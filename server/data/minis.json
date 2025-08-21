@@ -1,0 +1,473 @@
+[
+  {
+    "name": "Abomination",
+    "dmg": 190,
+    "hp": 1100,
+    "portrait": "abomination.png",
+    "class": "melee",
+    "role": "mini",
+    "cost": 6,
+    "speed": 1
+  },
+  {
+    "name": "Arcane Blast",
+    "dmg": 500,
+    "hp": 0,
+    "portrait": "arcane-blast.png",
+    "class": "spell",
+    "role": "mini",
+    "cost": 1,
+    "speed": 1
+  },
+  {
+    "name": "Banshee",
+    "dmg": 280,
+    "hp": 500,
+    "portrait": "banshee.png",
+    "class": "melee",
+    "role": "mini",
+    "cost": 3,
+    "speed": 1
+  },
+  {
+    "name": "Bat Rider",
+    "dmg": 210,
+    "hp": 400,
+    "portrait": "bat-rider.png",
+    "class": "air-vs-ground",
+    "role": "mini",
+    "cost": 3,
+    "speed": 2
+  },
+  {
+    "name": "Pyromancer",
+    "dmg": 180,
+    "hp": 340,
+    "portrait": "pyromancer.png",
+    "class": "range",
+    "role": "mini",
+    "cost": 3,
+    "speed": 1
+  },
+  {
+    "name": "Bloodmage Thalnos",
+    "dmg": 230,
+    "hp": 320,
+    "portrait": "bloodmage-thalnos.png",
+    "class": "melee",
+    "role": "champion",
+    "cost": 3,
+    "speed": 1
+  },
+  {
+    "name": "Blizzard",
+    "dmg": 690,
+    "hp": 0,
+    "portrait": "blizzard.png",
+    "class": "spell",
+    "role": "mini",
+    "cost": 3,
+    "speed": 1
+  },
+  {
+    "name": "Chain Lightning",
+    "dmg": 320,
+    "hp": 0,
+    "portrait": "chain-lightning.png",
+    "class": "spell",
+    "role": "mini",
+    "cost": 3,
+    "speed": 1
+  },
+  {
+    "name": "Chimaera",
+    "dmg": 540,
+    "hp": 1200,
+    "portrait": "chimaera.png",
+    "class": "air-vs-ground",
+    "role": "mini",
+    "cost": 3,
+    "speed": 2
+  },
+  {
+    "name": "Core Hound",
+    "dmg": 180,
+    "hp": 1100,
+    "portrait": "core-hounds.png",
+    "class": "melee",
+    "role": "mini",
+    "cost": 3,
+    "speed": 1
+  },
+  {
+    "name": "Darkspear Troll",
+    "dmg": 110,
+    "hp": 220,
+    "portrait": "darkspear-troll.png",
+    "class": "range",
+    "role": "mini",
+    "cost": 3,
+    "speed": 2
+  },
+  {
+    "name": "Defias Bandits",
+    "dmg": 100,
+    "hp": 220,
+    "portrait": "defias-bandits.png",
+    "class": "melee",
+    "role": "mini",
+    "cost": 3,
+    "speed": 2
+  },
+  {
+    "name": "Drake",
+    "dmg": 430,
+    "hp": 720,
+    "portrait": "drake.png",
+    "class": "air-vs-ground",
+    "role": "mini",
+    "cost": 3,
+    "speed": 2
+  },
+  {
+    "name": "Execute",
+    "dmg": 340,
+    "hp": 0,
+    "portrait": "execute.png",
+    "class": "spell",
+    "role": "mini",
+    "cost": 3,
+    "speed": 1
+  },
+  {
+    "name": "Faerie Dragon",
+    "dmg": 290,
+    "hp": 340,
+    "portrait": "faerie-dragon.png",
+    "class": "air-vs-ground",
+    "role": "mini",
+    "cost": 3,
+    "speed": 3
+  },
+  {
+    "name": "Frostwolf Shaman",
+    "dmg": 160,
+    "hp": 360,
+    "portrait": "frostwolf-shaman.png",
+    "class": "healer",
+    "role": "mini",
+    "cost": 3,
+    "speed": 2
+  },
+  {
+    "name": "Gargoyle",
+    "dmg": 220,
+    "hp": 530,
+    "portrait": "gargoyle.png",
+    "class": "air-vs-ground",
+    "role": "mini",
+    "cost": 3,
+    "speed": 2
+  },
+  {
+    "name": "Gnoll Brute",
+    "dmg": 160,
+    "hp": 670,
+    "portrait": "gnoll-brute.png",
+    "class": "melee",
+    "role": "mini",
+    "cost": 3,
+    "speed": 2
+  },
+  {
+    "name": "Gryphon Rider",
+    "dmg": 320,
+    "hp": 620,
+    "portrait": "gryphon-rider.png",
+    "class": "air-vs-ground",
+    "role": "mini",
+    "cost": 3,
+    "speed": 3
+  },
+  {
+    "name": "Harpies",
+    "dmg": 130,
+    "hp": 290,
+    "portrait": "harpies.png",
+    "class": "air-vs-ground",
+    "role": "mini",
+    "cost": 3,
+    "speed": 4
+  },
+  {
+    "name": "Hogger",
+    "dmg": 180,
+    "hp": 1400,
+    "portrait": "hogger.png",
+    "class": "melee",
+    "role": "champion",
+    "cost": 4,
+    "speed": 3
+  },
+  {
+    "name": "Holy Nova",
+    "dmg": 350,
+    "hp": 0,
+    "portrait": "holy-nova.png",
+    "class": "spell",
+    "role": "mini",
+    "cost": 3,
+    "speed": 1
+  },
+  {
+    "name": "Huntress",
+    "dmg": 160,
+    "hp": 600,
+    "portrait": "huntress.png",
+    "class": "range",
+    "role": "mini",
+    "cost": 3,
+    "speed": 4
+  },
+  {
+    "name": "Jaina Proudmoore",
+    "dmg": 220,
+    "hp": 530,
+    "portrait": "jaina-proudmoore.png",
+    "class": "melee",
+    "role": "champion",
+    "cost": 5,
+    "speed": 2
+  },
+  {
+    "name": "Living Bomb",
+    "dmg": 370,
+    "hp": 0,
+    "portrait": "living-bomb.png",
+    "class": "spell",
+    "role": "mini",
+    "cost": 6,
+    "speed": 1
+  },
+    {
+    "name": "Maiev Shadowsong",
+    "dmg": 200,
+    "hp": 940,
+    "portrait": "maiev-shadowsong.png",
+    "class": "melee",
+    "role": "champion",
+    "cost": 3,
+    "speed": 2
+  },
+  {
+    "name": "Malfurion Stormrage",
+    "dmg": 160,
+    "hp": 1000,
+    "portrait": "malfurion.png",
+    "class": "healer",
+    "role": "champion",
+    "cost": 5,
+    "speed": 2
+  },
+  {
+    "name": "Meat Wagon",
+    "dmg": 130,
+    "hp": 500,
+    "portrait": "meat-wagon.png",
+    "class": "siege-vs-base",
+    "role": "mini",
+    "cost": 3,
+    "speed": 1
+  },
+  {
+    "name": "Molten Giant",
+    "dmg": 360,
+    "hp": 2000,
+    "portrait": "molten-giant.png",
+    "class": "melee",
+    "role": "mini",
+    "cost": 3,
+    "speed": 1
+  },
+  {
+    "name": "Earth and Moon",
+    "dmg": 975,
+    "hp": 0,
+    "portrait": "earth-and-moon.png",
+    "class": "spell",
+    "role": "mini",
+    "cost": 3,
+    "speed": 1
+  },
+  {
+    "name": "Necromancer",
+    "dmg": 120,
+    "hp": 360,
+    "portrait": "necromancer.png",
+    "class": "melee",
+    "role": "mini",
+    "cost": 3,
+    "speed": 2
+  },
+  {
+    "name": "Polymorph",
+    "dmg": 0,
+    "hp": 0,
+    "portrait": "polymorph.png",
+    "class": "spell",
+    "role": "mini",
+    "cost": 2,
+    "speed": 1
+  },
+  {
+    "name": "Quilboar",
+    "dmg": 140,
+    "hp": 360,
+    "portrait": "quilboar.png",
+    "class": "melee",
+    "role": "mini",
+    "cost": 3,
+    "speed": 2
+  },
+  {
+    "name": "Ragnaros",
+    "dmg": 400,
+    "hp": 2800,
+    "portrait": "ragnaros.png",
+    "class": "melee",
+    "role": "champion",
+    "cost": 5,
+    "speed": 1
+  },
+  {
+    "name": "Raptor",
+    "dmg": 130,
+    "hp": 250,
+    "portrait": "raptors.png",
+    "class": "melee",
+    "role": "mini",
+    "cost": 2,
+    "speed": 3
+  },
+  {
+    "name": "Mountaineer",
+    "dmg": 100,
+    "hp": 220,
+    "portrait": "mountaineer.png",
+    "class": "range",
+    "role": "mini",
+    "cost": 2,
+    "speed": 2
+  },
+  {
+    "name": "S.A.F.E. Pilot",
+    "dmg": 230,
+    "hp": 500,
+    "portrait": "s-a-f-e-pilot.png",
+    "class": "range",
+    "role": "mini",
+    "cost": 3,
+    "speed": 2
+  },
+  {
+    "name": "Skeleton Party",
+    "dmg": 0,
+    "hp": 0,
+    "portrait": "skeleton-party.png",
+    "class": "spell",
+    "role": "mini",
+    "cost": 4,
+    "speed": 2
+  },
+  {
+    "name": "Smoke Bomb",
+    "dmg": 0,
+    "hp": 0,
+    "portrait": "smoke-bomb.png",
+    "class": "spell",
+    "role": "mini",
+    "cost": 1,
+    "speed": 1
+  },
+  {
+    "name": "Stonehoof Tauren",
+    "dmg": 250,
+    "hp": 1200,
+    "portrait": "stonehoof-tauren.png",
+    "class": "melee",
+    "role": "mini",
+    "cost": 3,
+    "speed": 2
+  },
+  {
+    "name": "Sylvanas Windrunner",
+    "dmg": 170,
+    "hp": 650,
+    "portrait": "sylvanas-windrunner.png",
+    "class": "range",
+    "role": "champion",
+    "cost": 5,
+    "speed": 2
+  },
+  {
+    "name": "Sneed",
+    "dmg": 300,
+    "hp": 1500,
+    "portrait": "sneed.png",
+    "class": "melee",
+    "role": "champion",
+    "cost": 4,
+    "speed": 2
+  },
+  {
+    "name": "Tirion Fordring",
+    "dmg": 230,
+    "hp": 1300,
+    "portrait": "tirion-fordring.png",
+    "class": "melee",
+    "role": "champion",
+    "cost": 4,
+    "speed": 2
+  },
+  {
+    "name": "Whelp Eggs",
+    "dmg": 0,
+    "hp": 0,
+    "portrait": "whelp-eggs.png",
+    "class": "spell",
+    "role": "mini",
+    "cost": 2,
+    "speed": 1
+  },
+  {
+    "name": "Witch Doctor",
+    "dmg": 170,
+    "hp": 320,
+    "portrait": "witch-doctor.png",
+    "class": "healer",
+    "role": "mini",
+    "cost": 3,
+    "speed": 2
+  },
+  {
+    "name": "Prowler",
+    "dmg": 130,
+    "hp": 280,
+    "portrait": "prowler.png",
+    "class": "melee",
+    "role": "mini",
+    "cost": 2,
+    "speed": 4
+  },
+  {
+    "name": "Warsong Raider",
+    "dmg": 180,
+    "hp": 540,
+    "portrait": "warsong-raider.png",
+    "class": "melee",
+    "role": "mini",
+    "cost": 3,
+    "speed": 4
+  }
+]
+

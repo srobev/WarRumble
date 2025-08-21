@@ -1,0 +1,28 @@
+{
+  "playerId": 255478,
+  "name": "TESTER",
+  "army": [
+    "Bloodmage Thalnos",
+    "Abomination",
+    "Banshee",
+    "Chimaera",
+    "Darkspear Troll",
+    "Defias Bandits",
+    "Drake"
+  ],
+  "armies": {
+    "Bloodmage Thalnos": [
+      "Abomination",
+      "Banshee",
+      "Chimaera",
+      "Darkspear Troll",
+      "Defias Bandits",
+      "Drake"
+    ]
+  },
+  "gold": 0,
+  "accountXp": 0,
+  "pvp_rating": 1200,
+  "pvp_rank": "Knight",
+  "avatar": "mage_female.png"
+}

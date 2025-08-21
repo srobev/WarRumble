@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="org.golang.todo.client">
+    <uses-permission android:name="android.permission.INTERNET"/>
+    <application android:label="War Rumble">
+        <activity
+            android:name="org.golang.app.GoNativeActivity"
+            android:exported="true"
+            android:label="War Rumble"
+            android:launchMode="singleTask"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|screenLayout|locale|layoutDirection|fontScale|uiMode">
+            <meta-data android:name="android.app.lib_name" android:value="main"/>
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN"/>
+                <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+        </activity>
+    </application>
+</manifest>

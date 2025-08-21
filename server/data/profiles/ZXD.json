@@ -1,0 +1,25 @@
+{
+  "playerId": 157258,
+  "name": "ZXD",
+  "army": [
+    "Malfurion Stormrage",
+    "Frostwolf Shaman",
+    "Gargoyle",
+    "Huntress",
+    "Molten Giant",
+    "Necromancer",
+    "Quilboar"
+  ],
+  "armies": {
+    "Malfurion Stormrage": [
+      "Frostwolf Shaman",
+      "Gargoyle",
+      "Huntress",
+      "Molten Giant",
+      "Necromancer",
+      "Quilboar"
+    ]
+  },
+  "gold": 0,
+  "accountXp": 0
+}

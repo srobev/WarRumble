@@ -1,0 +1,92 @@
+{
+  "playerId": 202508,
+  "name": "SILVESTER",
+  "army": [
+    "Bloodmage Thalnos",
+    "Bat Rider",
+    "Core Hound",
+    "Defias Bandits",
+    "Gargoyle",
+    "Gnoll Brute",
+    "Meat Wagon"
+  ],
+  "armies": {
+    "Bloodmage Thalnos": [
+      "Bat Rider",
+      "Core Hound",
+      "Defias Bandits",
+      "Gargoyle",
+      "Gnoll Brute",
+      "Meat Wagon"
+    ],
+    "Hogger": [
+      "Bat Rider",
+      "Core Hound",
+      "Defias Bandits",
+      "Frostwolf Shaman",
+      "Gargoyle",
+      "Gnoll Brute"
+    ],
+    "Jaina Proudmoore": [
+      "Bat Rider",
+      "Defias Bandits",
+      "Gargoyle",
+      "Gnoll Brute",
+      "Meat Wagon",
+      "Molten Giant"
+    ],
+    "Maiev Shadowsong": [
+      "Defias Bandits",
+      "Drake",
+      "Frostwolf Shaman",
+      "Gargoyle",
+      "Gnoll Brute",
+      "Gryphon Rider"
+    ],
+    "Malfurion Stormrage": [
+      "Abomination",
+      "Banshee",
+      "Bat Rider",
+      "Darkspear Troll",
+      "Frostwolf Shaman",
+      "Gargoyle"
+    ],
+    "Ragnaros": [
+      "Bat Rider",
+      "Pyromancer",
+      "Chimaera",
+      "Darkspear Troll",
+      "Defias Bandits",
+      "Faerie Dragon"
+    ],
+    "Sneed": [
+      "Abomination",
+      "Banshee",
+      "Bat Rider",
+      "Darkspear Troll",
+      "Defias Bandits",
+      "Drake"
+    ],
+    "Sylvanas Windrunner": [
+      "Banshee",
+      "Bat Rider",
+      "Pyromancer",
+      "Darkspear Troll",
+      "Gargoyle",
+      "Gnoll Brute"
+    ],
+    "Tirion Fordring": [
+      "Abomination",
+      "Banshee",
+      "Bat Rider",
+      "Pyromancer",
+      "Chimaera",
+      "Drake"
+    ]
+  },
+  "gold": 0,
+  "accountXp": 0,
+  "pvp_rating": 1786,
+  "pvp_rank": "Warlord",
+  "avatar": "femaleelf.png"
+}

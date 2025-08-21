@@ -1,0 +1,28 @@
+{
+  "playerId": 111090,
+  "name": "PESTOR",
+  "army": [
+    "Hogger",
+    "Banshee",
+    "Pyromancer",
+    "Chimaera",
+    "Core Hound",
+    "Defias Bandits",
+    "Gnoll Brute"
+  ],
+  "armies": {
+    "Hogger": [
+      "Banshee",
+      "Pyromancer",
+      "Chimaera",
+      "Core Hound",
+      "Defias Bandits",
+      "Gnoll Brute"
+    ]
+  },
+  "gold": 0,
+  "accountXp": 0,
+  "pvp_rating": 1200,
+  "pvp_rank": "Knight",
+  "avatar": "mage_female.png"
+}

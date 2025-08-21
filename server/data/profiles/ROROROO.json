@@ -1,0 +1,28 @@
+{
+  "playerId": 510466,
+  "name": "ROROROO",
+  "army": [
+    "Bloodmage Thalnos",
+    "Abomination",
+    "Banshee",
+    "Bat Rider",
+    "Core Hound",
+    "Darkspear Troll",
+    "Defias Bandits"
+  ],
+  "armies": {
+    "Bloodmage Thalnos": [
+      "Abomination",
+      "Banshee",
+      "Bat Rider",
+      "Core Hound",
+      "Darkspear Troll",
+      "Defias Bandits"
+    ]
+  },
+  "gold": 0,
+  "accountXp": 0,
+  "pvp_rating": 1200,
+  "pvp_rank": "Knight",
+  "avatar": "default.png"
+}

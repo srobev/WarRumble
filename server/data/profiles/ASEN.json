@@ -1,0 +1,43 @@
+{
+  "playerId": 153854,
+  "name": "ASEN",
+  "army": [
+    "Malfurion Stormrage",
+    "Banshee",
+    "Bat Rider",
+    "Defias Bandits",
+    "Drake",
+    "Faerie Dragon",
+    "Gryphon Rider"
+  ],
+  "armies": {
+    "Bloodmage Thalnos": [
+      "Abomination",
+      "Bat Rider",
+      "Pyromancer",
+      "Core Hound",
+      "Darkspear Troll",
+      "Defias Bandits"
+    ],
+    "Maiev Shadowsong": [
+      "Banshee",
+      "Defias Bandits",
+      "Faerie Dragon",
+      "Gargoyle",
+      "Gnoll Brute",
+      "Gryphon Rider"
+    ],
+    "Malfurion Stormrage": [
+      "Banshee",
+      "Bat Rider",
+      "Defias Bandits",
+      "Drake",
+      "Faerie Dragon",
+      "Gryphon Rider"
+    ]
+  },
+  "gold": 0,
+  "accountXp": 0,
+  "pvp_rating": 962,
+  "pvp_rank": "Ranger"
+}

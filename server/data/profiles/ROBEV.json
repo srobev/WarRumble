@@ -1,0 +1,28 @@
+{
+  "playerId": 274133,
+  "name": "ROBEV",
+  "army": [
+    "Malfurion Stormrage",
+    "Abomination",
+    "Banshee",
+    "Bat Rider",
+    "Chimaera",
+    "Drake",
+    "Faerie Dragon"
+  ],
+  "armies": {
+    "Malfurion Stormrage": [
+      "Abomination",
+      "Banshee",
+      "Bat Rider",
+      "Chimaera",
+      "Drake",
+      "Faerie Dragon"
+    ]
+  },
+  "gold": 0,
+  "accountXp": 0,
+  "pvp_rating": 1116,
+  "pvp_rank": "Knight",
+  "avatar": "default.png"
+}
