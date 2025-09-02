@@ -18,4 +18,6 @@ server/data/users.json
 bin/
 dist/
 build/
-
+client/assets/
+client/client.exe
+*.swp
