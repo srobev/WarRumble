@@ -8,13 +8,14 @@ import (
 	"rumble/shared/protocol"
 	"time"
 
+	"strings"
+
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/text"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 	"golang.org/x/image/font/basicfont"
-    "strings"
 )
 
 type hpFx struct {
@@ -24,6 +25,13 @@ type hpFx struct {
 	lerpStartMs int64 // when the chip starts animating
 	lerpStartHP int   // chip start HP when anim begins
 	lerpDurMs   int64 // animation duration (ms)
+
+	// Healing flash system
+	healGhostHP     int   // where the green healing flash starts (<= current HP)
+	healHoldUntilMs int64 // time to keep the green flash still
+	healLerpStartMs int64 // when healing flash starts animating
+	healLerpStartHP int   // healing flash start HP
+	healLerpDurMs   int64 // healing flash animation duration
 }
 
 func (g *Game) updateBattle() {
@@ -226,11 +234,12 @@ func safeCost(hand []protocol.MiniCardView, i int) int {
 func (g *Game) hpfxStep(m map[int64]*hpFx, id int64, curHP int, nowMs int64) *hpFx {
 	fx := m[id]
 	if fx == nil {
-		fx = &hpFx{lastHP: curHP, ghostHP: curHP}
+		fx = &hpFx{lastHP: curHP, ghostHP: curHP, healGhostHP: curHP}
 		m[id] = fx
 		return fx
 	}
 
+	// Handle damage (yellow flash)
 	if curHP < fx.lastHP {
 		fx.ghostHP = fx.lastHP
 		fx.holdUntilMs = nowMs + 500
@@ -239,6 +248,16 @@ func (g *Game) hpfxStep(m map[int64]*hpFx, id int64, curHP int, nowMs int64) *hp
 		fx.lerpStartHP = fx.ghostHP
 	}
 
+	// Handle healing (green flash)
+	if curHP > fx.lastHP {
+		fx.healGhostHP = fx.lastHP
+		fx.healHoldUntilMs = nowMs + 500
+		fx.healLerpStartMs = 0
+		fx.healLerpDurMs = 300
+		fx.healLerpStartHP = fx.healGhostHP
+	}
+
+	// Animate damage flash
 	if fx.ghostHP > curHP && nowMs > fx.holdUntilMs {
 		if fx.lerpStartMs == 0 {
 			fx.lerpStartMs = nowMs
@@ -249,25 +268,42 @@ func (g *Game) hpfxStep(m map[int64]*hpFx, id int64, curHP int, nowMs int64) *hp
 			fx.ghostHP = curHP
 			fx.lerpStartMs = 0
 		} else {
-
 			gh := float64(fx.lerpStartHP) + (float64(curHP)-float64(fx.lerpStartHP))*t
 			fx.ghostHP = int(math.Round(gh))
+		}
+	}
+
+	// Animate healing flash
+	if fx.healGhostHP < curHP && nowMs > fx.healHoldUntilMs {
+		if fx.healLerpStartMs == 0 {
+			fx.healLerpStartMs = nowMs
+			fx.healLerpStartHP = fx.healGhostHP
+		}
+		t := float64(nowMs-fx.healLerpStartMs) / float64(fx.healLerpDurMs)
+		if t >= 1 {
+			fx.healGhostHP = curHP
+			fx.healLerpStartMs = 0
+		} else {
+			gh := float64(fx.healLerpStartHP) + (float64(curHP)-float64(fx.healLerpStartHP))*t
+			fx.healGhostHP = int(math.Round(gh))
 		}
 	}
 
 	fx.lastHP = curHP
 	return fx
 }
-func (g *Game) drawHPBar(screen *ebiten.Image, x, y, w, h float64, cur, max, ghost int) {
+func (g *Game) drawHPBar(screen *ebiten.Image, x, y, w, h float64, cur, max, ghost, healGhost int) {
 	if max <= 0 || w <= 0 || h <= 0 {
 		return
 	}
 
-    // Background (empty) is dark/black
-    ebitenutil.DrawRect(screen, x, y, w, h, color.NRGBA{18, 18, 22, 255})
+	// Background (empty) is dark/black
+	ebitenutil.DrawRect(screen, x, y, w, h, color.NRGBA{18, 18, 22, 255})
 
-    pCur := float64(cur) / float64(max)
-    pGhost := float64(ghost) / float64(max)
+	pCur := float64(cur) / float64(max)
+	pGhost := float64(ghost) / float64(max)
+	pHealGhost := float64(healGhost) / float64(max)
+
 	if pCur < 0 {
 		pCur = 0
 	} else if pCur > 1 {
@@ -278,110 +314,153 @@ func (g *Game) drawHPBar(screen *ebiten.Image, x, y, w, h float64, cur, max, gho
 	} else if pGhost > 1 {
 		pGhost = 1
 	}
+	if pHealGhost < 0 {
+		pHealGhost = 0
+	} else if pHealGhost > 1 {
+		pHealGhost = 1
+	}
 
-    if pGhost > pCur {
-        startX := x + w*pCur
-        ebitenutil.DrawRect(screen, startX, y, w*(pGhost-pCur), h, color.NRGBA{240, 196, 25, 255})
-    }
-    // Filled portion color provided by caller via DrawHPBarForOwner
-    // (this function no longer decides blue/red here)
+	// Draw damage flash (yellow) - appears when HP decreases
+	if pGhost > pCur {
+		startX := x + w*pCur
+		ebitenutil.DrawRect(screen, startX, y, w*(pGhost-pCur), h, color.NRGBA{240, 196, 25, 255})
+	}
+
+	// Draw healing flash (green) - appears when HP increases
+	if pHealGhost < pCur {
+		startX := x + w*pHealGhost
+		ebitenutil.DrawRect(screen, startX, y, w*(pCur-pHealGhost), h, color.NRGBA{100, 255, 100, 255})
+	}
+
+	// Filled portion color provided by caller via DrawHPBarForOwner
+	// (this function no longer decides blue/red here)
 }
 
 // drawLevelBadge renders a round ornate badge (if available) or a fallback circle with the unit's level
 // to the left of the provided bar rectangle. The badge is sized to be readable even for tiny bars.
 func (g *Game) drawLevelBadge(screen *ebiten.Image, barRect image.Rectangle, level int) {
-    // target badge size: at least 18px, or 6x bar height (can be tuned via BadgeScale meta)
-    bh := barRect.Dy()
-    mult := 6.0
-    if ornate != nil && ornate.BadgeScale > 0 { mult = 6.0 * ornate.BadgeScale }
-    size := int(float64(bh) * mult)
-    if size < 18 { size = 18 }
-    // place badge center to the left of the bar, with a small gap
-    gap := 6
-    cx := barRect.Min.X - gap - size/2
-    cy := barRect.Min.Y + bh/2
-    if ornate != nil && ornate.Badge != nil {
-        // scale ornate badge to size
-        bb := ornate.Badge.Bounds()
-        if bb.Dx() > 0 && bb.Dy() > 0 {
-            s := float64(size) / float64(bb.Dy())
-            x := float64(cx) - float64(bb.Dx())*s/2
-            y := float64(cy) - float64(bb.Dy())*s/2
-            op := &ebiten.DrawImageOptions{}
-            op.GeoM.Scale(s, s)
-            op.GeoM.Translate(x, y)
-            screen.DrawImage(ornate.Badge, op)
-        }
-    } else {
-        // fallback: simple gold circle with dark border
-        vector.DrawFilledCircle(screen, float32(cx), float32(cy), float32(size)/2, color.NRGBA{240,196,25,255}, true)
-        vector.DrawFilledCircle(screen, float32(cx), float32(cy), float32(size)/2-1.5, color.NRGBA{200,160,20,255}, true)
-    }
-    // draw level text centered (dark text with light outline for readability)
-    lvlS := fmt.Sprintf("%d", level)
-    tw := text.BoundString(basicfont.Face7x13, lvlS).Dx()
-    th := text.BoundString(basicfont.Face7x13, lvlS).Dy()
-    tx := cx - tw/2
-    ty := cy + th/2 - 2
-    // outline
-    text.Draw(screen, lvlS, basicfont.Face7x13, tx+1, ty, color.NRGBA{0,0,0,200})
-    text.Draw(screen, lvlS, basicfont.Face7x13, tx-1, ty, color.NRGBA{0,0,0,200})
-    text.Draw(screen, lvlS, basicfont.Face7x13, tx, ty+1, color.NRGBA{0,0,0,200})
-    text.Draw(screen, lvlS, basicfont.Face7x13, tx, ty-1, color.NRGBA{0,0,0,200})
-    text.Draw(screen, lvlS, basicfont.Face7x13, tx, ty, color.NRGBA{240,240,240,255})
+	// target badge size: at least 18px, or 6x bar height (can be tuned via BadgeScale meta)
+	bh := barRect.Dy()
+	mult := 6.0
+	if ornate != nil && ornate.BadgeScale > 0 {
+		mult = 6.0 * ornate.BadgeScale
+	}
+	size := int(float64(bh) * mult)
+	if size < 18 {
+		size = 18
+	}
+	// place badge center to the left of the bar, with a small gap
+	gap := 6
+	cx := barRect.Min.X - gap - size/2
+	cy := barRect.Min.Y + bh/2
+	if ornate != nil && ornate.Badge != nil {
+		// scale ornate badge to size
+		bb := ornate.Badge.Bounds()
+		if bb.Dx() > 0 && bb.Dy() > 0 {
+			s := float64(size) / float64(bb.Dy())
+			x := float64(cx) - float64(bb.Dx())*s/2
+			y := float64(cy) - float64(bb.Dy())*s/2
+			op := &ebiten.DrawImageOptions{}
+			op.GeoM.Scale(s, s)
+			op.GeoM.Translate(x, y)
+			screen.DrawImage(ornate.Badge, op)
+		}
+	} else {
+		// fallback: simple gold circle with dark border
+		vector.DrawFilledCircle(screen, float32(cx), float32(cy), float32(size)/2, color.NRGBA{240, 196, 25, 255}, true)
+		vector.DrawFilledCircle(screen, float32(cx), float32(cy), float32(size)/2-1.5, color.NRGBA{200, 160, 20, 255}, true)
+	}
+	// draw level text centered (dark text with light outline for readability)
+	lvlS := fmt.Sprintf("%d", level)
+	tw := text.BoundString(basicfont.Face7x13, lvlS).Dx()
+	th := text.BoundString(basicfont.Face7x13, lvlS).Dy()
+	tx := cx - tw/2
+	ty := cy + th/2 - 2
+	// outline
+	text.Draw(screen, lvlS, basicfont.Face7x13, tx+1, ty, color.NRGBA{0, 0, 0, 200})
+	text.Draw(screen, lvlS, basicfont.Face7x13, tx-1, ty, color.NRGBA{0, 0, 0, 200})
+	text.Draw(screen, lvlS, basicfont.Face7x13, tx, ty+1, color.NRGBA{0, 0, 0, 200})
+	text.Draw(screen, lvlS, basicfont.Face7x13, tx, ty-1, color.NRGBA{0, 0, 0, 200})
+	text.Draw(screen, lvlS, basicfont.Face7x13, tx, ty, color.NRGBA{240, 240, 240, 255})
 }
 
 // helper to draw HP bar with team color
-func (g *Game) DrawHPBarForOwner(screen *ebiten.Image, x, y, w, h float64, cur, max, ghost int, isPlayer bool) {
-    // base dark background + yellow ghost handled in drawHPBar; we overlay fill after
-    g.drawHPBar(screen, x, y, w, h, cur, max, ghost)
-    fill := color.NRGBA{220, 70, 70, 255}
-    if isPlayer {
-        fill = color.NRGBA{70, 130, 255, 255}
-    }
-    // draw filled portion on top
-    if max > 0 {
-        pCur := float64(cur) / float64(max)
-        if pCur < 0 { pCur = 0 } else if pCur > 1 { pCur = 1 }
-        ebitenutil.DrawRect(screen, x, y, w*pCur, h, fill)
-    }
+func (g *Game) DrawHPBarForOwner(screen *ebiten.Image, x, y, w, h float64, cur, max, ghost, healGhost int, isPlayer bool) {
+	// base dark background + yellow ghost + green healing flash handled in drawHPBar; we overlay fill after
+	g.drawHPBar(screen, x, y, w, h, cur, max, ghost, healGhost)
+	fill := color.NRGBA{220, 70, 70, 255}
+	if isPlayer {
+		fill = color.NRGBA{70, 130, 255, 255}
+	}
+	// draw filled portion on top
+	if max > 0 {
+		pCur := float64(cur) / float64(max)
+		if pCur < 0 {
+			pCur = 0
+		} else if pCur > 1 {
+			pCur = 1
+		}
+		ebitenutil.DrawRect(screen, x, y, w*pCur, h, fill)
+	}
 }
 
 // levelForUnitName resolves the visible level for a unit name, matching Army tab values.
 // It looks up XP from g.unitXP by exact match, then by case-insensitive match.
 func (g *Game) levelForUnitName(name string) int {
-    lvl := 1
-    if g.unitXP == nil { return lvl }
-    if xp, ok := g.unitXP[name]; ok {
-        if l, _, _ := computeLevel(xp); l > 0 { return l }
-        return lvl
-    }
-    // case-insensitive fallback
-    for k, xp := range g.unitXP {
-        if strings.EqualFold(k, name) {
-            if l, _, _ := computeLevel(xp); l > 0 { return l }
-        }
-    }
-    return lvl
+	lvl := 1
+	if g.unitXP == nil {
+		return lvl
+	}
+	if xp, ok := g.unitXP[name]; ok {
+		if l, _, _ := computeLevel(xp); l > 0 {
+			return l
+		}
+		return lvl
+	}
+	// case-insensitive fallback
+	for k, xp := range g.unitXP {
+		if strings.EqualFold(k, name) {
+			if l, _, _ := computeLevel(xp); l > 0 {
+				return l
+			}
+		}
+	}
+	return lvl
 }
 
 // currentArmyRoundedLevel returns the average level of the current champion+6 minis,
 // rounded with .5 up, minimum 1.
 func (g *Game) currentArmyRoundedLevel() int {
-    names := []string{}
-    if g.selectedChampion != "" { names = append(names, g.selectedChampion) }
-    for i := 0; i < 6; i++ { if g.selectedOrder[i] != "" { names = append(names, g.selectedOrder[i]) } }
-    if len(names) == 0 { return 1 }
-    sum := 0.0
-    for _, n := range names {
-        lvl := 1
-        if g.unitXP != nil { if xp, ok := g.unitXP[n]; ok { if l,_,_ := computeLevel(xp); l>0 { lvl = l } } }
-        sum += float64(lvl)
-    }
-    avg := sum / float64(len(names))
-    r := int(avg + 0.5)
-    if r < 1 { r = 1 }
-    return r
+	names := []string{}
+	if g.selectedChampion != "" {
+		names = append(names, g.selectedChampion)
+	}
+	for i := 0; i < 6; i++ {
+		if g.selectedOrder[i] != "" {
+			names = append(names, g.selectedOrder[i])
+		}
+	}
+	if len(names) == 0 {
+		return 1
+	}
+	sum := 0.0
+	for _, n := range names {
+		lvl := 1
+		if g.unitXP != nil {
+			if xp, ok := g.unitXP[n]; ok {
+				if l, _, _ := computeLevel(xp); l > 0 {
+					lvl = l
+				}
+			}
+		}
+		sum += float64(lvl)
+	}
+	avg := sum / float64(len(names))
+	r := int(avg + 0.5)
+	if r < 1 {
+		r = 1
+	}
+	return r
 }
 
 type battleHPBar struct {

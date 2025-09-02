@@ -1,18 +1,20 @@
 package game
 
 import (
-    "fmt"
-    "image/color"
-    "rumble/shared/protocol"
+	"fmt"
+	"image/color"
+	"rumble/shared/protocol"
 
-    "github.com/hajimehoshi/ebiten/v2"
-    "github.com/hajimehoshi/ebiten/v2/ebitenutil"
-    "github.com/hajimehoshi/ebiten/v2/text"
-    "golang.org/x/image/font/basicfont"
+	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	"github.com/hajimehoshi/ebiten/v2/text"
+	"golang.org/x/image/font/basicfont"
 )
 
 func (g *Game) drawTopBarHome(screen *ebiten.Image) {
-    if g.topBarBg == nil { g.topBarBg = loadImage("assets/ui/top_bar_bg.png") }
+	if g.topBarBg == nil {
+		g.topBarBg = loadImage("assets/ui/top_bar_bg.png")
+	}
 
 	sw, _ := screen.Size()
 	iw := g.topBarBg.Bounds().Dx()
@@ -54,54 +56,62 @@ func (g *Game) drawTopBarHome(screen *ebiten.Image) {
 	baselineY := g.userBtn.y + (g.userBtn.h+lb.Dy())/2 - 2
 	text.Draw(screen, name, basicfont.Face7x13, g.userBtn.x+avPad+avW+8, baselineY, color.White)
 
-    if hoveredUser {
-        // Dynamically size hover card to fit username and rating text
-        title := "Account"
-        label := g.name
-        if label == "" { label = "Player" }
-        ratingLbl := "PvP rating"
-        ratingVal := fmt.Sprintf("%d  (%s)", g.pvpRating, defaultIfEmpty(g.pvpRank, "Unranked"))
+	if hoveredUser {
+		// Dynamically size hover card to fit username and rating text
+		title := "Account"
+		label := g.name
+		if label == "" {
+			label = "Player"
+		}
+		ratingLbl := "PvP rating"
+		ratingVal := fmt.Sprintf("%d  (%s)", g.pvpRating, defaultIfEmpty(g.pvpRank, "Unranked"))
 
-        titleW := text.BoundString(basicfont.Face7x13, title).Dx()
-        nameW := text.BoundString(basicfont.Face7x13, label).Dx()
-        rlW := text.BoundString(basicfont.Face7x13, ratingLbl).Dx()
-        rvW := text.BoundString(basicfont.Face7x13, ratingVal).Dx()
+		titleW := text.BoundString(basicfont.Face7x13, title).Dx()
+		nameW := text.BoundString(basicfont.Face7x13, label).Dx()
+		rlW := text.BoundString(basicfont.Face7x13, ratingLbl).Dx()
+		rvW := text.BoundString(basicfont.Face7x13, ratingVal).Dx()
 
-        contentW := titleW
-        if nameW > contentW { contentW = nameW }
-        if rlW+10+rvW > contentW { contentW = rlW + 10 + rvW }
+		contentW := titleW
+		if nameW > contentW {
+			contentW = nameW
+		}
+		if rlW+10+rvW > contentW {
+			contentW = rlW + 10 + rvW
+		}
 
-        const leftTextX = 68
-        const padRight = 12
-        tipW := leftTextX + contentW + padRight
-        if tipW < 220 { tipW = 220 }
-        tipH := 70
+		const leftTextX = 68
+		const padRight = 12
+		tipW := leftTextX + contentW + padRight
+		if tipW < 140 {
+			tipW = 140
+		}
+		tipH := 85
 
-        tx := clampInt(mx+14, 0, protocol.ScreenW-tipW)
-        ty := clampInt(my+12, 0, protocol.ScreenH-tipH)
-        ebitenutil.DrawRect(screen, float64(tx), float64(ty), float64(tipW), float64(tipH), color.NRGBA{30, 30, 45, 240})
+		tx := clampInt(mx+14, 0, protocol.ScreenW-tipW)
+		ty := clampInt(my+12, 0, protocol.ScreenH-tipH)
+		ebitenutil.DrawRect(screen, float64(tx), float64(ty), float64(tipW), float64(tipH), color.NRGBA{30, 30, 45, 240})
 
-        // Avatar block
-        ax := tx + 10
-        ay := ty + 10
-        aw, ah := 56, 56
-        if img := g.ensureAvatarImage(g.avatar); img != nil {
-            iw, ih := img.Bounds().Dx(), img.Bounds().Dy()
-            s := mathMin(float64(aw)/float64(iw), float64(ah)/float64(ih))
-            op := &ebiten.DrawImageOptions{}
-            op.GeoM.Scale(s, s)
-            op.GeoM.Translate(float64(ax)+(float64(aw)-float64(iw)*s)/2, float64(ay)+(float64(ah)-float64(ih)*s)/2)
-            screen.DrawImage(img, op)
-        } else {
-            ebitenutil.DrawRect(screen, float64(ax), float64(ay), float64(aw), float64(ah), color.NRGBA{70, 70, 90, 255})
-        }
+		// Avatar block
+		ax := tx + 10
+		ay := ty + 10
+		aw, ah := 56, 56
+		if img := g.ensureAvatarImage(g.avatar); img != nil {
+			iw, ih := img.Bounds().Dx(), img.Bounds().Dy()
+			s := mathMin(float64(aw)/float64(iw), float64(ah)/float64(ih))
+			op := &ebiten.DrawImageOptions{}
+			op.GeoM.Scale(s, s)
+			op.GeoM.Translate(float64(ax)+(float64(aw)-float64(iw)*s)/2, float64(ay)+(float64(ah)-float64(ih)*s)/2)
+			screen.DrawImage(img, op)
+		} else {
+			ebitenutil.DrawRect(screen, float64(ax), float64(ay), float64(aw), float64(ah), color.NRGBA{70, 70, 90, 255})
+		}
 
-        // Text lines
-        text.Draw(screen, title, basicfont.Face7x13, tx+leftTextX, ty+22, color.NRGBA{240, 196, 25, 255})
-        text.Draw(screen, label, basicfont.Face7x13, tx+leftTextX, ty+40, color.White)
-        text.Draw(screen, ratingLbl, basicfont.Face7x13, tx+leftTextX, ty+58, color.NRGBA{240, 196, 25, 255})
-        text.Draw(screen, ratingVal, basicfont.Face7x13, tx+leftTextX+rlW+10, ty+58, color.White)
-    }
+		// Text lines
+		text.Draw(screen, title, basicfont.Face7x13, tx+leftTextX, ty+25, color.NRGBA{240, 196, 25, 255})
+		text.Draw(screen, label, basicfont.Face7x13, tx+leftTextX, ty+43, color.White)
+		text.Draw(screen, ratingLbl, basicfont.Face7x13, tx+leftTextX, ty+61, color.NRGBA{240, 196, 25, 255})
+		text.Draw(screen, ratingVal, basicfont.Face7x13, tx+leftTextX+rlW+10, ty+61, color.White)
+	}
 
 	title := "War Rumble"
 	tb := text.BoundString(basicfont.Face7x13, title)
@@ -136,8 +146,8 @@ func (g *Game) computeTopBarLayout() {
 	const padX = 10
 	const avW = 28
 
-	// Vertical margins inside the bar
-	const userBtnVMargin = 4
+	// Vertical margins inside the bar - reduced for taller button
+	const userBtnVMargin = 2
 
 	userBtnH := topBarH - 2*userBtnVMargin
 
@@ -148,9 +158,10 @@ func (g *Game) computeTopBarLayout() {
 	nameBounds := text.BoundString(basicfont.Face7x13, uname)
 	nameW := nameBounds.Dx()
 
-	btnW := padX*2 + avW + 8 + nameW
-	if btnW < 132 {
-		btnW = 132
+	// Calculate button width with much more generous padding for better proportions
+	btnW := padX*2 + avW + 16 + nameW + 40 // Much more padding: 16px between avatar and text, 40px extra
+	if btnW < 200 {                        // Much larger minimum width for better proportions
+		btnW = 200
 	}
 
 	g.userBtn = rect{

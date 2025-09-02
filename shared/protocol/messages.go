@@ -32,15 +32,20 @@ type SetName struct {
 
 // Minis list for Army UI
 type ListMinis struct{}
+
 type MiniInfo struct {
-    Name     string `json:"name"`
-    Class    string `json:"class"`
-    Role     string `json:"role"`
-    Cost     int    `json:"cost"`
-    Portrait string `json:"portrait,omitempty"`
-    Dmg      int    `json:"dmg,omitempty"`
-    Hp       int    `json:"hp,omitempty"`
-    Speed    int    `json:"speed,omitempty"` // 1=slow,2=medium,3=mid-fast,4=fast
+	Name        string  `json:"name"`
+	Class       string  `json:"class"`
+	SubClass    string  `json:"subclass,omitempty"`
+	Role        string  `json:"role"`
+	Cost        int     `json:"cost"`
+	Portrait    string  `json:"portrait,omitempty"`
+	Dmg         int     `json:"dmg,omitempty"`
+	Hp          int     `json:"hp,omitempty"`
+	Heal        int     `json:"heal,omitempty"`
+	Hps         int     `json:"hps,omitempty"`
+	Speed       int     `json:"speed,omitempty"`        // 1=slow,2=medium,3=mid-fast,4=fast
+	AttackSpeed float64 `json:"attack_speed,omitempty"` // attacks per second
 }
 type Minis struct {
 	Items []MiniInfo `json:"items"`
@@ -102,15 +107,17 @@ type HandUpdate struct {
 }
 
 type UnitState struct {
-	ID      int64   `json:"id"`
-	Name    string  `json:"name"`
-	X       float64 `json:"x"`
-	Y       float64 `json:"y"`
-	HP      int     `json:"hp"`
-	MaxHP   int     `json:"maxHp"`
-	OwnerID int64   `json:"ownerId"`
-	Facing  float64 `json:"facing"`
-	Class   string  `json:"class"`
+	ID       int64   `json:"id"`
+	Name     string  `json:"name"`
+	X        float64 `json:"x"`
+	Y        float64 `json:"y"`
+	HP       int     `json:"hp"`
+	MaxHP    int     `json:"maxHp"`
+	OwnerID  int64   `json:"ownerId"`
+	Facing   float64 `json:"facing"`
+	Class    string  `json:"class"`
+	Range    int     `json:"range"`
+	Particle string  `json:"particle,omitempty"`
 }
 
 type BaseState struct {
@@ -167,12 +174,22 @@ type GameOver struct {
 // Queue-based PvP
 type JoinPvpQueue struct{}
 type LeavePvpQueue struct{}
-type QueueStatus struct{ InQueue bool; Players int }
-type PvpMatched struct{ RoomID string; Opponent string }
+type QueueStatus struct {
+	InQueue bool
+	Players int
+}
+type PvpMatched struct {
+	RoomID   string
+	Opponent string
+}
 
 // Friendly duels
-type FriendlyCreate struct{}                   // client -> server
-type FriendlyCancel struct{}                   // client -> server
-type FriendlyJoin struct{ Code string `json:"code"` } // client -> server
-type FriendlyCode struct{ Code string `json:"code"` } // server -> client
+type FriendlyCreate struct{} // client -> server
+type FriendlyCancel struct{} // client -> server
+type FriendlyJoin struct {
+	Code string `json:"code"`
+} // client -> server
+type FriendlyCode struct {
+	Code string `json:"code"`
+} // server -> client
 type FriendlyReady struct{ RoomID string }

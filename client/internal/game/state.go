@@ -95,13 +95,13 @@ type Game struct {
 	gameOver bool
 	victory  bool
 
-    endActive   bool
-    endVictory  bool
-    continueBtn rect
-    // XP results at battle end
-    preBattleXP map[string]int
-    xpGains     map[string]int // name -> +XP
-    battleArmy  []string       // names used at battle start
+	endActive   bool
+	endVictory  bool
+	continueBtn rect
+	// XP results at battle end
+	preBattleXP map[string]int
+	xpGains     map[string]int // name -> +XP
+	battleArmy  []string       // names used at battle start
 
 	// Army grid UI
 	showChamp bool // true: show champions, false: show minis
@@ -120,14 +120,14 @@ type Game struct {
 	// touch tracking (single-pointer drag)
 	activeTouchID ebiten.TouchID
 
-    // selected champion + minis (2x3 grid)
-    armySlotRects [7]rect // [0]=champion big card, [1..6] mini slots
-    selectedOrder  [6]string
-    // drag between equipped slots only
-    slotDragFrom   int // -1 if none, 0..5 otherwise
-    slotDragStartX int
-    slotDragStartY int
-    slotDragActive bool
+	// selected champion + minis (2x3 grid)
+	armySlotRects [7]rect // [0]=champion big card, [1..6] mini slots
+	selectedOrder [6]string
+	// drag between equipped slots only
+	slotDragFrom   int // -1 if none, 0..5 otherwise
+	slotDragStartX int
+	slotDragStartY int
+	slotDragActive bool
 
 	// collection grid (minis only)
 	collArea   rect
@@ -135,17 +135,18 @@ type Game struct {
 	collScroll int // row-based scroll for minis collection
 
 	// data for per-champion armies (client-side cache)
-	champToMinis  map[string]map[string]bool // champName -> set(miniName)
-	champToOrder  map[string][6]string       // champName -> slot order
+	champToMinis map[string]map[string]bool // champName -> set(miniName)
+	champToOrder map[string][6]string       // champName -> slot order
 
-    // --- Minis XP / Level overlay ---
-    unitXP map[string]int // from Profile.UnitXP
-    miniOverlayOpen bool
-    miniOverlayName string
-    miniOverlayFrom string // "slot" or "collection"
-    miniOverlaySlot int    // 0..5 for slots when from=="slot"
-    miniOverlayMode string // "" | "switch_target_slot" | "switch_target_collection"
-    overlayJustClosed bool // consume this click to avoid reopening
+	// --- Minis XP / Level overlay ---
+	unitXP            map[string]int // from Profile.UnitXP
+	miniOverlayOpen   bool
+	miniOverlayName   string
+	miniOverlayFrom   string // "slot" or "collection"
+	miniOverlaySlot   int    // 0..5 for slots when from=="slot"
+	miniOverlayMode   string // "" | "switch_target_slot" | "switch_target_collection"
+	overlayJustClosed bool   // consume this click to avoid reopening
+	xpBarHovered      bool   // true when mouse is hovering over XP bar
 
 	// Map tab (new hotspot UI)
 	mapHotspots  map[string][]Hotspot // key: mapID -> hotspots
@@ -186,65 +187,65 @@ type Game struct {
 	avatarRects   []rect
 	profileOpen   bool
 	profCloseBtn  rect
-    profLogoutBtn rect
+	profLogoutBtn rect
 
-    // --- Social / Guilds ---
-    socialTab int // 0=friends,1=guild,2=messages
-    guildID   string
-    guildName string
-    guildMembers []protocol.GuildMember
-    guildList    []protocol.GuildSummary
-    guildChat    []protocol.GuildChatMsg
-    guildChatInput string
-    guildChatFocus bool
-    guildBrowse bool
-    selectedGuildMember string
-    guildDescEdit   string
-    guildDescFocus  bool
-    guildCreateName string
-    guildFilter string
-    guildListScroll int
-    guildNameFocus bool
-    guildFilterFocus bool
-    guildMembersScroll int
-    guildSortMode int // 0=name,1=status,2=rank
-    guildLeaveConfirm bool
-    guildLeaveError   string
-    guildDisbandConfirm bool
-    guildDisbandError   string
-    chatBackspaceStart  time.Time
-    chatBackspaceLast   time.Time
+	// --- Social / Guilds ---
+	socialTab           int // 0=friends,1=guild,2=messages
+	guildID             string
+	guildName           string
+	guildMembers        []protocol.GuildMember
+	guildList           []protocol.GuildSummary
+	guildChat           []protocol.GuildChatMsg
+	guildChatInput      string
+	guildChatFocus      bool
+	guildBrowse         bool
+	selectedGuildMember string
+	guildDescEdit       string
+	guildDescFocus      bool
+	guildCreateName     string
+	guildFilter         string
+	guildListScroll     int
+	guildNameFocus      bool
+	guildFilterFocus    bool
+	guildMembersScroll  int
+	guildSortMode       int // 0=name,1=status,2=rank
+	guildLeaveConfirm   bool
+	guildLeaveError     string
+	guildDisbandConfirm bool
+	guildDisbandError   string
+	chatBackspaceStart  time.Time
+	chatBackspaceLast   time.Time
 
-    // Friends / Messages
-    friends        []protocol.FriendInfo
-    friendSearch   string
-    friendSearchFocus bool
-    friendSearchError string
-    friendAddLookup   string // non-empty when awaiting GetUserProfile to validate add
-    lastFriendsReq    time.Time
-    friendScroll   int
-    selectedFriend string
-    dmInput        string
-    dmInputFocus   bool
-    dmHistory      []protocol.FriendDM
-    dmScroll       int
-    confirmRemoveFriend string
-    dmOverlay      bool
-    memberProfileOverlay bool
-    memberProfile protocol.Profile
-    // Friends list sorting: 0=name,1=status
-    friendSortMode int
-    profileFromFriends bool
-    transferLeaderConfirm bool
-    transferLeaderTarget  string
-    socialTabLoaded bool
-    // Track previous guild roster to generate system events (join/leave/promote)
-    prevGuildRoles map[string]string
-    havePrevGuildRoster bool
+	// Friends / Messages
+	friends              []protocol.FriendInfo
+	friendSearch         string
+	friendSearchFocus    bool
+	friendSearchError    string
+	friendAddLookup      string // non-empty when awaiting GetUserProfile to validate add
+	lastFriendsReq       time.Time
+	friendScroll         int
+	selectedFriend       string
+	dmInput              string
+	dmInputFocus         bool
+	dmHistory            []protocol.FriendDM
+	dmScroll             int
+	confirmRemoveFriend  string
+	dmOverlay            bool
+	memberProfileOverlay bool
+	memberProfile        protocol.Profile
+	// Friends list sorting: 0=name,1=status
+	friendSortMode        int
+	profileFromFriends    bool
+	transferLeaderConfirm bool
+	transferLeaderTarget  string
+	socialTabLoaded       bool
+	// Track previous guild roster to generate system events (join/leave/promote)
+	prevGuildRoles      map[string]string
+	havePrevGuildRoster bool
 
-    // Throttle guild list requests
-    lastGuildListReq time.Time
-    lastGuildQuery   string
-    lastGuildInfoReq time.Time
-    guildSendClickAt time.Time
+	// Throttle guild list requests
+	lastGuildListReq time.Time
+	lastGuildQuery   string
+	lastGuildInfoReq time.Time
+	guildSendClickAt time.Time
 }

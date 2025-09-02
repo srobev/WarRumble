@@ -1,20 +1,21 @@
 package game
 
 import (
-    "fmt"
-    "image"
-    "image/color"
-    "log"
-    "rumble/client/internal/netcfg"
-    "rumble/shared/protocol"
-    "strings"
-    "time"
+	"fmt"
+	"image"
+	"image/color"
+	"log"
+	"math"
+	"rumble/client/internal/netcfg"
+	"rumble/shared/protocol"
+	"strings"
+	"time"
 
-    "github.com/hajimehoshi/ebiten/v2"
-    "github.com/hajimehoshi/ebiten/v2/ebitenutil"
-    "github.com/hajimehoshi/ebiten/v2/inpututil"
-    "github.com/hajimehoshi/ebiten/v2/text"
-    "golang.org/x/image/font/basicfont"
+	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+	"github.com/hajimehoshi/ebiten/v2/inpututil"
+	"github.com/hajimehoshi/ebiten/v2/text"
+	"golang.org/x/image/font/basicfont"
 )
 
 // New creates the game. Optional arg is kept for back-compat.
@@ -28,7 +29,7 @@ func New(args ...string) ebiten.Game {
 			playerName = args[0]
 		}
 	}
-    g := &Game{
+	g := &Game{
 		world: &World{
 			Units: make(map[int64]*RenderUnit),
 			Bases: make(map[int64]protocol.BaseState),
@@ -48,14 +49,14 @@ func New(args ...string) ebiten.Game {
 		hpFxUnits:        make(map[int64]*hpFx),
 		hpFxBases:        make(map[int64]*hpFx),
 
-        connCh: make(chan connResult, 4),
-        connSt: stateConnected,
-    }
+		connCh: make(chan connResult, 4),
+		connSt: stateConnected,
+	}
 
-    // Initialize new interaction defaults
-    g.slotDragFrom = -1
+	// Initialize new interaction defaults
+	g.slotDragFrom = -1
 
-    if !HasToken() {
+	if !HasToken() {
 
 		apiBase := netcfg.APIBase
 		g.auth = NewAuthUI(apiBase, func(username string) {
@@ -110,10 +111,10 @@ func (g *Game) Update() error {
 		}
 		g.send("SetName", protocol.SetName{Name: g.name})
 		g.send("GetProfile", protocol.GetProfile{})
-        g.send("ListMinis", protocol.ListMinis{})
-        g.send("ListMaps", protocol.ListMaps{})
-        g.send("GetGuild", protocol.GetGuild{})
-        g.send("GetFriends", protocol.GetFriends{})
+		g.send("ListMinis", protocol.ListMinis{})
+		g.send("ListMaps", protocol.ListMaps{})
+		g.send("GetGuild", protocol.GetGuild{})
+		g.send("GetFriends", protocol.GetFriends{})
 
 		g.activeTab = tabArmy
 		g.requestLobbyDataOnce()
@@ -294,16 +295,27 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		if b.MaxHP > 0 {
 			fx := g.hpfxStep(g.hpFxBases, id, b.HP, nowMs)
 			isPlayer := (b.OwnerID == g.playerID)
-			x := float64(b.X); y := float64(b.Y-6); w := float64(b.W); h := 4.0
-			g.DrawHPBarForOwner(screen, x, y, w, h, b.HP, b.MaxHP, fx.ghostHP, isPlayer)
+			x := float64(b.X)
+			y := float64(b.Y - 6)
+			w := float64(b.W)
+			h := 4.0
+			g.DrawHPBarForOwner(screen, x, y, w, h, b.HP, b.MaxHP, fx.ghostHP, fx.healGhostHP, isPlayer)
 			// Base level badge left of bar
-			rx0 := int(x + 0.5); ry0 := int(y + 0.5); rx1 := int(x+w + 0.5); ry1 := int(y+h + 0.5)
+			rx0 := int(x + 0.5)
+			ry0 := int(y + 0.5)
+			rx1 := int(x + w + 0.5)
+			ry1 := int(y + h + 0.5)
 			barRect := image.Rect(rx0, ry0, rx1, ry1)
 			lvl := 1
-			if isPlayer { lvl = g.currentArmyRoundedLevel() }
+			if isPlayer {
+				lvl = g.currentArmyRoundedLevel()
+			}
 			g.drawLevelBadge(screen, barRect, lvl)
 		}
 	}
+
+	// Draw projectiles first (behind units)
+	g.drawProjectiles(screen)
 
 	// Units
 	const unitTargetPX = 42.0
@@ -320,12 +332,12 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		}
 
 		if u.MaxHP > 0 {
-            barW := 26.0 * 1.05
-            bx := u.X - barW/2
-            by := u.Y - unitTargetPX/2 - 6
+			barW := 26.0 * 1.05
+			bx := u.X - barW/2
+			by := u.Y - unitTargetPX/2 - 6
 
-            fx := g.hpfxStep(g.hpFxUnits, id, u.HP, nowMs)
-            g.DrawHPBarForOwner(screen, bx, by, barW, 3, u.HP, u.MaxHP, fx.ghostHP, u.OwnerID == g.playerID)
+			fx := g.hpfxStep(g.hpFxUnits, id, u.HP, nowMs)
+			g.DrawHPBarForOwner(screen, bx, by, barW, 3, u.HP, u.MaxHP, fx.ghostHP, fx.healGhostHP, u.OwnerID == g.playerID)
 			// Level badge left of HP bar
 			rx0 := int(bx + 0.5)
 			ry0 := int(by + 0.5)
@@ -370,32 +382,44 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		ebitenutil.DrawRect(screen, float64(x), float64(y), float64(w), float64(h), color.NRGBA{30, 30, 45, 240})
 
 		title := "Defeat"
-		if g.endVictory || g.victory { title = "Victory!" }
+		if g.endVictory || g.victory {
+			title = "Victory!"
+		}
 		text.Draw(screen, title, basicfont.Face7x13, x+20, y+40, color.White)
 
-        // XP gains list (if computed)
-        if g.xpGains != nil {
-            names := g.battleArmy
-            if len(names) == 0 {
-                if g.selectedChampion != "" { names = append(names, g.selectedChampion) }
-                for i := 0; i < 6; i++ { if g.selectedOrder[i] != "" { names = append(names, g.selectedOrder[i]) } }
-            }
-            // Reorder so the champion stays first and minis with +XP are shown next
-            if len(names) > 0 {
-                champ := names[0]
-                pos := make([]string, 0, 6)
-                zero := make([]string, 0, 6)
-                for _, n := range names[1:] {
-                    if g.xpGains[n] > 0 { pos = append(pos, n) } else { zero = append(zero, n) }
-                }
-                // Keep relative order among positives/zeros stable
-                names = append([]string{champ}, append(pos, zero...)...)
-            }
-            yy := y + 62
-            for _, n := range names {
-                // small portrait
-                if img := g.ensureMiniImageByName(n); img != nil {
-                    iw, ih := img.Bounds().Dx(), img.Bounds().Dy()
+		// XP gains list (if computed)
+		if g.xpGains != nil {
+			names := g.battleArmy
+			if len(names) == 0 {
+				if g.selectedChampion != "" {
+					names = append(names, g.selectedChampion)
+				}
+				for i := 0; i < 6; i++ {
+					if g.selectedOrder[i] != "" {
+						names = append(names, g.selectedOrder[i])
+					}
+				}
+			}
+			// Reorder so the champion stays first and minis with +XP are shown next
+			if len(names) > 0 {
+				champ := names[0]
+				pos := make([]string, 0, 6)
+				zero := make([]string, 0, 6)
+				for _, n := range names[1:] {
+					if g.xpGains[n] > 0 {
+						pos = append(pos, n)
+					} else {
+						zero = append(zero, n)
+					}
+				}
+				// Keep relative order among positives/zeros stable
+				names = append([]string{champ}, append(pos, zero...)...)
+			}
+			yy := y + 62
+			for _, n := range names {
+				// small portrait
+				if img := g.ensureMiniImageByName(n); img != nil {
+					iw, ih := img.Bounds().Dx(), img.Bounds().Dy()
 					s := 20.0 / float64(maxInt(1, maxInt(iw, ih)))
 					op := &ebiten.DrawImageOptions{}
 					op.GeoM.Scale(s, s)
@@ -404,10 +428,16 @@ func (g *Game) Draw(screen *ebiten.Image) {
 				}
 				d := g.xpGains[n]
 				line := n
-				if d > 0 { line += fmt.Sprintf("  +%d XP", d) } else { line += "  +0 XP" }
+				if d > 0 {
+					line += fmt.Sprintf("  +%d XP", d)
+				} else {
+					line += "  +0 XP"
+				}
 				text.Draw(screen, line, basicfont.Face7x13, x+40, yy, color.White)
 				yy += 18
-				if yy > y+h-64 { break }
+				if yy > y+h-64 {
+					break
+				}
 			}
 		}
 
@@ -554,5 +584,48 @@ func (b *battleHPBar) Draw(dst *ebiten.Image) {
 	ebitenutil.DrawRect(dst, float64(b.x+b.w-1), float64(b.y), 1, float64(b.h), color.NRGBA{0, 0, 0, 160})
 }
 
+func (g *Game) drawProjectiles(screen *ebiten.Image) {
+	// Simple projectile rendering - draw lines from ranged units to their targets
+	for _, u := range g.world.Units {
+		// Only draw projectiles for ranged units that have a particle type
+		if strings.ToLower(u.Class) == "range" && u.Particle != "" && u.Particle != "projectile" {
+			// Find target
+			tx, ty := g.findTargetForUnit(u)
+			dist := math.Hypot(tx-u.X, ty-u.Y)
 
+			// Only draw if in range
+			if dist <= float64(u.Range) && dist > 10 {
+				// Draw a simple line projectile
+				ebitenutil.DrawLine(screen, u.X, u.Y, tx, ty, color.NRGBA{255, 255, 100, 200})
 
+				// Draw a small circle at the projectile tip
+				ebitenutil.DrawCircle(screen, tx, ty, 3, color.NRGBA{255, 255, 0, 255})
+			}
+		}
+	}
+}
+
+func (g *Game) findTargetForUnit(u *RenderUnit) (float64, float64) {
+	var best *RenderUnit
+	bestDist := math.MaxFloat64
+	for _, v := range g.world.Units {
+		if v.OwnerID == u.OwnerID || v.HP <= 0 {
+			continue
+		}
+		d := math.Hypot(v.X-u.X, v.Y-u.Y)
+		if d < bestDist {
+			bestDist = d
+			best = v
+		}
+	}
+	if best != nil {
+		return best.X, best.Y
+	}
+	// enemy base
+	for _, b := range g.world.Bases {
+		if b.OwnerID != u.OwnerID {
+			return float64(b.X + b.W/2), float64(b.Y + b.H/2)
+		}
+	}
+	return float64(protocol.ScreenW / 2), float64(protocol.ScreenH / 2)
+}

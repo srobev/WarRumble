@@ -1,23 +1,23 @@
 {
-  "playerId": 1282167,
+  "playerId": 598058,
   "name": "silvester",
   "army": [
-    "Malfurion Stormrage",
+    "Hogger",
+    "Banshee",
     "Bat Rider",
-    "Gnoll Brute",
-    "Quilboar",
-    "S.A.F.E. Pilot",
-    "Witch Doctor",
-    "Harpies"
+    "Pyromancer",
+    "Defias Bandits",
+    "Gargoyle",
+    "Gnoll Brute"
   ],
   "armies": {
     "Bloodmage Thalnos": [
       "Abomination",
       "Banshee",
-      "Pyromancer",
+      "Gargoyle",
       "Chimaera",
-      "Darkspear Troll",
-      "Harpies"
+      "Necromancer",
+      "Raptor"
     ],
     "Hogger": [
       "Banshee",
@@ -44,10 +44,10 @@
       "Gryphon Rider"
     ],
     "Malfurion Stormrage": [
-      "Bat Rider",
+      "Pyromancer",
+      "Drake",
       "Gnoll Brute",
-      "Quilboar",
-      "S.A.F.E. Pilot",
+      "Frostwolf Shaman",
       "Witch Doctor",
       "Harpies"
     ],
@@ -87,18 +87,14 @@
   "gold": 0,
   "accountXp": 0,
   "unitXp": {
-    "Banshee": 9246,
-    "Drake": 9164,
-    "Faerie Dragon": 9246,
-    "Frostwolf Shaman": 9328,
-    "Gargoyle": 16,
-    "Hogger": 8,
-    "Necromancer": 9328,
-    "Pyromancer": 8,
-    "Ragnaros": 9574,
-    "S.A.F.E. Pilot": 9410
+    "Frostwolf Shaman": 8,
+    "Gnoll Brute": 9,
+    "Harpies": 8,
+    "Malfurion Stormrage": 20,
+    "Quilboar": 3,
+    "Witch Doctor": 9
   },
-  "pvp_rating": 1739,
+  "pvp_rating": 1741,
   "pvp_rank": "Warlord",
   "avatar": "male.png",
   "guildId": "g-1756713614348685400"

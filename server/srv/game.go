@@ -14,26 +14,33 @@ import (
 )
 
 type MiniCard struct {
-	Name     string  `json:"name"`
-	DMG      int     `json:"dmg"`
-	HP       int     `json:"hp"`
-	Portrait string  `json:"portrait"`
-	Class    string  `json:"class"`
-	Role     string  `json:"role"`
-	Cost     int     `json:"cost"`
-	Speed    float64 `json:"speed"`
+	Name        string  `json:"name"`
+	DMG         int     `json:"dmg"`
+	HP          int     `json:"hp"`
+	Heal        int     `json:"heal"`
+	Hps         int     `json:"hps"`
+	Portrait    string  `json:"portrait"`
+	Class       string  `json:"class"`
+	SubClass    string  `json:"subclass"`
+	Role        string  `json:"role"`
+	Cost        int     `json:"cost"`
+	Speed       float64 `json:"speed"`
+	Range       int     `json:"range"`
+	Particle    string  `json:"particle"`
+	Cooldown    float64 `json:"cooldown,omitempty"`     // Attack cooldown in seconds
+	AttackSpeed float64 `json:"attack_speed,omitempty"` // Attacks per second (alternative to cooldown)
 }
 
 type Player struct {
-	ID    int64
-	Name  string
-	Gold  int
-	GoldT float64
-	Hand  []MiniCard
-	Queue []MiniCard
-	Next  *MiniCard
-	Ready bool
-	Base  Base
+	ID     int64
+	Name   string
+	Gold   int
+	GoldT  float64
+	Hand   []MiniCard
+	Queue  []MiniCard
+	Next   *MiniCard
+	Ready  bool
+	Base   Base
 	Rating int    // NEW: PvP Elo
 	Rank   string // NEW: derived name
 }
@@ -45,16 +52,23 @@ type Base struct {
 }
 
 type Unit struct {
-	ID         int64
-	Name       string
-	X, Y       float64
-	VX, VY     float64
-	HP, MaxHP  int
-	DMG        int
-	Speed      float64 // px/s
-	OwnerID    int64
-	Class      string
-	Facing, CD float64
+	ID             int64
+	Name           string
+	X, Y           float64
+	VX, VY         float64
+	HP, MaxHP      int
+	DMG            int
+	Heal           int
+	Hps            int
+	Speed          float64 // px/s
+	OwnerID        int64
+	Class          string
+	SubClass       string
+	Range          int
+	Particle       string
+	Facing, CD     float64
+	HealCD         float64
+	AttackCooldown float64 // Configurable attack cooldown duration
 }
 
 type Game struct {
@@ -294,14 +308,18 @@ func (g *Game) Step(dt float64) protocol.StateDelta {
 		dist := math.Hypot(dx, dy)
 
 		rng := 28.0 // melee
-		if c := lower(u.Class); c == "range" || c == "ranged" {
-			rng = 120
+		if lower(u.Class) == "range" {
+			rng = float64(u.Range)
 		}
 
+		// Attack logic for all ranged units (including healers)
 		if dist <= rng {
 			if u.CD <= 0 {
-				g.damageAt(u, tx, ty, u.DMG)
-				u.CD = 1.0
+				// Healers attack if they have damage, otherwise they just stay at range
+				if lower(u.SubClass) != "healer" || u.DMG > 0 {
+					g.damageAt(u, tx, ty, u.DMG)
+				}
+				u.CD = u.AttackCooldown
 			}
 		} else if dist > 0 {
 			nx, ny := dx/dist, dy/dist
@@ -313,9 +331,27 @@ func (g *Game) Step(dt float64) protocol.StateDelta {
 			u.CD -= dt
 		}
 
+		// Healing for healers
+		if lower(u.Class) == "range" && lower(u.SubClass) == "healer" {
+			if u.HealCD <= 0 {
+				for _, v := range g.units {
+					if v.OwnerID == u.OwnerID && v.HP < v.MaxHP && hypot(u.X, u.Y, v.X, v.Y) <= float64(u.Range) {
+						v.HP += u.Heal
+						if v.HP > v.MaxHP {
+							v.HP = v.MaxHP
+						}
+						u.HealCD = 4.0
+						break
+					}
+				}
+			} else {
+				u.HealCD -= dt
+			}
+		}
+
 		upserts = append(upserts, protocol.UnitState{
 			ID: u.ID, Name: u.Name, X: u.X, Y: u.Y, HP: u.HP, MaxHP: u.MaxHP,
-			OwnerID: u.OwnerID, Facing: u.Facing, Class: u.Class,
+			OwnerID: u.OwnerID, Facing: u.Facing, Class: u.Class, Range: u.Range, Particle: u.Particle,
 		})
 	}
 
@@ -332,7 +368,7 @@ func (g *Game) FullSnapshot() protocol.FullSnapshot {
 	units := make([]protocol.UnitState, 0, len(g.units))
 	for _, u := range g.units {
 		units = append(units, protocol.UnitState{
-			ID: u.ID, Name: u.Name, X: u.X, Y: u.Y, HP: u.HP, MaxHP: u.MaxHP, OwnerID: u.OwnerID, Facing: u.Facing, Class: u.Class,
+			ID: u.ID, Name: u.Name, X: u.X, Y: u.Y, HP: u.HP, MaxHP: u.MaxHP, OwnerID: u.OwnerID, Facing: u.Facing, Class: u.Class, Range: u.Range, Particle: u.Particle,
 		})
 	}
 	bases := make([]protocol.BaseState, 0, len(g.players))
@@ -412,15 +448,29 @@ func (g *Game) HandleDeploy(pid int64, d protocol.DeployMiniAt) {
 	// TODO: strict spawn zones; for now allow anywhere your client permits
 	p.Gold -= card.Cost
 
+	// Calculate attack cooldown from JSON data
+	attackCooldown := 2.0 // default
+	if card.Cooldown > 0 {
+		attackCooldown = card.Cooldown
+	} else if card.AttackSpeed > 0 {
+		attackCooldown = 1.0 / card.AttackSpeed
+	}
+
 	u := &Unit{
 		ID:   protocol.NewID(),
 		Name: card.Name,
 		X:    d.X, Y: d.Y,
 		HP: max1(card.HP, 1), MaxHP: max1(card.HP, 1),
-		DMG:     card.DMG,
-		Speed:   speedPx(card.Speed),
-		OwnerID: pid,
-		Class:   card.Class,
+		DMG:            card.DMG,
+		Heal:           card.Heal,
+		Hps:            card.Hps,
+		Speed:          speedPx(card.Speed),
+		OwnerID:        pid,
+		Class:          card.Class,
+		SubClass:       card.SubClass,
+		Range:          card.Range,
+		Particle:       card.Particle,
+		AttackCooldown: attackCooldown,
 	}
 	g.units[u.ID] = u
 
@@ -452,21 +502,25 @@ type MiniInfo struct {
 
 // LoadLobbyMinis returns a lightweight list of minis for the Army UI.
 func LoadLobbyMinis() []protocol.MiniInfo {
-    g := NewGame() // this loads minis.json via g.loadMinis()
-    out := make([]protocol.MiniInfo, 0, len(g.minis))
-    for _, m := range g.minis {
-        out = append(out, protocol.MiniInfo{
-            Name:     m.Name,
-            Class:    m.Class,
-            Role:     m.Role,
-            Cost:     m.Cost,
-            Portrait: m.Portrait,
-            Dmg:      m.DMG,
-            Hp:       m.HP,
-            Speed:    int(math.Round(m.Speed)),
-        })
-    }
-    return out
+	g := NewGame() // this loads minis.json via g.loadMinis()
+	out := make([]protocol.MiniInfo, 0, len(g.minis))
+	for _, m := range g.minis {
+		out = append(out, protocol.MiniInfo{
+			Name:        m.Name,
+			Class:       m.Class,
+			SubClass:    m.SubClass,
+			Role:        m.Role,
+			Cost:        m.Cost,
+			Portrait:    m.Portrait,
+			Dmg:         m.DMG,
+			Hp:          m.HP,
+			Heal:        m.Heal,
+			Hps:         m.Hps,
+			Speed:       int(math.Round(m.Speed)),
+			AttackSpeed: m.AttackSpeed,
+		})
+	}
+	return out
 }
 
 // DefaultAIArmy picks 1 champion + 6 cheapest non-spell minis from loaded minis.json
