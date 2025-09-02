@@ -1,0 +1,802 @@
+     1 package game
+     2 
+     3 import (
+     4 	"fmt"
+     5 	"image"
+     6 	"image/color"
+     7 	"sort"
+     8 	"strings"
+     9 	"time"
+    10 
+    11 	"rumble/shared/protocol"
+    12 
+    13 	"github.com/hajimehoshi/ebiten/v2"
+    14 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+    15 	"github.com/hajimehoshi/ebiten/v2/inpututil"
+    16 	"github.com/hajimehoshi/ebiten/v2/text"
+    17 	"github.com/hajimehoshi/ebiten/v2/vector"
+    18 	"golang.org/x/image/font/basicfont"
+    19 )
+    20 
+    21 // socialSubTab enumerates the Social view: Friends, Guild, Messages.
+    22 type socialSubTab int
+    23 
+    24 const (
+    25 	socialFriends socialSubTab = iota
+    26 	socialGuild
+    27 	socialMessages
+    28 )
+    29 
+    30 // Minimal guild state placeholders. Integrate with backend later.
+    31 type guildMember struct {
+    32 	Name string
+    33 	Role string // leader/officer/member
+    34 	Last string // last online
+    35 }
+    36 
+    37 // UpdateSocial handles input for Social tab
+    38 func (g *Game) updateSocial() {
+    39 	// Use logical coordinates to match our layout rects under window scaling
+    40 	mx, my := g.logicalCursor()
+    41 
+    42 	// Build segmented control rects (Friends | Guild)
+    43 	const segW, segH = 220, 36
+    44 	segX := pad
+    45 	segY := topBarH + pad
+    46 	segFriends := image.Rect(segX, segY, segX+segW/2, segY+segH)
+    47 	segGuild := image.Rect(segX+segW/2, segY, segX+segW, segY+segH)
+    48 
+    49 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+    50 		switch {
+    51 		case ptIn(mx, my, segFriends):
+    52 			g.socialTab = int(socialFriends)
+    53 		case ptIn(mx, my, segGuild):
+    54 			g.socialTab = int(socialGuild)
+    55 		}
+    56 	}
+    57 
+    58 	// Simple interactions for Guild when not in a guild
+    59 	if g.socialActive() == socialGuild && strings.TrimSpace(g.guildID) == "" {
+    60 		// Match geometry with drawGuild
+    61 		contentY := segY + segH + 12
+    62 		// Guild name input box
+    63 		nameRect := image.Rect(pad+12, contentY+36, pad+12+260, contentY+36+24)
+    64 		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+    65 			g.guildNameFocus = ptIn(mx, my, nameRect)
+    66 		}
+    67 		if g.guildNameFocus {
+    68 			for _, k := range inpututil.AppendJustPressedKeys(nil) {
+    69 				switch k {
+    70 				case ebiten.KeyBackspace:
+    71 					if len(g.guildCreateName) > 0 {
+    72 						g.guildCreateName = g.guildCreateName[:len(g.guildCreateName)-1]
+    73 					}
+    74 				case ebiten.KeyEnter:
+    75 					// no-op; Create button triggers
+    76 				}
+    77 			}
+    78 			for _, r := range ebiten.AppendInputChars(nil) {
+    79 				if r == '\n' || r == '\r' {
+    80 					continue
+    81 				}
+    82 				if r >= 32 {
+    83 					g.guildCreateName += string(r)
+    84 				}
+    85 			}
+    86 		}
+    87 		btnW, btnH := 160, 32
+    88 		create := image.Rect(pad+12, contentY+72, pad+12+btnW, contentY+72+btnH)
+    89 		join := image.Rect(pad+12+btnW+12, contentY+72, pad+12+btnW+12+btnW, contentY+72+btnH)
+    90 		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+    91 			switch {
+    92 			case ptIn(mx, my, create):
+    93 				name := strings.TrimSpace(g.guildCreateName)
+    94 				if name == "" {
+    95 					base := g.name
+    96 					if strings.TrimSpace(base) == "" {
+    97 						base = "Player"
+    98 					}
+    99 					name = base + "'s Guild"
+   100 				}
+   101 				g.send("CreateGuild", protocol.CreateGuild{Name: name, Desc: "", Privacy: "public", Region: "NA"})
+   102 				g.guildCreateName = ""
+   103 				g.send("GetGuild", protocol.GetGuild{})
+   104 			case ptIn(mx, my, join):
+   105 				g.guildBrowse = true
+   106 				g.guildListScroll = 0
+   107 				g.send("ListGuilds", protocol.ListGuilds{Query: strings.TrimSpace(g.guildFilter)})
+   108 			}
+   109 		}
+   110 		// If browsing, allow clicking first few items to join
+   111 		if g.guildBrowse {
+   112 			// handle filter focus + typing
+   113 			filterRect := image.Rect(pad+12, contentY+108, pad+12+260, contentY+108+22)
+   114 			if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+   115 				g.guildFilterFocus = ptIn(mx, my, filterRect)
+   116 			}
+   117 			if g.guildFilterFocus {
+   118 				for _, k := range inpututil.AppendJustPressedKeys(nil) {
+   119 					switch k {
+   120 					case ebiten.KeyBackspace:
+   121 						if len(g.guildFilter) > 0 {
+   122 							g.guildFilter = g.guildFilter[:len(g.guildFilter)-1]
+   123 						}
+   124 					}
+   125 				}
+   126 				for _, r := range ebiten.AppendInputChars(nil) {
+   127 					if r >= 32 {
+   128 						g.guildFilter += string(r)
+   129 					}
+   130 				}
+   131 				// Throttle refreshes to avoid spamming the server
+   132 				q := strings.TrimSpace(g.guildFilter)
+   133 				if q != g.lastGuildQuery || time.Since(g.lastGuildListReq) > 800*time.Millisecond {
+   134 					g.send("ListGuilds", protocol.ListGuilds{Query: q})
+   135 					g.lastGuildListReq = time.Now()
+   136 					g.lastGuildQuery = q
+   137 				}
+   138 			}
+   139 			// wheel scroll
+   140 			_, wy := ebiten.Wheel()
+   141 			if wy != 0 {
+   142 				g.guildListScroll -= int(wy)
+   143 				if g.guildListScroll < 0 {
+   144 					g.guildListScroll = 0
+   145 				}
+   146 				maxStart := maxInt(0, len(g.guildList)-10)
+   147 				if g.guildListScroll > maxStart {
+   148 					g.guildListScroll = maxStart
+   149 				}
+   150 			}
+   151 			listTop := contentY + 140
+   152 			rowH := 22
+   153 			start := g.guildListScroll
+   154 			maxRows := 10
+   155 			for i := 0; i < maxRows && start+i < len(g.guildList); i++ {
+   156 				y := listTop + i*rowH
+   157 				// Join button rect at right
+   158 				bx := pad + 12 + 420
+   159 				br := image.Rect(bx, y-12, bx+72, y+10)
+   160 				if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) && ptIn(mx, my, br) {
+   161 					gid := g.guildList[start+i].GuildID
+   162 					g.send("JoinGuild", protocol.JoinGuild{GuildID: gid})
+   163 					g.guildBrowse = false
+   164 				}
+   165 			}
+   166 		}
+   167 	}
+   168 
+   169 	// Guild actions when in a guild
+   170 	if g.socialActive() == socialGuild && strings.TrimSpace(g.guildID) != "" {
+   171 		// Selection in members list
+   172 		// Recompute geometry exactly like drawGuild
+   173 		contentY := segY + segH + 12
+   174 		x := pad + 12
+   175 		colW := (protocol.ScreenW - 2*pad - 36) / 3
+   176 		membersX := x
+   177 		h := protocol.ScreenH - menuBarH - contentY - pad
+   178 		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+   179 			for i := 0; i < len(g.guildMembers) && i < 20; i++ {
+   180 				yy := contentY + 50 + i*18
+   181 				r := image.Rect(membersX+6, yy-12, membersX+colW-6, yy+4)
+   182 				name := g.guildMembers[i].Name
+   183 				if ptIn(mx, my, r) {
+   184 					// if clicking the same selected member, open profile overlay
+   185 					if strings.EqualFold(g.selectedGuildMember, name) {
+   186 						g.send("GetUserProfile", protocol.GetUserProfile{Name: name})
+   187 					}
+   188 					g.selectedGuildMember = name
+   189 				}
+   190 			}
+   191 			// Actions buttons
+   192 			actY := contentY + h - 24 - 80
+   193 			leaveR := image.Rect(membersX+14, actY+36, membersX+14+86, actY+36+22)
+   194 			promoR := image.Rect(membersX+14+96, actY+36, membersX+14+96+86, actY+36+22)
+   195 			demoR := image.Rect(membersX+14+96*2, actY+36, membersX+14+96*2+86, actY+36+22)
+   196 			kickR := image.Rect(membersX+14+96*3, actY+36, membersX+14+96*3+86, actY+36+22)
+   197 			xferR := image.Rect(membersX+14+96*4, actY+36, membersX+14+96*4+86, actY+36+22)
+   198 			switch {
+   199 			case ptIn(mx, my, leaveR):
+   200 				g.send("LeaveGuild", protocol.LeaveGuild{})
+   201 				g.send("GetGuild", protocol.GetGuild{})
+   202 			case ptIn(mx, my, promoR) && g.selectedGuildMember != "":
+   203 				g.send("PromoteMember", protocol.PromoteMember{User: g.selectedGuildMember})
+   204 				g.send("GetGuild", protocol.GetGuild{})
+   205 			case ptIn(mx, my, demoR) && g.selectedGuildMember != "":
+   206 				g.send("DemoteMember", protocol.DemoteMember{User: g.selectedGuildMember})
+   207 				g.send("GetGuild", protocol.GetGuild{})
+   208 			case ptIn(mx, my, kickR) && g.selectedGuildMember != "":
+   209 				g.send("KickMember", protocol.KickMember{User: g.selectedGuildMember})
+   210 				g.send("GetGuild", protocol.GetGuild{})
+   211 			case ptIn(mx, my, xferR) && g.selectedGuildMember != "":
+   212 				g.send("TransferLeader", protocol.TransferLeader{To: g.selectedGuildMember})
+   213 				g.send("GetGuild", protocol.GetGuild{})
+   214 			}
+   215 			// Handle guild description edit/save in sidebar
+   216 			membersW := colW*2 + 18
+   217 			rewardsX := membersX + membersW + 18 - (colW*2 + 18 - membersW)
+   218 			descRect := image.Rect(rewardsX+10, contentY+50, rewardsX+10+(colW-20), contentY+50+80)
+   219 			saveRect := image.Rect(rewardsX+10, contentY+50+84, rewardsX+10+72, contentY+50+84+22)
+   220 			// focus
+   221 			g.guildDescFocus = ptIn(mx, my, descRect)
+   222 			meRole := "member"
+   223 			for _, m := range g.guildMembers {
+   224 				if strings.EqualFold(m.Name, g.name) {
+   225 					meRole = strings.ToLower(m.Role)
+   226 				}
+   227 			}
+   228 			canEdit := (meRole == "leader" || meRole == "officer")
+   229 			if canEdit && ptIn(mx, my, saveRect) {
+   230 				g.send("SetGuildDesc", protocol.SetGuildDesc{Desc: strings.TrimSpace(g.guildDescEdit)})
+   231 				g.send("GetGuild", protocol.GetGuild{})
+   232 			}
+   233 		}
+   234 		if g.guildDescFocus {
+   235 			for _, k := range inpututil.AppendJustPressedKeys(nil) {
+   236 				if k == ebiten.KeyBackspace && len(g.guildDescEdit) > 0 {
+   237 					g.guildDescEdit = g.guildDescEdit[:len(g.guildDescEdit)-1]
+   238 				}
+   239 			}
+   240 			for _, r := range ebiten.AppendInputChars(nil) {
+   241 				if r >= 32 {
+   242 					g.guildDescEdit += string(r)
+   243 				}
+   244 			}
+   245 		}
+   246 	}
+   247 
+   248 	// Friends: add/search and send DM on Enter (in Messages)
+   249 	if g.socialActive() == socialFriends {
+   250 		// focus handling for search field
+   251 		searchRect := image.Rect(pad+12, (topBarH+pad)+36+12+16, pad+12+260, (topBarH+pad)+36+12+16+24)
+   252 		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+   253 			g.friendSearchFocus = ptIn(mx, my, searchRect)
+   254 		}
+   255 		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+   256 			// click on friend to select for messages or remove
+   257 			listTop := (topBarH + pad) + 36 + 12 + 52
+   258 			for i := range g.friends {
+   259 				yy := listTop + i*20
+   260 				r := image.Rect(pad+12, yy-12, pad+12+360, yy+6)
+   261 				if ptIn(mx, my, r) {
+   262 					g.selectedFriend = g.friends[i].Name
+   263 					// Open DM overlay and load history
+   264 					g.dmOverlay = true
+   265 					g.dmInputFocus = true
+   266 					g.send("GetFriendHistory", protocol.GetFriendHistory{With: g.selectedFriend, Limit: 50})
+   267 				}
+   268 				// remove button
+   269 				rem := image.Rect(pad+12+370, yy-12, pad+12+370+64, yy+6)
+   270 				if ptIn(mx, my, rem) {
+   271 					g.confirmRemoveFriend = g.friends[i].Name
+   272 				}
+   273 			}
+   274 			// Add button
+   275 			btn := image.Rect(pad+12+270, (topBarH+pad)+36+12+16, pad+12+270+70, (topBarH+pad)+36+12+16+24)
+   276 			if ptIn(mx, my, btn) && strings.TrimSpace(g.friendSearch) != "" {
+   277 				g.send("AddFriend", protocol.AddFriend{Name: g.friendSearch})
+   278 				g.friendSearch = ""
+   279 				g.friendSearchFocus = false
+   280 			}
+   281 			// Confirm remove overlay buttons
+   282 			if g.confirmRemoveFriend != "" {
+   283 				baseY := (topBarH + pad) + 36 + 12 + 52 + len(g.friends)*20 + 8
+   284 				yes := image.Rect(pad+18+180, baseY+6, pad+18+180+44, baseY+6+22)
+   285 				no := image.Rect(pad+18+180+52, baseY+6, pad+18+180+52+44, baseY+6+22)
+   286 				if ptIn(mx, my, yes) {
+   287 					g.send("RemoveFriend", protocol.RemoveFriend{Name: g.confirmRemoveFriend})
+   288 					g.confirmRemoveFriend = ""
+   289 				} else if ptIn(mx, my, no) {
+   290 					g.confirmRemoveFriend = ""
+   291 				}
+   292 			}
+   293 		}
+   294 		// Type into search only when focused
+   295 		if g.friendSearchFocus {
+   296 			for _, k := range inpututil.AppendJustPressedKeys(nil) {
+   297 				if k == ebiten.KeyBackspace && len(g.friendSearch) > 0 {
+   298 					g.friendSearch = g.friendSearch[:len(g.friendSearch)-1]
+   299 				}
+   300 			}
+   301 			for _, r := range ebiten.AppendInputChars(nil) {
+   302 				if r >= 32 {
+   303 					g.friendSearch += string(r)
+   304 				}
+   305 			}
+   306 		}
+   307 	}
+   308 
+   309 	// DM overlay input handling (since Messages tab is removed)
+   310 	if g.dmOverlay && g.selectedFriend != "" {
+   311 		// match geometry with draw overlay
+   312 		w, h := 420, 300
+   313 		x := (protocol.ScreenW - w) / 2
+   314 		y := (protocol.ScreenH - h) / 2
+   315 		closeR := image.Rect(x+w-28, y+8, x+w-8, y+28)
+   316 		inputRect := image.Rect(x+12, y+h-30, x+w-12, y+h-8)
+   317 		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+   318 			if ptIn(mx, my, closeR) {
+   319 				g.dmOverlay = false
+   320 			}
+   321 			g.dmInputFocus = ptIn(mx, my, inputRect)
+   322 		}
+   323 		if g.dmInputFocus {
+   324 			for _, k := range inpututil.AppendJustPressedKeys(nil) {
+   325 				if k == ebiten.KeyEnter && strings.TrimSpace(g.dmInput) != "" {
+   326 					g.send("SendFriendDM", protocol.SendFriendDM{To: g.selectedFriend, Text: g.dmInput})
+   327 					g.dmInput = ""
+   328 					g.send("GetFriendHistory", protocol.GetFriendHistory{With: g.selectedFriend, Limit: 50})
+   329 				} else if k == ebiten.KeyBackspace && len(g.dmInput) > 0 {
+   330 					g.dmInput = g.dmInput[:len(g.dmInput)-1]
+   331 				}
+   332 			}
+   333 			for _, r := range ebiten.AppendInputChars(nil) {
+   334 				if r == '\n' || r == '\r' {
+   335 					continue
+   336 				}
+   337 				if r >= 32 {
+   338 					g.dmInput += string(r)
+   339 				}
+   340 			}
+   341 		}
+   342 	}
+   343 }
+   344 
+   345 // DrawSocial renders the Social UI
+   346 func (g *Game) drawSocial(screen *ebiten.Image) {
+   347 	// Segmented control header (Friends | Guild)
+   348 	const segW, segH = 220, 36
+   349 	segX := pad
+   350 	segY := topBarH + pad
+   351 	ebitenutil.DrawRect(screen, float64(segX), float64(segY), segW, segH, color.NRGBA{20, 28, 44, 210})
+   352 
+   353 	drawSeg := func(idx int, label string, active bool) {
+   354 		x0 := segX + idx*(segW/2)
+   355 		w := segW / 2
+   356 		if active {
+   357 			ebitenutil.DrawRect(screen, float64(x0), float64(segY), float64(w), segH, color.NRGBA{44, 76, 140, 200})
+   358 		}
+   359 		lb := text.BoundString(basicfont.Face7x13, label)
+   360 		tx := x0 + (w-lb.Dx())/2
+   361 		ty := segY + (segH+13)/2 - 2
+   362 		text.Draw(screen, label, basicfont.Face7x13, tx, ty, color.White)
+   363 	}
+   364 
+   365 	drawSeg(0, "Friends", g.socialActive() == socialFriends)
+   366 	drawSeg(1, "Guild", g.socialActive() == socialGuild)
+   367 
+   368 	// Content area box
+   369 	contentY := segY + segH + 12
+   370 	contentH := protocol.ScreenH - menuBarH - contentY - pad
+   371 	ebitenutil.DrawRect(screen, float64(pad), float64(contentY), float64(protocol.ScreenW-2*pad), float64(contentH), color.NRGBA{0x24, 0x24, 0x30, 0xFF})
+   372 
+   373 	switch g.socialActive() {
+   374 	case socialFriends:
+   375 		g.drawFriends(screen, contentY)
+   376 	case socialGuild:
+   377 		g.drawGuild(screen, contentY, contentH)
+   378 	}
+   379 
+   380 	// DM overlay popup
+   381 	if g.dmOverlay && g.selectedFriend != "" {
+   382 		// backdrop
+   383 		ebitenutil.DrawRect(screen, 0, 0, float64(protocol.ScreenW), float64(protocol.ScreenH), color.NRGBA{0, 0, 0, 120})
+   384 		// dialog
+   385 		w, h := 420, 300
+   386 		x := (protocol.ScreenW - w) / 2
+   387 		y := (protocol.ScreenH - h) / 2
+   388 		ebitenutil.DrawRect(screen, float64(x), float64(y), float64(w), float64(h), color.NRGBA{30, 34, 50, 245})
+   389 		// title
+   390 		text.Draw(screen, "Chat: "+g.selectedFriend, basicfont.Face7x13, x+14, y+22, color.White)
+   391 		// close X
+   392 		closeR := image.Rect(x+w-28, y+8, x+w-8, y+28)
+   393 		ebitenutil.DrawRect(screen, float64(closeR.Min.X), float64(closeR.Min.Y), float64(closeR.Dx()), float64(closeR.Dy()), color.NRGBA{60, 60, 80, 255})
+   394 		text.Draw(screen, "X", basicfont.Face7x13, closeR.Min.X+6, closeR.Min.Y+14, color.White)
+   395 		// history area
+   396 		padIn := 12
+   397 		panelTop := y + 34
+   398 		panelH := h - 34 - 40
+   399 		ebitenutil.DrawRect(screen, float64(x+padIn), float64(panelTop), float64(w-2*padIn), float64(panelH), color.NRGBA{0x24, 0x24, 0x30, 0xFF})
+   400 		// messages (last N)
+   401 		rowH := 16
+   402 		maxRows := (panelH - 10) / rowH
+   403 		start := 0
+   404 		if len(g.dmHistory) > maxRows {
+   405 			start = len(g.dmHistory) - maxRows
+   406 		}
+   407 		for i := start; i < len(g.dmHistory); i++ {
+   408 			line := g.dmHistory[i].From + ": " + g.dmHistory[i].Text
+   409 			text.Draw(screen, line, basicfont.Face7x13, x+padIn+6, panelTop+16+(i-start)*rowH, color.White)
+   410 		}
+   411 		// input bar
+   412 		ebitenutil.DrawRect(screen, float64(x+padIn), float64(y+h-30), float64(w-2*padIn), 22, color.NRGBA{24, 28, 40, 220})
+   413 		text.Draw(screen, g.dmInput, basicfont.Face7x13, x+padIn+6, y+h-14, color.White)
+   414 		// handle clicks
+   415 		mx, my := g.logicalCursor()
+   416 		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+   417 			if ptIn(mx, my, closeR) {
+   418 				g.dmOverlay = false
+   419 			}
+   420 		}
+   421 	}
+   422 
+   423 	// Member profile overlay popup
+   424 	if g.memberProfileOverlay {
+   425 		ebitenutil.DrawRect(screen, 0, 0, float64(protocol.ScreenW), float64(protocol.ScreenH), color.NRGBA{0, 0, 0, 120})
+   426 		w, h := 420, 220
+   427 		x := (protocol.ScreenW - w) / 2
+   428 		y := (protocol.ScreenH - h) / 2
+   429 		ebitenutil.DrawRect(screen, float64(x), float64(y), float64(w), float64(h), color.NRGBA{30, 34, 50, 245})
+   430 		// close X
+   431 		closeR := image.Rect(x+w-28, y+8, x+w-8, y+28)
+   432 		ebitenutil.DrawRect(screen, float64(closeR.Min.X), float64(closeR.Min.Y), float64(closeR.Dx()), float64(closeR.Dy()), color.NRGBA{60, 60, 80, 255})
+   433 		text.Draw(screen, "X", basicfont.Face7x13, closeR.Min.X+6, closeR.Min.Y+14, color.White)
+   434 		text.Draw(screen, g.memberProfile.Name, basicfont.Face7x13, x+14, y+26, color.White)
+   435 		text.Draw(screen, fmt.Sprintf("PvP: %d (%s)", g.memberProfile.PvPRating, g.memberProfile.PvPRank), basicfont.Face7x13, x+14, y+48, color.White)
+   436 		mx, my := g.logicalCursor()
+   437 		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+   438 			if ptIn(mx, my, closeR) {
+   439 				g.memberProfileOverlay = false
+   440 			}
+   441 		}
+   442 	}
+   443 }
+   444 
+   445 // drawGuild renders the Guild section. Rewards are present but disabled (grayed out).
+   446 func (g *Game) drawGuild(screen *ebiten.Image, y0, h int) {
+   447 	// If no guild membership, show Join/Create panel
+   448 	if strings.TrimSpace(g.guildID) == "" {
+   449 		text.Draw(screen, "No guild yet", basicfont.Face7x13, pad+12, y0+24, color.White)
+   450 		text.Draw(screen, "Create or Join a guild to play with others.", basicfont.Face7x13, pad+12, y0+44, color.NRGBA{200, 200, 210, 255})
+   451 		// Guild name input
+   452 		ebitenutil.DrawRect(screen, float64(pad+12), float64(y0+36), 260, 24, color.NRGBA{24, 28, 40, 220})
+   453 		name := g.guildCreateName
+   454 		if name == "" && !g.guildNameFocus {
+   455 			name = "Enter guild name..."
+   456 		}
+   457 		text.Draw(screen, name, basicfont.Face7x13, pad+18, y0+52, color.White)
+   458 
+   459 		// Buttons
+   460 		btnW, btnH := 160, 32
+   461 		create := rect{x: pad + 12, y: y0 + 72, w: btnW, h: btnH}
+   462 		join := rect{x: pad + 12 + btnW + 12, y: y0 + 72, w: btnW, h: btnH}
+   463 		ebitenutil.DrawRect(screen, float64(create.x), float64(create.y), float64(create.w), float64(create.h), color.NRGBA{70, 110, 70, 255})
+   464 		ebitenutil.DrawRect(screen, float64(join.x), float64(join.y), float64(join.w), float64(join.h), color.NRGBA{70, 90, 120, 255})
+   465 		text.Draw(screen, "Create Guild", basicfont.Face7x13, create.x+18, create.y+20, color.White)
+   466 		text.Draw(screen, "Join Guild", basicfont.Face7x13, join.x+24, join.y+20, color.White)
+   467 		// Browse list (optional)
+   468 		if g.guildBrowse {
+   469 			// filter box
+   470 			ebitenutil.DrawRect(screen, float64(pad+12), float64(y0+108), 260, 22, color.NRGBA{24, 28, 40, 220})
+   471 			ftxt := g.guildFilter
+   472 			if ftxt == "" && !g.guildFilterFocus {
+   473 				ftxt = "Filter..."
+   474 			}
+   475 			text.Draw(screen, ftxt, basicfont.Face7x13, pad+18, y0+124, color.White)
+   476 			listTop := y0 + 140
+   477 			text.Draw(screen, "Public Guilds:", basicfont.Face7x13, pad+12, listTop-14, color.White)
+   478 			rowH := 22
+   479 			start := g.guildListScroll
+   480 			maxRows := 10
+   481 			for i := 0; i < maxRows && start+i < len(g.guildList); i++ {
+   482 				yy := listTop + i*rowH
+   483 				it := g.guildList[start+i]
+   484 				line := it.Name + fmt.Sprintf("  (%d)", it.MembersCount)
+   485 				if i%2 == 0 {
+   486 					ebitenutil.DrawRect(screen, float64(pad+12), float64(yy-14), float64(480), 20, color.NRGBA{0x2c, 0x2c, 0x3c, 0xFF})
+   487 				}
+   488 				text.Draw(screen, line, basicfont.Face7x13, pad+18, yy, color.White)
+   489 				// Join button
+   490 				jb := image.Rect(pad+12+420, yy-12, pad+12+420+72, yy+10)
+   491 				ebitenutil.DrawRect(screen, float64(jb.Min.X), float64(jb.Min.Y), float64(jb.Dx()), float64(jb.Dy()), color.NRGBA{70, 110, 70, 255})
+   492 				text.Draw(screen, "Join", basicfont.Face7x13, jb.Min.X+18, jb.Min.Y+16, color.White)
+   493 			}
+   494 		}
+   495 		return
+   496     }
+   497 
+   498     // New layout: top members, center rewards button, bottom chat
+   499     x := pad + 12
+   500     fullW := protocol.ScreenW - 2*pad - 24
+   501     availH := h - 24
+   502     topH := availH/2 - 20
+   503     if topH < 120 { topH = availH/2 }
+   504     botH := availH - topH - 36
+   505 
+   506     // Members box
+   507     ebitenutil.DrawRect(screen, float64(x), float64(y0+12), float64(fullW), float64(topH), color.NRGBA{0x28,0x28,0x36,0xFF})
+   508     // Header with count and sort
+   509     text.Draw(screen, fmt.Sprintf("Members %d/25", len(g.guildMembers)), basicfont.Face7x13, x+8, y0+28, color.White)
+   510     sortBtn := image.Rect(x+fullW-90, y0+16, x+fullW-12, y0+16+22)
+   511     ebitenutil.DrawRect(screen, float64(sortBtn.Min.X), float64(sortBtn.Min.Y), float64(sortBtn.Dx()), float64(sortBtn.Dy()), color.NRGBA{60,60,80,255})
+   512     sortLabel := []string{"Name","Status","Rank"}
+   513     text.Draw(screen, "Sort: "+sortLabel[g.guildSortMode%3], basicfont.Face7x13, sortBtn.Min.X+8, sortBtn.Min.Y+16, color.White)
+   514 
+   515     // Sorted members and rows
+   516     members := append([]protocol.GuildMember(nil), g.guildMembers...)
+   517     switch g.guildSortMode % 3 {
+   518     case 0:
+   519         sort.Slice(members, func(i,j int) bool { return strings.ToLower(members[i].Name) < strings.ToLower(members[j].Name) })
+   520     case 1:
+   521         sort.Slice(members, func(i,j int) bool { if members[i].Online!=members[j].Online { return members[i].Online }; return strings.ToLower(members[i].Name) < strings.ToLower(members[j].Name) })
+   522     case 2:
+   523         rank := func(r string) int { r=strings.ToLower(r); if r=="leader"{return 0}; if r=="officer"{return 1}; return 2 }
+   524         sort.Slice(members, func(i,j int) bool { ri,rj := rank(members[i].Role), rank(members[j].Role); if ri!=rj { return ri<rj }; return strings.ToLower(members[i].Name)<strings.ToLower(members[j].Name) })
+   525     }
+   526     rowsTop := y0 + 40
+   527     rowH := 18
+   528     vis := (topH - (rowsTop-(y0+12))) / rowH
+   529     if vis < 0 { vis = 0 }
+   530     start := g.guildMembersScroll
+   531     if start < 0 { start = 0 }
+   532     maxStart := 0
+   533     if len(members) > vis { maxStart = len(members) - vis }
+   534     if g.guildMembersScroll > maxStart { g.guildMembersScroll = maxStart; start = g.guildMembersScroll }
+   535     for i := 0; i < vis && start+i < len(members); i++ {
+   536         m := members[start+i]
+   537         yy := rowsTop + i*rowH
+   538         bg := color.NRGBA{0x2c,0x2c,0x3c,0xFF}
+   539         lr := strings.ToLower(m.Role)
+   540         if lr=="leader" { bg = color.NRGBA{40,46,70,255} } else if lr=="officer" { bg = color.NRGBA{36,56,48,255} }
+   541         ebitenutil.DrawRect(screen, float64(x+6), float64(yy-12), float64(fullW-12), 16, bg)
+   542         text.Draw(screen, m.Name+" ("+m.Role+")", basicfont.Face7x13, x+12, yy, color.White)
+   543         dx := float32(x+fullW-18)
+   544         dy := float32(yy-6)
+   545         dc := color.NRGBA{220,60,60,255}; if m.Online { dc = color.NRGBA{60,200,80,255} }
+   546         vector.DrawFilledCircle(screen, dx, dy, 4, dc, true)
+   547     }
+   548 
+   549     // Center rewards button
+   550     rb := image.Rect(x+(fullW-160)/2, y0+12+topH+6, x+(fullW-160)/2+160, y0+12+topH+6+26)
+   551     ebitenutil.DrawRect(screen, float64(rb.Min.X), float64(rb.Min.Y), float64(rb.Dx()), float64(rb.Dy()), color.NRGBA{70,90,120,255})
+   552     text.Draw(screen, "Guild Rewards", basicfont.Face7x13, rb.Min.X+26, rb.Min.Y+18, color.White)
+   553 
+   554     // Chat bottom
+   555     chatTop := y0+12+topH+36
+   556     ebitenutil.DrawRect(screen, float64(x), float64(chatTop), float64(fullW), float64(botH), color.NRGBA{0x24,0x24,0x30,0xFF})
+   557     msgRows := (botH-32)/16
+   558     startMsg := 0
+   559     if len(g.guildChat) > msgRows { startMsg = len(g.guildChat) - msgRows }
+   560     for i := startMsg; i < len(g.guildChat); i++ {
+   561         line := g.guildChat[i].From+": "+g.guildChat[i].Text
+   562         text.Draw(screen, line, basicfont.Face7x13, x+8, chatTop+14+(i-startMsg)*16, color.White)
+   563     }
+   564     inputW := fullW - 90
+   565     ebitenutil.DrawRect(screen, float64(x+8), float64(chatTop+botH-26), float64(inputW), 22, color.NRGBA{24,28,40,220})
+   566     text.Draw(screen, g.guildChatInput, basicfont.Face7x13, x+14, chatTop+botH-10, color.White)
+   567     sendR := image.Rect(x+8+inputW+6, chatTop+botH-26, x+8+inputW+6+70, chatTop+botH-26+22)
+   568     ebitenutil.DrawRect(screen, float64(sendR.Min.X), float64(sendR.Min.Y), float64(sendR.Dx()), float64(sendR.Dy()), color.NRGBA{70,110,70,255})
+   569     text.Draw(screen, "Send", basicfont.Face7x13, sendR.Min.X+18, sendR.Min.Y+16, color.White)
+   570 
+   571     // Leave button bottom-right
+   572     leaveR := image.Rect(x+fullW-86, y0+h-32, x+fullW-8, y0+h-10)
+   573     ebitenutil.DrawRect(screen, float64(leaveR.Min.X), float64(leaveR.Min.Y), float64(leaveR.Dx()), float64(leaveR.Dy()), color.NRGBA{90,70,70,255})
+   574     text.Draw(screen, "Leave", basicfont.Face7x13, leaveR.Min.X+18, leaveR.Min.Y+16, color.White)
+   575 
+   576     return
+   577 	x := pad + 12
+   578 	colW := (protocol.ScreenW - 2*pad - 36) / 3
+   579 
+   580 	// Members panel
+   581 	membersX := x
+   582 	ebitenutil.DrawRect(screen, float64(membersX), float64(y0+12), float64(colW), float64(h-24), color.NRGBA{0x28, 0x28, 0x36, 0xFF})
+   583 	text.Draw(screen, fmt.Sprintf("Members %d/25", len(g.guildMembers)), basicfont.Face7x13, membersX+10, y0+30, color.White)
+   584 	sortBtn := image.Rect(membersX+colW-90, y0+16, membersX+colW-12, y0+16+22)
+   585 	ebitenutil.DrawRect(screen, float64(sortBtn.Min.X), float64(sortBtn.Min.Y), float64(sortBtn.Dx()), float64(sortBtn.Dy()), color.NRGBA{60, 60, 80, 255})
+   586 	sortLabel := []string{"Name", "Status", "Rank"}
+   587 	text.Draw(screen, "Sort: "+sortLabel[g.guildSortMode%3], basicfont.Face7x13, sortBtn.Min.X+8, sortBtn.Min.Y+16, color.White)
+   588 	// Sorted + scrollable list
+   589 	members := append([]protocol.GuildMember(nil), g.guildMembers...)
+   590 	switch g.guildSortMode % 3 {
+   591 	case 0:
+   592 		sort.Slice(members, func(i, j int) bool { return strings.ToLower(members[i].Name) < strings.ToLower(members[j].Name) })
+   593 	case 1:
+   594 		sort.Slice(members, func(i, j int) bool {
+   595 			if members[i].Online != members[j].Online {
+   596 				return members[i].Online
+   597 			}
+   598 			return strings.ToLower(members[i].Name) < strings.ToLower(members[j].Name)
+   599 		})
+   600 	case 2:
+   601 		rank := func(r string) int {
+   602 			r = strings.ToLower(r)
+   603 			if r == "leader" {
+   604 				return 0
+   605 			}
+   606 			if r == "officer" {
+   607 				return 1
+   608 			}
+   609 			return 2
+   610 		}
+   611 		sort.Slice(members, func(i, j int) bool {
+   612 			ri, rj := rank(members[i].Role), rank(members[j].Role)
+   613 			if ri != rj {
+   614 				return ri < rj
+   615 			}
+   616 			return strings.ToLower(members[i].Name) < strings.ToLower(members[j].Name)
+   617 		})
+   618 	}
+   619 	rowsTop := y0 + 40
+   620 	rowH := 18
+   621 	vis := (h - 24 - (rowsTop - (y0 + 12))) / rowH
+   622 	if vis < 0 {
+   623 		vis = 0
+   624 	}
+   625 	start := g.guildMembersScroll
+   626 	if start < 0 {
+   627 		start = 0
+   628 	}
+   629 	maxStart := 0
+   630 	if len(members) > vis {
+   631 		maxStart = len(members) - vis
+   632 	}
+   633 	if g.guildMembersScroll > maxStart {
+   634 		g.guildMembersScroll = maxStart
+   635 		start = g.guildMembersScroll
+   636 	}
+   637 	for i := 0; i < vis && start+i < len(members); i++ {
+   638 		m := members[start+i]
+   639 		yy := rowsTop + i*rowH
+   640 		bg := color.NRGBA{0x2c, 0x2c, 0x3c, 0xFF}
+   641 		lr := strings.ToLower(m.Role)
+   642 		if lr == "leader" {
+   643 			bg = color.NRGBA{40, 46, 70, 255}
+   644 		} else if lr == "officer" {
+   645 			bg = color.NRGBA{36, 56, 48, 255}
+   646 		}
+   647 		ebitenutil.DrawRect(screen, float64(membersX+6), float64(yy-12), float64(colW-12), 16, bg)
+   648 		text.Draw(screen, m.Name+" ("+m.Role+")", basicfont.Face7x13, membersX+12, yy, color.White)
+   649 		dx := float32(membersX + colW - 18)
+   650 		dy := float32(yy - 6)
+   651 		dc := color.NRGBA{220, 60, 60, 255}
+   652 		if m.Online {
+   653 			dc = color.NRGBA{60, 200, 80, 255}
+   654 		}
+   655 		vector.DrawFilledCircle(screen, dx, dy, 4, dc, true)
+   656 	}
+   657 	// Actions: Leave, Promote, Demote, Kick, Transfer
+   658 	actY := y0 + h - 24 - 80
+   659 	ebitenutil.DrawRect(screen, float64(membersX+8), float64(actY), float64(colW-16), 72, color.NRGBA{0x2c, 0x2c, 0x3c, 0xFF})
+   660 	text.Draw(screen, "Actions:", basicfont.Face7x13, membersX+14, actY+18, color.White)
+   661 	// Buttons only visual; clicks handled in updateSocial next
+   662 	btn := func(x, y int, label string, enabled bool) {
+   663 		col := color.NRGBA{60, 60, 80, 255}
+   664 		if enabled {
+   665 			col = color.NRGBA{70, 110, 70, 255}
+   666 		}
+   667 		ebitenutil.DrawRect(screen, float64(x), float64(y), 86, 22, col)
+   668 		text.Draw(screen, label, basicfont.Face7x13, x+8, y+16, color.White)
+   669 	}
+   670 	meRole := "member"
+   671 	for _, m := range g.guildMembers {
+   672 		if strings.EqualFold(m.Name, g.name) {
+   673 			meRole = strings.ToLower(m.Role)
+   674 		}
+   675 	}
+   676 	btn(membersX+14, actY+36, "Leave", true)
+   677 	sel := g.selectedGuildMember
+   678 	canAdmin := (meRole == "leader" || meRole == "officer") && sel != "" && !strings.EqualFold(sel, g.name)
+   679 	btn(membersX+14+96, actY+36, "Promote", canAdmin && meRole == "leader")
+   680 	btn(membersX+14+96*2, actY+36, "Demote", canAdmin)
+   681 	btn(membersX+14+96*3, actY+36, "Kick", canAdmin)
+   682 	btn(membersX+14+96*4, actY+36, "Transfer", canAdmin && meRole == "leader")
+   683 
+   684 	// Rewards panel (disabled)
+   685 	rewardsX := membersX + colW + 18
+   686 	ebitenutil.DrawRect(screen, float64(rewardsX), float64(y0+12), float64(colW), float64(h-24), color.NRGBA{50, 50, 60, 200})
+   687 	text.Draw(screen, "Guild Rewards", basicfont.Face7x13, rewardsX+10, y0+30, color.NRGBA{220, 220, 230, 255})
+   688 	text.Draw(screen, "Coming soon", basicfont.Face7x13, rewardsX+10, y0+50, color.NRGBA{170, 170, 180, 255})
+   689 
+   690 	// Chat panel (repurposed right column: add input + send)
+   691 	chatX := rewardsX + colW + 18
+   692 	ebitenutil.DrawRect(screen, float64(chatX), float64(y0+12), float64(colW), float64(h-24), color.NRGBA{0x28, 0x28, 0x36, 0xFF})
+   693 	text.Draw(screen, "Guild Chat", basicfont.Face7x13, chatX+10, y0+30, color.White)
+   694 	maxRows := (h - 24 - 60) / 16
+   695 	startMsg := 0
+   696 	if len(g.guildChat) > maxRows {
+   697 		startMsg = len(g.guildChat) - maxRows
+   698 	}
+   699 	for i := startMsg; i < len(g.guildChat); i++ {
+   700 		yy := y0 + 50 + (i-startMsg)*16
+   701 		var col color.Color = color.White
+   702 		if g.guildChat[i].System {
+   703 			col = color.NRGBA{240, 196, 25, 255}
+   704 		}
+   705 		text.Draw(screen, g.guildChat[i].From+": "+g.guildChat[i].Text, basicfont.Face7x13, chatX+10, yy, col)
+   706 	}
+   707 	// input and send button
+   708 	inputW := colW - 90
+   709 	ebitenutil.DrawRect(screen, float64(chatX+10), float64(y0+h-26-12), float64(inputW), 22, color.NRGBA{24, 28, 40, 220})
+   710 	text.Draw(screen, g.guildChatInput, basicfont.Face7x13, chatX+16, y0+h-12-12, color.White)
+   711 	sendR := image.Rect(chatX+10+inputW+6, y0+h-26-12, chatX+10+inputW+6+70, y0+h-26-12+22)
+   712 	ebitenutil.DrawRect(screen, float64(sendR.Min.X), float64(sendR.Min.Y), float64(sendR.Dx()), float64(sendR.Dy()), color.NRGBA{70, 110, 70, 255})
+   713 	text.Draw(screen, "Send", basicfont.Face7x13, sendR.Min.X+18, sendR.Min.Y+16, color.White)
+   714 }
+   715 
+   716 // Friends tab: simple search/add and list
+   717 func (g *Game) drawFriends(screen *ebiten.Image, y int) {
+   718 	// Search field
+   719 	ebitenutil.DrawRect(screen, float64(pad+12), float64(y+16), 260, 24, color.NRGBA{24, 28, 40, 220})
+   720 	s := g.friendSearch
+   721 	if s == "" && !g.friendSearchFocus {
+   722 		s = "Search or add..."
+   723 	}
+   724 	text.Draw(screen, s, basicfont.Face7x13, pad+18, y+32, color.NRGBA{160, 160, 180, 255})
+   725 	// Add button
+   726 	ebitenutil.DrawRect(screen, float64(pad+12+270), float64(y+16), 70, 24, color.NRGBA{70, 110, 70, 255})
+   727 	text.Draw(screen, "+ Add", basicfont.Face7x13, pad+12+270+16, y+32, color.White)
+   728 	// Friends list
+   729 	listTop := y + 52
+   730 	for i, f := range g.friends {
+   731 		yy := listTop + i*20
+   732 		if i%2 == 0 {
+   733 			ebitenutil.DrawRect(screen, float64(pad+12), float64(yy-12), float64(360), 18, color.NRGBA{0x2c, 0x2c, 0x3c, 0xFF})
+   734 		}
+   735 		name := f.Name
+   736 		if f.Online {
+   737 			name += "  (online)"
+   738 		}
+   739 		text.Draw(screen, name, basicfont.Face7x13, pad+18, yy, color.White)
+   740 		// remove button
+   741 		ebitenutil.DrawRect(screen, float64(pad+12+370), float64(yy-12), 64, 18, color.NRGBA{90, 70, 70, 255})
+   742 		text.Draw(screen, "Remove", basicfont.Face7x13, pad+12+370+8, yy, color.White)
+   743 	}
+   744 	// confirmation overlay
+   745 	if g.confirmRemoveFriend != "" {
+   746 		ebitenutil.DrawRect(screen, float64(pad+12), float64(y+52+len(g.friends)*20+8), 320, 36, color.NRGBA{30, 30, 45, 240})
+   747 		text.Draw(screen, "Remove "+g.confirmRemoveFriend+"?", basicfont.Face7x13, pad+18, y+52+len(g.friends)*20+28, color.White)
+   748 		yes := image.Rect(pad+18+180, y+52+len(g.friends)*20+8+6, pad+18+180+44, y+52+len(g.friends)*20+8+6+22)
+   749 		no := image.Rect(pad+18+180+52, y+52+len(g.friends)*20+8+6, pad+18+180+52+44, y+52+len(g.friends)*20+8+6+22)
+   750 		ebitenutil.DrawRect(screen, float64(yes.Min.X), float64(yes.Min.Y), float64(yes.Dx()), float64(yes.Dy()), color.NRGBA{70, 110, 70, 255})
+   751 		ebitenutil.DrawRect(screen, float64(no.Min.X), float64(no.Min.Y), float64(no.Dx()), float64(no.Dy()), color.NRGBA{90, 70, 70, 255})
+   752 		text.Draw(screen, "Yes", basicfont.Face7x13, yes.Min.X+10, yes.Min.Y+16, color.White)
+   753 		text.Draw(screen, "No", basicfont.Face7x13, no.Min.X+14, no.Min.Y+16, color.White)
+   754 	}
+   755 }
+   756 
+   757 func (g *Game) drawMessages(screen *ebiten.Image, y int) {
+   758 	// Header shows selected friend
+   759 	who := g.selectedFriend
+   760 	if who == "" {
+   761 		who = "(select a friend)"
+   762 	}
+   763 	text.Draw(screen, "Chat with "+who, basicfont.Face7x13, pad+12, y+18, color.White)
+   764 	// History panel
+   765 	panelTop := y + 36
+   766 	panelH := protocol.ScreenH - menuBarH - y - 36 - 44
+   767 	ebitenutil.DrawRect(screen, float64(pad+12), float64(panelTop), float64(protocol.ScreenW-2*pad-24), float64(panelH), color.NRGBA{0x24, 0x24, 0x30, 0xFF})
+   768 	// wheel scroll
+   769 	_, wy := ebiten.Wheel()
+   770 	if wy != 0 {
+   771 		g.dmScroll -= int(wy)
+   772 		if g.dmScroll < 0 {
+   773 			g.dmScroll = 0
+   774 		}
+   775 	}
+   776 	// render last N with scroll offset
+   777 	rowH := 16
+   778 	maxRows := panelH/rowH - 2
+   779 	start := maxInt(0, len(g.dmHistory)-maxRows-g.dmScroll)
+   780 	for i := 0; i < maxRows && start+i < len(g.dmHistory); i++ {
+   781 		dm := g.dmHistory[start+i]
+   782 		line := dm.From + ": " + dm.Text
+   783 		text.Draw(screen, line, basicfont.Face7x13, pad+18, panelTop+18+i*rowH, color.White)
+   784 	}
+   785 	// Input
+   786 	ebitenutil.DrawRect(screen, float64(pad+12), float64(panelTop+panelH+6), float64(protocol.ScreenW-2*pad-24), 24, color.NRGBA{24, 28, 40, 220})
+   787 	text.Draw(screen, g.dmInput, basicfont.Face7x13, pad+18, panelTop+panelH+22, color.White)
+   788 }
+   789 
+   790 // Helpers for Social state encapsulated on Game without changing state.go too much
+   791 func (g *Game) socialActive() socialSubTab {
+   792 	switch g.socialTab {
+   793 	case 1:
+   794 		return socialGuild
+   795 	case 2:
+   796 		return socialMessages
+   797 	default:
+   798 		return socialFriends
+   799 	}
+   800 }
+   801 
+   802 func fmtInt(n int) string { return fmt.Sprintf("%d", n) }

@@ -452,18 +452,21 @@ type MiniInfo struct {
 
 // LoadLobbyMinis returns a lightweight list of minis for the Army UI.
 func LoadLobbyMinis() []protocol.MiniInfo {
-	g := NewGame() // this loads minis.json via g.loadMinis()
-	out := make([]protocol.MiniInfo, 0, len(g.minis))
-	for _, m := range g.minis {
-		out = append(out, protocol.MiniInfo{
-			Name:     m.Name,
-			Class:    m.Class,
-			Role:     m.Role,
-			Cost:     m.Cost,
-			Portrait: m.Portrait,
-		})
-	}
-	return out
+    g := NewGame() // this loads minis.json via g.loadMinis()
+    out := make([]protocol.MiniInfo, 0, len(g.minis))
+    for _, m := range g.minis {
+        out = append(out, protocol.MiniInfo{
+            Name:     m.Name,
+            Class:    m.Class,
+            Role:     m.Role,
+            Cost:     m.Cost,
+            Portrait: m.Portrait,
+            Dmg:      m.DMG,
+            Hp:       m.HP,
+            Speed:    int(math.Round(m.Speed)),
+        })
+    }
+    return out
 }
 
 // DefaultAIArmy picks 1 champion + 6 cheapest non-spell minis from loaded minis.json

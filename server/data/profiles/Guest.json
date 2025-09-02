@@ -1,0 +1,28 @@
+{
+  "playerId": 0,
+  "name": "Guest",
+  "army": [
+    "Bloodmage Thalnos",
+    "Banshee",
+    "Bat Rider",
+    "Core Hound",
+    "Darkspear Troll",
+    "Defias Bandits",
+    "Drake"
+  ],
+  "armies": {
+    "Bloodmage Thalnos": [
+      "Banshee",
+      "Bat Rider",
+      "Core Hound",
+      "Darkspear Troll",
+      "Defias Bandits",
+      "Drake"
+    ]
+  },
+  "gold": 0,
+  "accountXp": 0,
+  "pvp_rating": 1200,
+  "pvp_rank": "Knight",
+  "avatar": "default.png"
+}

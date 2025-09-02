@@ -236,7 +236,7 @@
     "portrait": "jaina-proudmoore.png",
     "class": "melee",
     "role": "champion",
-    "cost": 5,
+    "cost": 3,
     "speed": 2
   },
   {

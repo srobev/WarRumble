@@ -1,15 +1,15 @@
-package yourgamemobile
+package clientmobile
 
 import (
-	"rumble/client/internal/game"
-
+	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/mobile"
 )
 
-func init() {
-	// game.New() must return ebiten.Game
-	mobile.SetGame(game.New())
-}
+type emptyGame struct{}
 
-// Dummy is required so gomobile/ebitenmobile will bind this package.
+func (emptyGame) Update() error              { return nil }
+func (emptyGame) Draw(*ebiten.Image)         {}
+func (emptyGame) Layout(int, int) (int, int) { return 480, 800 }
+
+func init()  { mobile.SetGame(emptyGame{}) }
 func Dummy() {}

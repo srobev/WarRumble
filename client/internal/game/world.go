@@ -24,41 +24,49 @@ type World struct {
 }
 
 func buildWorldFromSnapshot(s protocol.FullSnapshot) *World {
-	w := &World{Units: make(map[int64]*RenderUnit), Bases: make(map[int64]protocol.BaseState)}
-	for _, u := range s.Units {
-		w.Units[u.ID] = &RenderUnit{
-			ID: u.ID, Name: u.Name,
-			X: float64(u.X), Y: float64(u.Y),
-			PrevX: float64(u.X), PrevY: float64(u.Y),
-			HP: u.HP, MaxHP: u.MaxHP, OwnerID: u.OwnerID, Class: u.Class,
-		}
-	}
-	for _, b := range s.Bases {
-		w.Bases[int64(b.OwnerID)] = b
-	}
-	return w
+    w := &World{Units: make(map[int64]*RenderUnit), Bases: make(map[int64]protocol.BaseState)}
+    for _, u := range s.Units {
+        w.Units[u.ID] = &RenderUnit{
+            ID: u.ID, Name: u.Name,
+            X: float64(u.X), Y: float64(u.Y),
+            PrevX: float64(u.X), PrevY: float64(u.Y),
+            TargetX: float64(u.X), TargetY: float64(u.Y),
+            HP: u.HP, MaxHP: u.MaxHP, OwnerID: u.OwnerID, Class: u.Class,
+        }
+    }
+    for _, b := range s.Bases {
+        w.Bases[int64(b.OwnerID)] = b
+    }
+    w.lastUpdate = time.Now()
+    return w
 }
 
 func (w *World) ApplyDelta(d protocol.StateDelta) {
-	for _, u := range d.UnitsUpsert {
-		ru := w.Units[u.ID]
-		if ru == nil {
-			ru = &RenderUnit{ID: u.ID, Name: u.Name}
-			w.Units[u.ID] = ru
-		}
-		ru.PrevX, ru.PrevY = ru.X, ru.Y
-		ru.X, ru.Y = float64(u.X), float64(u.Y)
-		ru.HP, ru.MaxHP = u.HP, u.MaxHP
-		ru.OwnerID, ru.Class = u.OwnerID, u.Class
-	}
-	for _, id := range d.UnitsRemoved {
-		delete(w.Units, id)
-	}
-	if len(d.Bases) > 0 {
-		for _, b := range d.Bases {
-			w.Bases[int64(b.OwnerID)] = b
-		}
-	}
+    for _, u := range d.UnitsUpsert {
+        ru := w.Units[u.ID]
+        if ru == nil {
+            // New unit: initialize at server position, no interpolation jump
+            ru = &RenderUnit{ID: u.ID, Name: u.Name}
+            ru.X, ru.Y = float64(u.X), float64(u.Y)
+            ru.PrevX, ru.PrevY = ru.X, ru.Y
+            ru.TargetX, ru.TargetY = ru.X, ru.Y
+            w.Units[u.ID] = ru
+        }
+        // Smoothly interpolate toward new server position
+        ru.PrevX, ru.PrevY = ru.X, ru.Y
+        ru.TargetX, ru.TargetY = float64(u.X), float64(u.Y)
+        ru.HP, ru.MaxHP = u.HP, u.MaxHP
+        ru.OwnerID, ru.Class = u.OwnerID, u.Class
+    }
+    for _, id := range d.UnitsRemoved {
+        delete(w.Units, id)
+    }
+    if len(d.Bases) > 0 {
+        for _, b := range d.Bases {
+            w.Bases[int64(b.OwnerID)] = b
+        }
+    }
+    w.lastUpdate = time.Now()
 }
 
 func (w *World) LerpPositions() {

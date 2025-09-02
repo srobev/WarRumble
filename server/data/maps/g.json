@@ -1,0 +1,15 @@
+{
+  "id": "g",
+  "name": "g",
+  "width": 0,
+  "height": 0,
+  "deployZones": null,
+  "meetingStones": [
+    {
+      "x": 0.07705192629815745,
+      "y": 0.05803571428571429
+    }
+  ],
+  "goldMines": null,
+  "lanes": null
+}

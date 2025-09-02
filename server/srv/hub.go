@@ -66,21 +66,33 @@ type Hub struct {
 	// NEW:
 	pvpQueue       []*client
 	friendly       map[string]*client
-	friendByClient map[*client]string // host client -> code (for cancel/cleanup)
+    friendByClient map[*client]string // host client -> code (for cancel/cleanup)
+
+    // Guilds and chat
+    guilds *Guilds
+    guildSubs map[string]map[*client]struct{} // guildID -> clients subscribed
+
+    social *Social
 }
 
 func NewHub() *Hub {
-	return &Hub{
-		clients:  make(map[*client]struct{}),
-		rooms:    make(map[string]*Room),
-		sessions: make(map[*client]*Session),
+    h := &Hub{
+        clients:  make(map[*client]struct{}),
+        rooms:    make(map[string]*Room),
+        sessions: make(map[*client]*Session),
 
-		// NEW:
-		pvpQueue:       make([]*client, 0, 64),
-		friendly:       make(map[string]*client),
-		friendByClient: make(map[*client]string),
-	}
+        // NEW:
+        pvpQueue:       make([]*client, 0, 64),
+        friendly:       make(map[string]*client),
+        friendByClient: make(map[*client]string),
+        guildSubs:      make(map[string]map[*client]struct{}),
+    }
+    // guilds set by main() via setter to pass data dir
+    return h
 }
+
+func (h *Hub) SetGuilds(g *Guilds) { h.guilds = g }
+func (h *Hub) SetSocial(s *Social) { h.social = s }
 
 func makeRoomID(prefix string) string {
 	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
@@ -177,16 +189,62 @@ func (h *Hub) HandleWS(conn *websocket.Conn) {
 	c.reader(h)
 }
 
-func (c *client) reader(h *Hub) {
-	defer func() {
-		h.DequeuePvp(c)
-		c.conn.Close()
-		h.mu.Lock()
-		delete(h.clients, c)
-		if c.room != nil {
-			c.room.Leave(c)
-			c.room = nil
+// HandleWSAuth upgrades a connection that is already authenticated and binds the session to 'username'.
+// It also sends the Profile immediately so the client doesn't have to send SetName first.
+func (h *Hub) HandleWSAuth(conn *websocket.Conn, username string) {
+	c := &client{conn: conn, send: make(chan []byte, 64), name: username}
+	h.mu.Lock()
+		   h.clients[c] = struct{}{}
+	if h.sessions[c] == nil {
+		s := NewSession()
+		s.Name = username
+		// Load existing profile (or defaults), bind identity
+		prof, err := loadProfile(username)
+		if err == nil {
+			prof.PlayerID = s.PlayerID
+			prof.Name = s.Name
+			if prof.Avatar == "" {
+				prof.Avatar = "default.png"
+			}
+			if prof.PvPRating == 0 {
+				prof.PvPRating = 1200
+			}
+			if prof.PvPRank == "" {
+				prof.PvPRank = rankName(prof.PvPRating)
+			}
+			if prof.Armies == nil {
+				prof.Armies = map[string][]string{}
+			}
+			if prof.UnitXP == nil {
+				prof.UnitXP = map[string]int{}
+			}
+			if prof.Resources == nil {
+				prof.Resources = map[string]int{}
+			}
+			s.Profile = prof
+			s.Army = append([]string{}, prof.Army...)
 		}
+		h.sessions[c] = s
+	}
+	h.mu.Unlock()
+
+    go c.writer()
+    if s := h.sessions[c]; s != nil {
+        sendJSON(c, "Profile", s.Profile)
+    }
+    c.reader(h)
+}
+
+func (c *client) reader(h *Hub) {
+    defer func() {
+        h.DequeuePvp(c)
+        c.conn.Close()
+        h.mu.Lock()
+        delete(h.clients, c)
+        if c.room != nil {
+            c.room.Leave(c)
+            c.room = nil
+        }
 		// remove from PvP queue if applicable
 		for i, x := range h.pvpQueue {
 			if x == c {
@@ -199,9 +257,16 @@ func (c *client) reader(h *Hub) {
 			delete(h.friendByClient, c)
 			delete(h.friendly, code)
 		}
-		delete(h.sessions, c)
-		h.mu.Unlock()
-	}()
+        // remove from guild subscriptions
+        for gid, set := range h.guildSubs {
+            if _, ok := set[c]; ok {
+                delete(set, c)
+                if len(set) == 0 { delete(h.guildSubs, gid) }
+            }
+        }
+        delete(h.sessions, c)
+        h.mu.Unlock()
+    }()
 
 	for {
 		_, data, err := c.conn.ReadMessage()
@@ -219,7 +284,7 @@ func (c *client) reader(h *Hub) {
 		switch env.Type {
 
 		// ---------- Profile / Lobby ----------
-		case "SetName":
+        case "SetName":
 			var msg protocol.SetName
 			_ = json.Unmarshal(env.Data, &msg)
 
@@ -250,8 +315,253 @@ func (c *client) reader(h *Hub) {
 			// keep legacy field in sync
 			s.Army = append([]string{}, prof.Army...)
 			h.mu.Unlock()
+			// Ensure a profile file exists for new users
+			if err := saveProfile(s.Profile); err != nil {
+				log.Printf("saveProfile(SetName): %v", err)
+			}
 
-			sendJSON(c, "Profile", s.Profile)
+            sendJSON(c, "Profile", s.Profile)
+        case "GetGuild":
+            h.mu.Lock()
+            s := h.sessions[c]
+            prof := protocol.Profile{}
+            if s != nil { prof = s.Profile }
+            gid := strings.TrimSpace(prof.GuildID)
+            h.mu.Unlock()
+            if gid == "" || h.guilds == nil {
+                sendJSON(c, "GuildNone", protocol.GuildNone{})
+            } else if gp, ok := h.guilds.BuildProfile(gid); ok {
+                // fill online status
+                h.mu.Lock()
+                for i := range gp.Members {
+                    name := gp.Members[i].Name
+                    for cl := range h.clients {
+                        if ss := h.sessions[cl]; ss != nil && strings.EqualFold(ss.Profile.Name, name) {
+                            gp.Members[i].Online = true
+                            break
+                        }
+                    }
+                }
+                h.mu.Unlock()
+                sendJSON(c, "GuildInfo", protocol.GuildInfo{Profile: gp})
+                h.mu.Lock()
+                subs := h.guildSubs[gid]
+                if subs == nil { subs = map[*client]struct{}{}; h.guildSubs[gid] = subs }
+                subs[c] = struct{}{}
+                h.mu.Unlock()
+            } else {
+                sendJSON(c, "GuildNone", protocol.GuildNone{})
+            }
+        case "CreateGuild":
+            var m protocol.CreateGuild
+            _ = json.Unmarshal(env.Data, &m)
+            if h.guilds == nil { sendJSON(c, "Error", protocol.ErrorMsg{Message: "Guilds disabled"}); break }
+            h.mu.Lock()
+            s := h.sessions[c]
+            user := ""
+            if s != nil { user = s.Profile.Name }
+            h.mu.Unlock()
+            g, err := h.guilds.Create(m.Name, m.Desc, m.Privacy, m.Region, user)
+            if err != nil { sendJSON(c, "Error", protocol.ErrorMsg{Message: err.Error()}); break }
+            // store membership on profile
+            h.mu.Lock()
+            if s := h.sessions[c]; s != nil {
+                s.Profile.GuildID = g.GuildID
+                _ = saveProfile(s.Profile)
+            }
+            h.mu.Unlock()
+            if gp, ok := h.guilds.BuildProfile(g.GuildID); ok {
+                sendJSON(c, "GuildInfo", protocol.GuildInfo{Profile: gp})
+            }
+        case "JoinGuild":
+            var m protocol.JoinGuild
+            _ = json.Unmarshal(env.Data, &m)
+            if h.guilds == nil { sendJSON(c, "Error", protocol.ErrorMsg{Message: "Guilds disabled"}); break }
+            h.mu.Lock()
+            s := h.sessions[c]
+            user := ""
+            if s != nil { user = s.Profile.Name }
+            h.mu.Unlock()
+            if err := h.guilds.Join(m.GuildID, user); err != nil {
+                sendJSON(c, "Error", protocol.ErrorMsg{Message: err.Error()}); break
+            }
+            h.mu.Lock()
+            if s := h.sessions[c]; s != nil { s.Profile.GuildID = m.GuildID; _ = saveProfile(s.Profile) }
+            h.mu.Unlock()
+            if gp, ok := h.guilds.BuildProfile(m.GuildID); ok { sendJSON(c, "GuildInfo", protocol.GuildInfo{Profile: gp}) }
+        case "LeaveGuild":
+            if h.guilds == nil { break }
+            h.mu.Lock()
+            s := h.sessions[c]
+            gid := ""; user := ""
+            if s != nil { gid = s.Profile.GuildID; user = s.Profile.Name }
+            // also unsubscribe from guild chat set immediately
+            if gid != "" {
+                if set := h.guildSubs[gid]; set != nil {
+                    delete(set, c)
+                    if len(set) == 0 { delete(h.guildSubs, gid) }
+                }
+            }
+            h.mu.Unlock()
+            if gid != "" {
+                _ = h.guilds.Leave(gid, user)
+                h.mu.Lock()
+                if s := h.sessions[c]; s != nil { s.Profile.GuildID = ""; _ = saveProfile(s.Profile) }
+                h.mu.Unlock()
+            }
+            sendJSON(c, "GuildNone", protocol.GuildNone{})
+        case "ListGuilds":
+            var m protocol.ListGuilds
+            _ = json.Unmarshal(env.Data, &m)
+            if h.guilds == nil { sendJSON(c, "GuildList", protocol.GuildList{Items: nil}); break }
+            items := h.guilds.List(m.Query)
+            sendJSON(c, "GuildList", protocol.GuildList{Items: items})
+        case "PromoteMember":
+            var m protocol.PromoteMember
+            _ = json.Unmarshal(env.Data, &m)
+            h.mu.Lock(); s := h.sessions[c]; gid := ""; actor := ""; if s != nil { gid = s.Profile.GuildID; actor = s.Profile.Name }; h.mu.Unlock()
+            if gid == "" || h.guilds == nil { break }
+            if err := h.guilds.SetRole(gid, actor, m.User, "officer"); err != nil { sendJSON(c, "Error", protocol.ErrorMsg{Message: err.Error()}) }
+            if gp, ok := h.guilds.BuildProfile(gid); ok { sendJSON(c, "GuildInfo", protocol.GuildInfo{Profile: gp}) }
+        case "DemoteMember":
+            var m protocol.DemoteMember
+            _ = json.Unmarshal(env.Data, &m)
+            h.mu.Lock(); s := h.sessions[c]; gid := ""; actor := ""; if s != nil { gid = s.Profile.GuildID; actor = s.Profile.Name }; h.mu.Unlock()
+            if gid == "" || h.guilds == nil { break }
+            if err := h.guilds.SetRole(gid, actor, m.User, "member"); err != nil { sendJSON(c, "Error", protocol.ErrorMsg{Message: err.Error()}) }
+            if gp, ok := h.guilds.BuildProfile(gid); ok { sendJSON(c, "GuildInfo", protocol.GuildInfo{Profile: gp}) }
+        case "KickMember":
+            var m protocol.KickMember
+            _ = json.Unmarshal(env.Data, &m)
+            h.mu.Lock(); s := h.sessions[c]; gid := ""; actor := ""; if s != nil { gid = s.Profile.GuildID; actor = s.Profile.Name }; h.mu.Unlock()
+            if gid == "" || h.guilds == nil { break }
+            if err := h.guilds.Kick(gid, actor, m.User); err != nil { sendJSON(c, "Error", protocol.ErrorMsg{Message: err.Error()}) }
+            if gp, ok := h.guilds.BuildProfile(gid); ok { sendJSON(c, "GuildInfo", protocol.GuildInfo{Profile: gp}) }
+        case "TransferLeader":
+            var m protocol.TransferLeader
+            _ = json.Unmarshal(env.Data, &m)
+            h.mu.Lock(); s := h.sessions[c]; gid := ""; actor := ""; if s != nil { gid = s.Profile.GuildID; actor = s.Profile.Name }; h.mu.Unlock()
+            if gid == "" || h.guilds == nil { break }
+            if err := h.guilds.SetRole(gid, actor, m.To, "leader"); err != nil { sendJSON(c, "Error", protocol.ErrorMsg{Message: err.Error()}) }
+            if gp, ok := h.guilds.BuildProfile(gid); ok { sendJSON(c, "GuildInfo", protocol.GuildInfo{Profile: gp}) }
+        case "SetGuildDesc":
+            var m protocol.SetGuildDesc
+            _ = json.Unmarshal(env.Data, &m)
+            h.mu.Lock(); s := h.sessions[c]; gid := ""; actor := ""; if s != nil { gid = s.Profile.GuildID; actor = s.Profile.Name }; h.mu.Unlock()
+            if gid == "" || h.guilds == nil { break }
+            if err := h.guilds.SetDesc(gid, actor, strings.TrimSpace(m.Desc)); err != nil { sendJSON(c, "Error", protocol.ErrorMsg{Message: err.Error()}) }
+            if gp, ok := h.guilds.BuildProfile(gid); ok { sendJSON(c, "GuildInfo", protocol.GuildInfo{Profile: gp}) }
+        case "GuildChatSend":
+            var gm protocol.GuildChatSend
+            _ = json.Unmarshal(env.Data, &gm)
+            txt := strings.TrimSpace(gm.Text)
+            if txt == "" { break }
+            h.mu.Lock()
+            s := h.sessions[c]
+            gid := ""; from := ""
+            if s != nil { gid = s.Profile.GuildID; from = s.Profile.Name }
+            subs := h.guildSubs[gid]
+            if subs == nil { subs = map[*client]struct{}{}; h.guildSubs[gid] = subs }
+            subs[c] = struct{}{}
+            h.mu.Unlock()
+            if gid == "" { break }
+            msg := protocol.GuildChatMsg{From: from, Text: txt, Ts: time.Now().UnixMilli(), System: false}
+            h.mu.Lock()
+            for cl := range h.guildSubs[gid] {
+                sendJSON(cl, "GuildChatMsg", msg)
+            }
+            h.mu.Unlock()
+
+        // -------- Friends / DMs --------
+        case "GetFriends":
+            h.mu.Lock(); s := h.sessions[c]; user := ""; if s != nil { user = s.Profile.Name }; h.mu.Unlock()
+            if h.social == nil { sendJSON(c, "FriendsList", protocol.FriendsList{}); break }
+            names := h.social.ListFriends(user)
+            items := make([]protocol.FriendInfo, 0, len(names))
+            for _, n := range names {
+                online := false
+                h.mu.Lock()
+                for cl := range h.clients { if ss := h.sessions[cl]; ss != nil && strings.EqualFold(ss.Profile.Name, n) { online = true; break } }
+                h.mu.Unlock()
+                items = append(items, protocol.FriendInfo{Name: n, Online: online})
+            }
+            sendJSON(c, "FriendsList", protocol.FriendsList{Items: items})
+        case "AddFriend":
+            var m protocol.AddFriend
+            _ = json.Unmarshal(env.Data, &m)
+            h.mu.Lock(); s := h.sessions[c]; user := ""; if s != nil { user = s.Profile.Name }; h.mu.Unlock()
+            if h.social != nil && user != "" && strings.TrimSpace(m.Name) != "" {
+                target := strings.TrimSpace(m.Name)
+                // Disallow adding self
+                if strings.EqualFold(user, target) {
+                    sendJSON(c, "Error", protocol.ErrorMsg{Message: "Cannot add yourself"})
+                    break
+                }
+                // Verify target exists: either has a stored profile file or currently online
+                exists := false
+                // Check online sessions
+                h.mu.Lock()
+                for cl := range h.clients {
+                    if ss := h.sessions[cl]; ss != nil && strings.EqualFold(ss.Profile.Name, target) { exists = true; break }
+                }
+                h.mu.Unlock()
+                if !exists {
+                    // Check persisted profile file without creating defaults
+                    path := profilePath(target)
+                    if _, err := os.Stat(path); err == nil { exists = true }
+                }
+                if !exists {
+                    sendJSON(c, "Error", protocol.ErrorMsg{Message: "Player not found"})
+                    break
+                }
+                // Proceed to add both ways
+                h.social.AddFriend(user, target)
+                // resend friends (with online flags)
+                names := h.social.ListFriends(user)
+                items := make([]protocol.FriendInfo, 0, len(names))
+                for _, n := range names {
+                    online := false
+                    h.mu.Lock()
+                    for cl := range h.clients { if ss := h.sessions[cl]; ss != nil && strings.EqualFold(ss.Profile.Name, n) { online = true; break } }
+                    h.mu.Unlock()
+                    items = append(items, protocol.FriendInfo{Name: n, Online: online})
+                }
+                sendJSON(c, "FriendsList", protocol.FriendsList{Items: items})
+            }
+        case "RemoveFriend":
+            var m protocol.RemoveFriend
+            _ = json.Unmarshal(env.Data, &m)
+            h.mu.Lock(); s := h.sessions[c]; user := ""; if s != nil { user = s.Profile.Name }; h.mu.Unlock()
+            if h.social != nil && user != "" && m.Name != "" {
+                h.social.RemoveFriend(user, m.Name)
+                names := h.social.ListFriends(user)
+                items := make([]protocol.FriendInfo, 0, len(names))
+                for _, n := range names { items = append(items, protocol.FriendInfo{Name: n, Online: false}) }
+                sendJSON(c, "FriendsList", protocol.FriendsList{Items: items})
+            }
+        case "SendFriendDM":
+            var m protocol.SendFriendDM
+            _ = json.Unmarshal(env.Data, &m)
+            txt := strings.TrimSpace(m.Text)
+            if txt == "" { break }
+            h.mu.Lock(); s := h.sessions[c]; from := ""; if s != nil { from = s.Profile.Name }; h.mu.Unlock()
+            if from == "" { break }
+            dm := h.social.AppendDM(from, m.To, txt)
+            // deliver to both participants if online
+            h.mu.Lock()
+            for cl := range h.clients {
+                if ss := h.sessions[cl]; ss != nil && (strings.EqualFold(ss.Profile.Name, m.To) || strings.EqualFold(ss.Profile.Name, from)) {
+                    sendJSON(cl, "FriendDM", dm)
+                }
+            }
+            h.mu.Unlock()
+        case "GetFriendHistory":
+            var m protocol.GetFriendHistory
+            _ = json.Unmarshal(env.Data, &m)
+            h.mu.Lock(); s := h.sessions[c]; user := ""; if s != nil { user = s.Profile.Name }; h.mu.Unlock()
+            if user == "" || h.social == nil { break }
+            items := h.social.History(user, m.With, m.Limit)
+            sendJSON(c, "FriendHistory", protocol.FriendHistory{With: m.With, Items: items})
 		case "SetAvatar":
 			var m protocol.SetAvatar
 			_ = json.Unmarshal(env.Data, &m)
@@ -281,15 +591,29 @@ func (c *client) reader(h *Hub) {
 				h.mu.Unlock()
 			}
 
-		case "GetProfile":
-			h.mu.Lock()
-			s := h.sessions[c]
-			var prof protocol.Profile
-			if s != nil {
-				prof = s.Profile
-			}
-			h.mu.Unlock()
-			sendJSON(c, "Profile", prof)
+        case "GetProfile":
+            h.mu.Lock()
+            s := h.sessions[c]
+            var prof protocol.Profile
+            if s != nil {
+                prof = s.Profile
+            }
+            h.mu.Unlock()
+            sendJSON(c, "Profile", prof)
+
+        case "GetUserProfile":
+            var m protocol.GetUserProfile
+            _ = json.Unmarshal(env.Data, &m)
+            name := strings.TrimSpace(m.Name)
+            if name == "" { break }
+            prof, err := loadProfile(name)
+            if err == nil {
+                // fill defaults like elsewhere
+                if prof.PvPRating == 0 { prof.PvPRating = 1200 }
+                if prof.PvPRank == "" { prof.PvPRank = rankName(prof.PvPRating) }
+                if prof.Avatar == "" { prof.Avatar = "default.png" }
+            }
+            sendJSON(c, "UserProfile", protocol.UserProfile{Profile: prof})
 
 		case "SaveArmy":
 			var msg protocol.SaveArmy
@@ -328,13 +652,33 @@ func (c *client) reader(h *Hub) {
 			minis := LoadLobbyMinis()
 			sendJSON(c, "Minis", protocol.Minis{Items: minis})
 
-		case "ListMaps":
-			maps := []protocol.MapInfo{
-				{ID: "arena1", Name: "Arena I"},
-				{ID: "arena2", Name: "Arena II"},
-				{ID: "arena3", Name: "Arena III"},
-			}
-			sendJSON(c, "Maps", protocol.Maps{Items: maps})
+        case "ListMaps":
+            maps := listMaps()
+            sendJSON(c, "Maps", protocol.Maps{Items: maps})
+        case "GetMap":
+            var m protocol.GetMap
+            _ = json.Unmarshal(env.Data, &m)
+            if strings.TrimSpace(m.ID) == "" { break }
+            if def, err := loadMapDef(m.ID); err == nil {
+                sendJSON(c, "MapDef", protocol.MapDefMsg{Def: def})
+            } else {
+                sendJSON(c, "Error", protocol.ErrorMsg{Message: "Map not found"})
+            }
+        case "SaveMap":
+            var m protocol.SaveMap
+            _ = json.Unmarshal(env.Data, &m)
+            if strings.TrimSpace(m.Def.ID) == "" && strings.TrimSpace(m.Def.Name) == "" {
+                sendJSON(c, "Error", protocol.ErrorMsg{Message: "Map requires id or name"})
+                break
+            }
+            if err := saveMapDef(m.Def); err != nil {
+                sendJSON(c, "Error", protocol.ErrorMsg{Message: err.Error()})
+                break
+            }
+            // Return updated list and the saved def
+            sendJSON(c, "MapDef", protocol.MapDefMsg{Def: m.Def})
+            maps := listMaps()
+            sendJSON(c, "Maps", protocol.Maps{Items: maps})
 
 		// ---------- Room / PvE ----------
 		case "CreatePve":
@@ -415,20 +759,26 @@ func (c *client) reader(h *Hub) {
 				c.room.MarkReady(c)
 			}
 
-		case "Logout":
-			h.mu.Lock()
-			// best-effort cleanups
-			if c.room != nil {
-				c.room.Leave(c)
-				c.room = nil
-			}
-			h.DequeuePvp(c)
-			if code, ok := h.friendByClient[c]; ok {
-				delete(h.friendByClient, c)
-				delete(h.friendly, code)
-			}
-			delete(h.sessions, c) // drop session so next login gets a fresh one
-			h.mu.Unlock()
+        case "Logout":
+            h.mu.Lock()
+            // best-effort cleanups
+            if c.room != nil {
+                c.room.Leave(c)
+                c.room = nil
+            }
+            // Remove from PvP queue WITHOUT re-locking (we already hold h.mu)
+            for i, x := range h.pvpQueue {
+                if x == c {
+                    h.pvpQueue = append(h.pvpQueue[:i], h.pvpQueue[i+1:]...)
+                    break
+                }
+            }
+            if code, ok := h.friendByClient[c]; ok {
+                delete(h.friendByClient, c)
+                delete(h.friendly, code)
+            }
+            delete(h.sessions, c) // drop session so next login gets a fresh one
+            h.mu.Unlock()
 
 			// tell the client it's ok to close from their side
 			sendJSON(c, "LoggedOut", struct{}{})

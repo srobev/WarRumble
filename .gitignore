@@ -1,0 +1,21 @@
+# Build artifacts / binaries
+*.exe
+*.dll
+*.so
+*.dylib
+*.aar
+*.jar
+
+# Logs and temp
+nohup.out
+*.log
+
+# Server secrets / user DB (generated at runtime)
+server/data/jwt.key
+server/data/users.json
+
+# Go build cache/output
+bin/
+dist/
+build/
+

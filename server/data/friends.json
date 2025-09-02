@@ -1,0 +1,18 @@
+{
+  "gege": {},
+  "gfdgagfadg": {},
+  "silvester": {
+    "tester": true,
+    "tester2": true
+  },
+  "tester": {
+    "silvester": true,
+    "tester2": true
+  },
+  "tester2": {
+    "silvester": true,
+    "tester": true
+  },
+  "tester4": {},
+  "tester666": {}
+}

@@ -1,0 +1,29 @@
+{
+  "playerId": 151277,
+  "name": "tester2",
+  "army": [
+    "Bloodmage Thalnos",
+    "Banshee",
+    "Bat Rider",
+    "Darkspear Troll",
+    "Defias Bandits",
+    "Gargoyle",
+    "Gnoll Brute"
+  ],
+  "armies": {
+    "Bloodmage Thalnos": [
+      "Banshee",
+      "Bat Rider",
+      "Darkspear Troll",
+      "Defias Bandits",
+      "Gargoyle",
+      "Gnoll Brute"
+    ]
+  },
+  "gold": 0,
+  "accountXp": 0,
+  "pvp_rating": 774,
+  "pvp_rank": "Grunt",
+  "avatar": "default.png",
+  "guildId": "g-1756713614348685400"
+}

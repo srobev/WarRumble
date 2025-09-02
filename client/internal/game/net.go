@@ -3,15 +3,21 @@ package game
 import (
 	"encoding/json"
 	"errors"
+	"io"
 	"log"
+	"net/http"
+	neturl "net/url"
+	"strings"
 	"sync"
+	"time"
+
 	"github.com/gorilla/websocket"
 )
 
 type Net struct {
 	mu     sync.Mutex
 	conn   *websocket.Conn
-	inCh   chan Msg  // keep whatever channels/fields you already use
+	inCh   chan Msg
 	closed bool
 }
 
@@ -20,11 +26,49 @@ type Msg struct {
 	Data json.RawMessage `json:"data"`
 }
 
-func NewNet(url string) (*Net, error) {
-	c, _, err := websocket.DefaultDialer.Dial(url, nil)
+// HasToken reports whether a non-empty token file exists.
+// Use the unified loader from auth.go (which should read via ConfigPath).
+func HasToken() bool {
+	return strings.TrimSpace(LoadToken()) != ""
+}
+
+func NewNet(wsURL string) (*Net, error) {
+	tok := strings.TrimSpace(LoadToken()) // <-- use the same token as HTTP login saved
+
+	// Prepare headers and also add token as a query param (belt & suspenders)
+	hdr := http.Header{}
+	if tok != "" {
+		hdr.Set("Authorization", "Bearer "+tok)
+		if u, err := neturl.Parse(wsURL); err == nil {
+			q := u.Query()
+			q.Set("token", tok)
+			u.RawQuery = q.Encode()
+			wsURL = u.String()
+		}
+	}
+
+	log.Printf("WS dial: %s (token=%d chars)", wsURL, len(tok))
+
+	dialer := websocket.Dialer{
+		HandshakeTimeout:  5 * time.Second,
+		EnableCompression: true,
+		Proxy: func(*http.Request) (*neturl.URL, error) {
+			return nil, nil // disable proxies
+		},
+	}
+
+	c, resp, err := dialer.Dial(wsURL, hdr)
 	if err != nil {
+		if resp != nil {
+			body, _ := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
+			log.Printf("WS dial failed: %s\n%s", resp.Status, string(body))
+		} else {
+			log.Printf("WS dial failed: %v", err)
+		}
 		return nil, err
 	}
+
 	n := &Net{conn: c, inCh: make(chan Msg, 128)}
 	go n.reader()
 	return n, nil
@@ -85,9 +129,7 @@ func (n *Net) IsClosed() bool {
 	return n.closed
 }
 
-
 // Close closes the websocket and marks the Net as closed.
-// Return an error only for the conn close; callers typically ignore it.
 func (n *Net) Close() error {
 	if n == nil {
 		return nil
@@ -106,7 +148,5 @@ func (n *Net) Close() error {
 	if c != nil {
 		err = c.Close()
 	}
-	// Optionally close your channels if your code expects that:
-	// close(n.inCh) // only if all senders are done!
 	return err
 }

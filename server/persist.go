@@ -5,13 +5,13 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
-	"regexp"
+//	"regexp"
 	"rumble/shared/protocol"
 )
 
 var profilesDir = filepath.Join("data", "profiles")
 
-func safeFileName(name string) string {
+/**func safeFileName(name string) string {
 	// lowercase, non-alnum -> underscore
 	re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
 	s := re.ReplaceAllString(name, "_")
@@ -20,14 +20,14 @@ func safeFileName(name string) string {
 	}
 	return s
 }
-
+**/
 func ensureProfilesDir() error {
 	return os.MkdirAll(profilesDir, 0o755)
 }
-
+/**
 func profilePath(name string) string {
 	return filepath.Join(profilesDir, safeFileName(name)+".json")
-}
+}**/
 
 func loadProfile(name string) (protocol.Profile, error) {
 	_ = ensureProfilesDir()

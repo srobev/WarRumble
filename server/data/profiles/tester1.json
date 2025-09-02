@@ -1,0 +1,28 @@
+{
+  "playerId": 107428,
+  "name": "tester1",
+  "army": [
+    "Bloodmage Thalnos",
+    "Abomination",
+    "Bat Rider",
+    "Darkspear Troll",
+    "Defias Bandits",
+    "Drake",
+    "Gryphon Rider"
+  ],
+  "armies": {
+    "Bloodmage Thalnos": [
+      "Abomination",
+      "Bat Rider",
+      "Darkspear Troll",
+      "Defias Bandits",
+      "Drake",
+      "Gryphon Rider"
+    ]
+  },
+  "gold": 0,
+  "accountXp": 0,
+  "pvp_rating": 1200,
+  "pvp_rank": "Knight",
+  "avatar": "femaleelf.png"
+}

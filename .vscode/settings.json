@@ -1,0 +1,7 @@
+{
+"codex.approvalPolicy": "never",
+"codex.sandbox.filesystem": "danger-full-access",
+"codex.sandbox.network": "enabled",
+"codex.agent.autoApplyEdits": true,
+"openai.codex.agent.autoApplyEdits": true
+}

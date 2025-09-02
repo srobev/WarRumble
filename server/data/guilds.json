@@ -1,0 +1,16 @@
+{
+  "g-1756713614348685400": {
+    "guildId": "g-1756713614348685400",
+    "name": "guildthree",
+    "desc": "",
+    "privacy": "public",
+    "region": "NA",
+    "leader": "tester",
+    "members": {
+      "silvester": "member",
+      "tester": "leader",
+      "tester2": "member"
+    },
+    "created": 1756713614
+  }
+}

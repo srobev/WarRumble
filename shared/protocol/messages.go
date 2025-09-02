@@ -33,11 +33,14 @@ type SetName struct {
 // Minis list for Army UI
 type ListMinis struct{}
 type MiniInfo struct {
-	Name     string `json:"name"`
-	Class    string `json:"class"`
-	Role     string `json:"role"`
-	Cost     int    `json:"cost"`
-	Portrait string `json:"portrait,omitempty"`
+    Name     string `json:"name"`
+    Class    string `json:"class"`
+    Role     string `json:"role"`
+    Cost     int    `json:"cost"`
+    Portrait string `json:"portrait,omitempty"`
+    Dmg      int    `json:"dmg,omitempty"`
+    Hp       int    `json:"hp,omitempty"`
+    Speed    int    `json:"speed,omitempty"` // 1=slow,2=medium,3=mid-fast,4=fast
 }
 type Minis struct {
 	Items []MiniInfo `json:"items"`
