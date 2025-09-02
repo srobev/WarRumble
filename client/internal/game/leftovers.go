@@ -26,7 +26,7 @@ import (
 	"embed"
 )
 
-//go:embed assets/ui/* assets/minis/* assets/maps/*
+//go:embed assets/ui/* assets/ui/avatars/* assets/minis/* assets/maps/*
 var assetsFS embed.FS
 
 var ornate *ui.OrnateBar
