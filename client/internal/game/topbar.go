@@ -1,22 +1,18 @@
 package game
 
 import (
-	"fmt"
-	"image/color"
-	"rumble/shared/protocol"
+    "fmt"
+    "image/color"
+    "rumble/shared/protocol"
 
-	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
-	"github.com/hajimehoshi/ebiten/v2/text"
-	"golang.org/x/image/font/basicfont"
+    "github.com/hajimehoshi/ebiten/v2"
+    "github.com/hajimehoshi/ebiten/v2/ebitenutil"
+    "github.com/hajimehoshi/ebiten/v2/text"
+    "golang.org/x/image/font/basicfont"
 )
 
 func (g *Game) drawTopBarHome(screen *ebiten.Image) {
-	img, _, err := ebitenutil.NewImageFromFile("internal/game/assets/ui/top_bar_bg.png")
-	if err != nil {
-		panic("failed to load top_bar_bg.png: " + err.Error())
-	}
-	g.topBarBg = img
+    if g.topBarBg == nil { g.topBarBg = loadImage("assets/ui/top_bar_bg.png") }
 
 	sw, _ := screen.Size()
 	iw := g.topBarBg.Bounds().Dx()

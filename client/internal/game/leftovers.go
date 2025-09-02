@@ -2,6 +2,7 @@ package game
 
 import (
     "fmt"
+    "image"
     "image/color"
 	_ "image/jpeg" // (optional) register JPEG decoder
 	_ "image/png"  // register PNG decoder
@@ -34,7 +35,22 @@ var ornate *ui.OrnateBar
 func drawSmallLevelBadgeSized(dst *ebiten.Image, x, y, level int, size int) {
     // center for text
     cx, cy := x+size/2, y+size/2
-    if ornate == nil { ornate = ui.LoadOrnateBar() }
+    if ornate == nil {
+        // Build ornate bar from embedded assets (no disk dependency)
+        ob := &ui.OrnateBar{}
+        // Try primary names shipped in repo
+        ob.Frame = loadImage("assets/ui/health_bar.png")
+        if ob.Frame == nil { ob.Frame = loadImage("assets/ui/bar_frame.png") }
+        ob.Badge = loadImage("assets/ui/level_bar.png")
+        if ob.Badge == nil { ob.Badge = loadImage("assets/ui/level_badge.png") }
+        // Defaults reasonable for our images; can be tuned via meta later
+        ob.WellOfs = image.Pt(130, 30)
+        ob.WellSize = image.Pt(350, 44)
+        ob.Mode = "fitpad"
+        ob.PadX, ob.PadY = 2, 2
+        ob.BadgeScale = 1.0
+        ornate = ob
+    }
     if ornate != nil && ornate.Badge != nil {
         bb := ornate.Badge.Bounds()
         if bb.Dx() > 0 && bb.Dy() > 0 {

@@ -1,23 +1,17 @@
 package game
 
 import (
-	"rumble/shared/protocol"
-	"strings"
+    "rumble/shared/protocol"
+    "strings"
 
-	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
+    "github.com/hajimehoshi/ebiten/v2"
 )
 
 func (g *Game) ensureArmyBgLayer() {
-	if g.armyBg == nil {
-		img, _, err := ebitenutil.NewImageFromFile("internal/game/assets/ui/army_bg.png")
-		if err == nil {
-			g.armyBg = img
-		}
-	}
-	if g.armyBg == nil {
-		return
-	}
+    if g.armyBg == nil { g.armyBg = loadImage("assets/ui/army_bg.png") }
+    if g.armyBg == nil {
+        return
+    }
 
 	sw, sh := protocol.ScreenW, protocol.ScreenH
 	viewW, viewH := sw, sh-topBarH-menuBarH

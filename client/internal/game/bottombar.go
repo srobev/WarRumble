@@ -1,24 +1,18 @@
 package game
 
 import (
-	"image/color"
-	"rumble/shared/protocol"
+    "image/color"
+    "rumble/shared/protocol"
 
-	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
-	"github.com/hajimehoshi/ebiten/v2/text"
-	"golang.org/x/image/font/basicfont"
+    "github.com/hajimehoshi/ebiten/v2"
+    "github.com/hajimehoshi/ebiten/v2/ebitenutil"
+    "github.com/hajimehoshi/ebiten/v2/text"
+    "golang.org/x/image/font/basicfont"
 )
 
 func (g *Game) drawBottomBar(screen *ebiten.Image) {
 
-	if g.bottomBarBg == nil {
-		img, _, err := ebitenutil.NewImageFromFile("internal/game/assets/ui/bottom_bar_bg.png")
-		if err != nil {
-			panic("failed to load bottom_bar_bg.png: " + err.Error())
-		}
-		g.bottomBarBg = img
-	}
+    if g.bottomBarBg == nil { g.bottomBarBg = loadImage("assets/ui/bottom_bar_bg.png") }
 
 	sw, sh := screen.Size()
 	iw := g.bottomBarBg.Bounds().Dx()
