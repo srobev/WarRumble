@@ -57,8 +57,8 @@ func (g *Game) drawTopBarHome(screen *ebiten.Image) {
 	baselineY := g.userBtn.y + (g.userBtn.h+lb.Dy())/2 - 2
 	text.Draw(screen, name, basicfont.Face7x13, g.userBtn.x+avPad+avW+8, baselineY, color.White)
 
-	if hoveredUser {
-		// Dynamically size hover card to fit username and rating text
+	if hoveredUser && g.fantasyUI != nil {
+		// Use FantasyUI themed tooltip
 		title := "Account"
 		label := g.name
 		if label == "" {
@@ -67,6 +67,7 @@ func (g *Game) drawTopBarHome(screen *ebiten.Image) {
 		ratingLbl := "PvP rating"
 		ratingVal := fmt.Sprintf("%d  (%s)", g.pvpRating, defaultIfEmpty(g.pvpRank, "Unranked"))
 
+		// Calculate tooltip dimensions
 		titleW := text.BoundString(basicfont.Face7x13, title).Dx()
 		nameW := text.BoundString(basicfont.Face7x13, label).Dx()
 		rlW := text.BoundString(basicfont.Face7x13, ratingLbl).Dx()
@@ -90,9 +91,11 @@ func (g *Game) drawTopBarHome(screen *ebiten.Image) {
 
 		tx := clampInt(mx+14, 0, protocol.ScreenW-tipW)
 		ty := clampInt(my+12, 0, protocol.ScreenH-tipH)
-		ebitenutil.DrawRect(screen, float64(tx), float64(ty), float64(tipW), float64(tipH), color.NRGBA{30, 30, 45, 240})
 
-		// Avatar block
+		// Draw themed tooltip background
+		g.fantasyUI.DrawThemedPanel(screen, tx, ty, tipW, tipH, 0.9)
+
+		// Avatar block with themed styling
 		ax := tx + 10
 		ay := ty + 10
 		aw, ah := 56, 56
@@ -102,16 +105,18 @@ func (g *Game) drawTopBarHome(screen *ebiten.Image) {
 			op := &ebiten.DrawImageOptions{}
 			op.GeoM.Scale(s, s)
 			op.GeoM.Translate(float64(ax)+(float64(aw)-float64(iw)*s)/2, float64(ay)+(float64(ah)-float64(ih)*s)/2)
+			op.Filter = ebiten.FilterLinear // High-quality filtering
 			screen.DrawImage(img, op)
 		} else {
-			ebitenutil.DrawRect(screen, float64(ax), float64(ay), float64(aw), float64(ah), color.NRGBA{70, 70, 90, 255})
+			// Themed placeholder
+			ebitenutil.DrawRect(screen, float64(ax), float64(ay), float64(aw), float64(ah), g.fantasyUI.Theme.Surface)
 		}
 
-		// Text lines
-		text.Draw(screen, title, basicfont.Face7x13, tx+leftTextX, ty+25, color.NRGBA{240, 196, 25, 255})
-		text.Draw(screen, label, basicfont.Face7x13, tx+leftTextX, ty+43, color.White)
-		text.Draw(screen, ratingLbl, basicfont.Face7x13, tx+leftTextX, ty+61, color.NRGBA{240, 196, 25, 255})
-		text.Draw(screen, ratingVal, basicfont.Face7x13, tx+leftTextX+rlW+10, ty+61, color.White)
+		// Text lines with theme colors
+		text.Draw(screen, title, basicfont.Face7x13, tx+leftTextX, ty+25, g.fantasyUI.Theme.TextPrimary)
+		text.Draw(screen, label, basicfont.Face7x13, tx+leftTextX, ty+43, g.fantasyUI.Theme.TextSecondary)
+		text.Draw(screen, ratingLbl, basicfont.Face7x13, tx+leftTextX, ty+61, g.fantasyUI.Theme.Secondary)
+		text.Draw(screen, ratingVal, basicfont.Face7x13, tx+leftTextX+rlW+10, ty+61, g.fantasyUI.Theme.TextPrimary)
 	}
 
 	title := protocol.GameName
@@ -125,7 +130,7 @@ func (g *Game) drawTopBarHome(screen *ebiten.Image) {
 	text.Draw(screen, goldStr, basicfont.Face7x13, g.goldArea.x+6, gy, color.NRGBA{240, 196, 25, 255})
 
 	hoveredGold := g.goldArea.hit(mx, my)
-	if hoveredGold {
+	if hoveredGold && g.fantasyUI != nil {
 		tip := []string{
 			"Your account gold.",
 			"Earn gold from battles, events,",
@@ -134,11 +139,9 @@ func (g *Game) drawTopBarHome(screen *ebiten.Image) {
 		tipW, tipH := 260, 66
 		tx := clampInt(mx-tipW-10, 0, protocol.ScreenW-tipW)
 		ty := clampInt(my+12, 0, protocol.ScreenH-tipH)
-		ebitenutil.DrawRect(screen, float64(tx), float64(ty), float64(tipW), float64(tipH), color.NRGBA{30, 30, 45, 240})
-		text.Draw(screen, "Gold", basicfont.Face7x13, tx+10, ty+18, color.NRGBA{240, 196, 25, 255})
-		text.Draw(screen, tip[0], basicfont.Face7x13, tx+10, ty+34, color.White)
-		text.Draw(screen, tip[1], basicfont.Face7x13, tx+10, ty+48, color.NRGBA{210, 210, 220, 255})
-		text.Draw(screen, tip[2], basicfont.Face7x13, tx+10, ty+62, color.NRGBA{210, 210, 220, 255})
+
+		// Use FantasyUI themed tooltip
+		g.fantasyUI.DrawThemedTooltip(screen, tx, ty, tipW, tipH, "Gold", tip)
 	}
 }
 

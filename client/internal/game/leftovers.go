@@ -672,12 +672,16 @@ func (g *Game) updateHome() {
 		// Reset hover states (already declared above)
 		g.hoveredChampionLevel = -1
 		g.hoveredChampionCost = -1
+		g.hoveredChampionCard = -1
 		g.hoveredSelectedChampionLevel = false
 		g.hoveredSelectedChampionCost = false
+		g.hoveredSelectedChampionCard = false
 		g.hoveredMiniSlotLevel = -1
 		g.hoveredMiniSlotCost = -1
+		g.hoveredMiniSlotCard = -1
 		g.hoveredCollectionLevel = -1
 		g.hoveredCollectionCost = -1
+		g.hoveredCollectionCard = -1
 		g.hoveredOverlayLevel = false
 		g.hoveredOverlayCost = false
 
@@ -694,13 +698,16 @@ func (g *Game) updateHome() {
 						g.hoveredChampionLevel = idx
 					}
 
-					// Check cost text area (top-right corner)
+					// Check cost text area (bottom-right corner - updated position)
 					costS := fmt.Sprintf("%d", it.Cost)
 					cw := text.BoundString(basicfont.Face7x13, costS).Dx()
-					costRect := rect{x: r.x + r.w - 6 - cw, y: r.y + 8, w: cw, h: 16}
+					costRect := rect{x: r.x + r.w - 6 - cw, y: r.y + r.h - 16, w: cw, h: 16}
 					if costRect.hit(mx, my) {
 						g.hoveredChampionCost = idx
 					}
+
+					// Set hover for the entire card (for frame effect)
+					g.hoveredChampionCard = idx
 				}
 				break
 			}
@@ -716,11 +723,14 @@ func (g *Game) updateHome() {
 					g.hoveredSelectedChampionLevel = true
 				}
 
-				// Check cost text area (would be in bottom area of big card)
+				// Check cost text area (bottom area of big card)
 				costRect := rect{x: chRect.x + 8, y: chRect.y + chRect.h - 20, w: chRect.w - 16, h: 16}
 				if costRect.hit(mx, my) {
 					g.hoveredSelectedChampionCost = true
 				}
+
+				// Set hover for the entire champion card (for frame effect)
+				g.hoveredSelectedChampionCard = true
 			}
 		}
 
@@ -736,15 +746,18 @@ func (g *Game) updateHome() {
 					g.hoveredMiniSlotLevel = i - 1
 				}
 
-				// Check cost text area (top-right)
+				// Check cost text area (bottom-right)
 				if info, ok := g.nameToMini[name]; ok {
 					costS := fmt.Sprintf("%d", info.Cost)
 					cw := text.BoundString(basicfont.Face7x13, costS).Dx()
-					costRect := rect{x: slotRect.x + slotRect.w - 6 - cw, y: slotRect.y + 8, w: cw, h: 16}
+					costRect := rect{x: slotRect.x + slotRect.w - cw - 8, y: slotRect.y + slotRect.h - 16, w: cw, h: 16}
 					if costRect.hit(mx, my) {
 						g.hoveredMiniSlotCost = i - 1
 					}
 				}
+
+				// Set hover for the entire mini slot card (for frame effect)
+				g.hoveredMiniSlotCard = i - 1
 			}
 		}
 
@@ -824,14 +837,18 @@ func (g *Game) updateHome() {
 						g.hoveredCollectionLevel = idx
 					}
 
-					// Check cost text area (top-right) - matches draw position exactly: r.x+r.w-6-cw, r.y+14
+					// Check cost text area (bottom-right) - matches draw position exactly: r.x+r.w-8-cw, r.y+r.h-16
 					costS := fmt.Sprintf("%d", it.Cost)
 					cw := text.BoundString(basicfont.Face7x13, costS).Dx()
-					costRect := rect{x: r.x + r.w - 6 - cw, y: r.y + 14, w: cw, h: 16}
+					costRect := rect{x: r.x + r.w - cw - 8, y: r.y + r.h - 16, w: cw, h: 16}
 					if costRect.hit(mx, my) {
 						g.hoveredCollectionCost = idx
 					}
+
+					// Set hover for the entire collection card (for frame effect)
+					g.hoveredCollectionCard = idx
 				}
+				break
 			}
 		}
 
@@ -1143,7 +1160,17 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 
 			it := g.champions[start+i]
 
-			ebitenutil.DrawRect(screen, float64(r.x), float64(r.y), float64(r.w), float64(r.h), color.NRGBA{0x2b, 0x2b, 0x3e, 0xff})
+			// Use FantasyUI themed card
+			if g.fantasyUI != nil {
+				isSelected := g.selectedChampion == it.Name
+				isHovered := g.hoveredChampionCard >= 0 && g.hoveredChampionCard == start+i
+
+				g.fantasyUI.DrawEnhancedUnitCard(screen, r.x, r.y, r.w, r.h,
+					it.Name, strings.Title(it.Class), 1, it.Cost, nil, isSelected, isHovered)
+			} else {
+				// Fallback to basic styling
+				ebitenutil.DrawRect(screen, float64(r.x), float64(r.y), float64(r.w), float64(r.h), color.NRGBA{0x2b, 0x2b, 0x3e, 0xff})
+			}
 
 			if img := g.ensureMiniImageByName(it.Name); img != nil {
 				iw, ih := img.Bounds().Dx(), img.Bounds().Dy()
@@ -1152,9 +1179,11 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				op := &ebiten.DrawImageOptions{}
 				op.GeoM.Scale(s, s)
 				op.GeoM.Translate(float64(r.x)+4, float64(r.y)+4)
+				op.Filter = ebiten.FilterLinear // High-quality filtering
 				screen.DrawImage(img, op)
 			}
-			// Level top-left
+
+			// Level top-left (keep existing level badge)
 			lvl := 1
 			if g.unitXP != nil {
 				if xp, ok := g.unitXP[it.Name]; ok {
@@ -1165,14 +1194,14 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				}
 			}
 			drawSmallLevelBadgeSized(screen, r.x+4, r.y+4, lvl, 24)
-			// Cost top-right (gold color)
-			costS := fmt.Sprintf("%d", it.Cost)
-			cw := text.BoundString(basicfont.Face7x13, costS).Dx()
-			text.Draw(screen, costS, basicfont.Face7x13, r.x+r.w-6-cw, r.y+14, color.NRGBA{240, 196, 25, 255})
-			// Name hidden on Army tab
 
+			// Selection indicator with theme color
 			if g.selectedChampion == it.Name {
-				ebitenutil.DrawRect(screen, float64(r.x), float64(r.y), float64(r.w), 2, color.NRGBA{240, 196, 25, 255})
+				selectionColor := color.NRGBA{240, 196, 25, 255}
+				if g.fantasyUI != nil {
+					selectionColor = g.fantasyUI.Theme.Secondary
+				}
+				ebitenutil.DrawRect(screen, float64(r.x), float64(r.y), float64(r.w), 2, selectionColor)
 			}
 		}
 
@@ -1185,8 +1214,24 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 		leftX := startX
 
 		chRect := rect{x: leftX, y: topY, w: bigW, h: bigH}
-		ebitenutil.DrawRect(screen, float64(chRect.x), float64(chRect.y), float64(chRect.w), float64(chRect.h), color.NRGBA{0x2b, 0x2b, 0x3e, 0xff})
 		if g.selectedChampion != "" {
+			// Get champion cost from champion data
+			championCost := 0
+			for _, champ := range g.champions {
+				if champ.Name == g.selectedChampion {
+					championCost = champ.Cost
+					break
+				}
+			}
+
+			// Use FantasyUI themed card for selected champion
+			if g.fantasyUI != nil {
+				g.fantasyUI.DrawEnhancedUnitCard(screen, chRect.x, chRect.y, chRect.w, chRect.h,
+					g.selectedChampion, "Champion", 1, championCost, nil, true, g.hoveredSelectedChampionCard)
+			} else {
+				ebitenutil.DrawRect(screen, float64(chRect.x), float64(chRect.y), float64(chRect.w), float64(chRect.h), color.NRGBA{0x2b, 0x2b, 0x3e, 0xff})
+			}
+
 			if img := g.ensureMiniImageByName(g.selectedChampion); img != nil {
 				iw, ih := img.Bounds().Dx(), img.Bounds().Dy()
 				pw, ph := float64(chRect.w-8), float64(chRect.h-24)
@@ -1194,8 +1239,10 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				op := &ebiten.DrawImageOptions{}
 				op.GeoM.Scale(s, s)
 				op.GeoM.Translate(float64(chRect.x)+4, float64(chRect.y)+4)
+				op.Filter = ebiten.FilterLinear // High-quality filtering
 				screen.DrawImage(img, op)
 			}
+
 			// Level top-left of champion card
 			lvl := 1
 			if g.unitXP != nil {
@@ -1207,9 +1254,15 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				}
 			}
 			drawSmallLevelBadgeSized(screen, chRect.x+4, chRect.y+4, lvl, 24)
-			// Name hidden on Army tab
 		} else {
-			text.Draw(screen, "Champion (select above)", basicfont.Face7x13, chRect.x+6, chRect.y+18, color.NRGBA{200, 200, 200, 255})
+			// Empty champion slot with themed styling
+			if g.fantasyUI != nil {
+				g.fantasyUI.DrawThemedCard(screen, chRect.x, chRect.y, chRect.w, chRect.h,
+					"", []string{"Select a champion from above"})
+			} else {
+				ebitenutil.DrawRect(screen, float64(chRect.x), float64(chRect.y), float64(chRect.w), float64(chRect.h), color.NRGBA{0x2b, 0x2b, 0x3e, 0xff})
+				text.Draw(screen, "Champion (select above)", basicfont.Face7x13, chRect.x+6, chRect.y+18, color.NRGBA{200, 200, 200, 255})
+			}
 		}
 
 		gridX := leftX + bigW + 16
@@ -1222,9 +1275,25 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 					y: gridY + row*(miniCardH+gap),
 					w: miniCardW, h: miniCardH,
 				}
-				ebitenutil.DrawRect(screen, float64(r.x), float64(r.y), float64(r.w), float64(r.h), color.NRGBA{0x26, 0x26, 0x35, 0xff})
+
 				if k < 6 && g.selectedOrder[k] != "" {
 					name := g.selectedOrder[k]
+
+					// Get mini cost from mini data
+					miniCost := 0
+					if info, ok := g.nameToMini[name]; ok {
+						miniCost = info.Cost
+					}
+
+					// Use FantasyUI themed card for equipped minis
+					if g.fantasyUI != nil {
+						isHovered := g.hoveredMiniSlotCard >= 0 && g.hoveredMiniSlotCard == k
+
+						g.fantasyUI.DrawEnhancedUnitCard(screen, r.x, r.y, r.w, r.h,
+							name, "Mini", 1, miniCost, nil, false, isHovered)
+					} else {
+						ebitenutil.DrawRect(screen, float64(r.x), float64(r.y), float64(r.w), float64(r.h), color.NRGBA{0x26, 0x26, 0x35, 0xff})
+					}
 
 					if img := g.ensureMiniImageByName(name); img != nil {
 						iw, ih := img.Bounds().Dx(), img.Bounds().Dy()
@@ -1233,9 +1302,10 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 						op := &ebiten.DrawImageOptions{}
 						op.GeoM.Scale(s, s)
 						op.GeoM.Translate(float64(r.x)+4, float64(r.y)+4)
+						op.Filter = ebiten.FilterLinear // High-quality filtering
 						screen.DrawImage(img, op)
 					}
-					info := g.nameToMini[name]
+
 					// Level top-left for equipped minis
 					lvl := 1
 					if g.unitXP != nil {
@@ -1247,15 +1317,16 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 						}
 					}
 					drawSmallLevelBadgeSized(screen, r.x+4, r.y+4, lvl, 24)
-					// Cost top-right
-					costS := fmt.Sprintf("%d", info.Cost)
-					cw := text.BoundString(basicfont.Face7x13, costS).Dx()
-					text.Draw(screen, costS, basicfont.Face7x13, r.x+r.w-6-cw, r.y+14, color.NRGBA{240, 196, 25, 255})
-					// Name hidden on Army tab
 				} else {
-
-					text.Draw(screen, "Mini", basicfont.Face7x13, r.x+6, r.y+14, color.NRGBA{200, 200, 200, 255})
-					text.Draw(screen, "(empty)", basicfont.Face7x13, r.x+6, r.y+r.h-6, color.NRGBA{160, 160, 160, 255})
+					// Empty mini slot with themed styling
+					if g.fantasyUI != nil {
+						g.fantasyUI.DrawThemedCard(screen, r.x, r.y, r.w, r.h,
+							"", []string{"Empty slot"})
+					} else {
+						ebitenutil.DrawRect(screen, float64(r.x), float64(r.y), float64(r.w), float64(r.h), color.NRGBA{0x26, 0x26, 0x35, 0xff})
+						text.Draw(screen, "Mini", basicfont.Face7x13, r.x+6, r.y+14, color.NRGBA{200, 200, 200, 255})
+						text.Draw(screen, "(empty)", basicfont.Face7x13, r.x+6, r.y+r.h-6, color.NRGBA{160, 160, 160, 255})
+					}
 				}
 				k++
 			}
@@ -1300,7 +1371,17 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 
 			it := avail[start2+i]
 
-			ebitenutil.DrawRect(screen, float64(r.x), float64(r.y), float64(r.w), float64(r.h), color.NRGBA{0x2b, 0x2b, 0x3e, 0xff})
+			// Use FantasyUI themed card for collection items
+			if g.fantasyUI != nil {
+				isSelected := g.selectedMinis[it.Name]
+				isHovered := g.hoveredCollectionCard >= 0 && g.hoveredCollectionCard == start2+i
+
+				g.fantasyUI.DrawEnhancedUnitCard(screen, r.x, r.y, r.w, r.h,
+					it.Name, strings.Title(it.Class), 1, it.Cost, nil, isSelected, isHovered)
+			} else {
+				// Fallback to basic styling
+				ebitenutil.DrawRect(screen, float64(r.x), float64(r.y), float64(r.w), float64(r.h), color.NRGBA{0x2b, 0x2b, 0x3e, 0xff})
+			}
 
 			if img := g.ensureMiniImageByName(it.Name); img != nil {
 				iw, ih := img.Bounds().Dx(), img.Bounds().Dy()
@@ -1309,8 +1390,10 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				op := &ebiten.DrawImageOptions{}
 				op.GeoM.Scale(s, s)
 				op.GeoM.Translate(float64(r.x)+4, float64(r.y)+4)
+				op.Filter = ebiten.FilterLinear // High-quality filtering
 				screen.DrawImage(img, op)
 			}
+
 			// Level top-left for collection items
 			lvl := 1
 			if g.unitXP != nil {
@@ -1322,14 +1405,14 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				}
 			}
 			drawSmallLevelBadgeSized(screen, r.x+4, r.y+4, lvl, 24)
-			// Cost top-right
-			costS := fmt.Sprintf("%d", it.Cost)
-			cw := text.BoundString(basicfont.Face7x13, costS).Dx()
-			text.Draw(screen, costS, basicfont.Face7x13, r.x+r.w-6-cw, r.y+14, color.NRGBA{240, 196, 25, 255})
-			// Name hidden on Army tab
 
+			// Selection indicator with theme color
 			if g.selectedMinis[it.Name] {
-				ebitenutil.DrawRect(screen, float64(r.x), float64(r.y), float64(r.w), 2, color.NRGBA{240, 196, 25, 255})
+				selectionColor := color.NRGBA{240, 196, 25, 255}
+				if g.fantasyUI != nil {
+					selectionColor = g.fantasyUI.Theme.Secondary
+				}
+				ebitenutil.DrawRect(screen, float64(r.x), float64(r.y), float64(r.w), 2, selectionColor)
 			}
 		}
 
@@ -2208,10 +2291,8 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 		y += 50
 		text.Draw(screen, "Controls", basicfont.Face7x13, pad+8, y, color.NRGBA{200, 200, 210, 255})
 
-		y += 25
-		text.Draw(screen, "F - Toggle Fullscreen", basicfont.Face7x13, pad+16, y, color.NRGBA{180, 180, 190, 255})
 		y += 18
-		text.Draw(screen, "Alt+F - Fit to Screen", basicfont.Face7x13, pad+16, y, color.NRGBA{180, 180, 190, 255})
+		text.Draw(screen, "Alt+F - Toggle Fullscreen", basicfont.Face7x13, pad+16, y, color.NRGBA{180, 180, 190, 255})
 		y += 18
 		text.Draw(screen, "Mouse - Navigate & Select", basicfont.Face7x13, pad+16, y, color.NRGBA{180, 180, 190, 255})
 		y += 18
@@ -2220,7 +2301,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 		// Version/Info
 		y = protocol.ScreenH - menuBarH - 40
 		text.Draw(screen, protocol.GameName+" v"+protocol.GameVersion, basicfont.Face7x13, pad+8, y, color.NRGBA{150, 150, 160, 255})
-		text.Draw(screen, "Built with Ebiten", basicfont.Face7x13, pad+8, y+16, color.NRGBA{120, 120, 130, 255})
+		text.Draw(screen, "by S. Robev", basicfont.Face7x13, pad+8, y+16, color.NRGBA{120, 120, 130, 255})
 	}
 }
 

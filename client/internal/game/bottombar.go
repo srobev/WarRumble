@@ -1,18 +1,25 @@
 package game
 
 import (
-    "image/color"
-    "rumble/shared/protocol"
+	"rumble/shared/protocol"
 
-    "github.com/hajimehoshi/ebiten/v2"
-    "github.com/hajimehoshi/ebiten/v2/ebitenutil"
-    "github.com/hajimehoshi/ebiten/v2/text"
-    "golang.org/x/image/font/basicfont"
+	"github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2/text"
+	"golang.org/x/image/font/basicfont"
 )
 
-func (g *Game) drawBottomBar(screen *ebiten.Image) {
+// Bottom bar button states
+var bottomBarButtons map[string]*FantasyButton
 
-    if g.bottomBarBg == nil { g.bottomBarBg = loadImage("assets/ui/bottom_bar_bg.png") }
+func (g *Game) drawBottomBar(screen *ebiten.Image) {
+	// Initialize bottom bar buttons if not already done
+	if bottomBarButtons == nil {
+		bottomBarButtons = make(map[string]*FantasyButton)
+	}
+
+	if g.bottomBarBg == nil {
+		g.bottomBarBg = loadImage("assets/ui/bottom_bar_bg.png")
+	}
 
 	sw, sh := screen.Size()
 	iw := g.bottomBarBg.Bounds().Dx()
@@ -26,54 +33,54 @@ func (g *Game) drawBottomBar(screen *ebiten.Image) {
 
 	g.computeBottomBarLayout()
 
-	{
-		btns := []*rect{&g.armyBtn, &g.mapBtn, &g.pvpBtn, &g.socialBtn, &g.settingsBtn}
-		gap := 16
+	// Get mouse position for hover detection
+	mx, my := ebiten.CursorPosition()
 
-		totalW := 0
-		for i, b := range btns {
-			if b.w == 0 {
-				b.w = 120
-			}
-			totalW += b.w
-			if i < len(btns)-1 {
-				totalW += gap
-			}
-		}
-
-		startX := (sw - totalW) / 2
-		x := startX
-		for _, b := range btns {
-			b.x = x
-			x += b.w + gap
-		}
+	// Define button configurations
+	buttonConfigs := []struct {
+		key    string
+		label  string
+		rect   rect
+		active bool
+	}{
+		{"army", "Army", g.armyBtn, g.activeTab == tabArmy},
+		{"map", "Map", g.mapBtn, g.activeTab == tabMap},
+		{"pvp", "PvP", g.pvpBtn, g.activeTab == tabPvp},
+		{"social", "Social", g.socialBtn, g.activeTab == tabSocial},
+		{"settings", "Settings", g.settingsBtn, g.activeTab == tabSettings},
 	}
 
-	drawBtn := func(r rect, label string, active, enabled bool) {
-		col := color.NRGBA{60, 60, 80, 255}
-		if active {
-			col = color.NRGBA{80, 80, 110, 255}
+	// Create or update fantasy buttons
+	for _, config := range buttonConfigs {
+		btn, exists := bottomBarButtons[config.key]
+		if !exists {
+			btn = NewFantasyButton(config.rect.x, config.rect.y, config.rect.w, config.rect.h, config.label, g.fantasyUI.Theme, nil)
+			btn.IsBottomBarButton = true // Enable bottom bar specific styling
+			bottomBarButtons[config.key] = btn
 		}
-		if !enabled {
-			col = color.NRGBA{50, 50, 50, 255}
-		}
-		ebitenutil.DrawRect(screen, float64(r.x), float64(r.y), float64(r.w), float64(r.h), col)
 
-		lb := text.BoundString(basicfont.Face7x13, label)
-		tx := r.x + (r.w-lb.Dx())/2
-		ty := r.y + (r.h+13)/2 - 2
-		txt := color.Color(color.White)
-		if !enabled {
-			txt = color.NRGBA{220, 220, 220, 255}
+		// Update button position and size
+		btn.X, btn.Y = config.rect.x, config.rect.y
+		btn.Width, btn.Height = config.rect.w, config.rect.h
+
+		// Determine button state based on hover and active status
+		if btn.Contains(mx, my) {
+			if config.active {
+				btn.SetState(ButtonPressed) // Active + hover = pressed state
+			} else {
+				btn.SetState(ButtonHover) // Just hover
+			}
+		} else {
+			if config.active {
+				btn.SetState(ButtonPressed) // Active but not hovered = pressed state
+			} else {
+				btn.SetState(ButtonNormal) // Normal state
+			}
 		}
-		text.Draw(screen, label, basicfont.Face7x13, tx, ty, txt)
+
+		// Draw the enhanced button
+		btn.Draw(screen)
 	}
-
-	drawBtn(g.armyBtn, "Army", g.activeTab == tabArmy, true)
-	drawBtn(g.mapBtn, "Map", g.activeTab == tabMap, true)
-	drawBtn(g.pvpBtn, "PvP", g.activeTab == tabPvp, true)
-    drawBtn(g.socialBtn, "Social", g.activeTab == tabSocial, true)
-	drawBtn(g.settingsBtn, "Settings", g.activeTab == tabSettings, true)
 }
 
 func (g *Game) computeBottomBarLayout() {

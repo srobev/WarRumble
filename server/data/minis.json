@@ -1,9 +1,9 @@
 [
   {
-    "name": "Abomination",
+    "name": "Flesh Golem",
     "dmg": 190,
     "hp": 1100,
-    "portrait": "abomination.png",
+    "portrait": "flesh_golem.png",
     "class": "melee",
     "role": "mini",
     "cost": 6,
@@ -30,10 +30,10 @@
     "speed": 1
   },
   {
-    "name": "Bat Rider",
+    "name": "Foulwing Rider",
     "dmg": 210,
     "hp": 400,
-    "portrait": "bat-rider.png",
+    "portrait": "foulwing_rider.png",
     "class": "range",
     "subclass": "air-vs-ground",
     "role": "mini",
@@ -89,10 +89,10 @@
     "speed": 1
   },
   {
-    "name": "Chimaera",
+    "name": "Twin Wyrnn",
     "dmg": 540,
     "hp": 1200,
-    "portrait": "chimaera.png",
+    "portrait": "twin_wyrnn.png",
     "class": "range",
     "subclass": "air-vs-all",
     "role": "mini",
@@ -103,43 +103,30 @@
     "particle": "projectile"
   },
   {
-    "name": "Core Hound",
+    "name": "Magma Beasts",
     "dmg": 180,
     "hp": 1100,
-    "portrait": "core-hounds.png",
+    "portrait": "magma_beasts.png",
     "class": "melee",
     "role": "mini",
     "cost": 3,
     "speed": 1
   },
   {
-    "name": "Pyromancer",
-    "dmg": 180,
-    "hp": 340,
-    "portrait": "pyromancer.png",
-    "class": "range",
-    "subclass": "ranger",
-    "role": "mini",
-    "cost": 3,
-    "speed": 1,
-    "range": 200,
-    "particle": "projectile"
-  },
-  {
-    "name": "Defias Bandits",
+    "name": "Redhand Thieves",
     "dmg": 100,
     "hp": 220,
-    "portrait": "defias-bandits.png",
+    "portrait": "redhand_thieves.png",
     "class": "melee",
     "role": "mini",
     "cost": 3,
     "speed": 2
   },
   {
-    "name": "Drake",
+    "name": "Firedrake",
     "dmg": 430,
     "hp": 720,
-    "portrait": "drake.png",
+    "portrait": "firedrake.png",
     "class": "range",
     "subclass": "air-vs-all",
     "role": "mini",
@@ -158,6 +145,19 @@
     "role": "mini",
     "cost": 3,
     "speed": 1
+  },
+    {
+    "name": "Jungle Headhunter",
+    "dmg": 290,
+    "hp": 340,
+    "portrait": "jungle_headhunter.png",
+    "class": "range",
+    "subclass": "ranger",
+    "role": "mini",
+    "cost": 3,
+    "speed": 3,
+    "range": 250,
+    "particle": "projectile"
   },
   {
     "name": "Faerie Dragon",

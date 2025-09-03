@@ -1,21 +1,21 @@
 {
-  "playerId": 171859,
+  "playerId": 1517834,
   "name": "silvester",
   "army": [
-    "Sir Kaelen Lightbane",
-    "Corpse Catapult",
-    "Spirit Binder",
-    "Night Sentinel",
-    "Crimson Raider",
+    "Silvanus Windarrow",
+    "Jungle Headhunter",
+    "Twin Wyrnn",
     "Blazebinder",
-    "Harpies"
+    "Flesh Golem",
+    "Corpse Catapult",
+    "Magma Beasts"
   ],
   "armies": {
     "Aethelion Ragestorm": [
       "Abomination",
-      "Bat Rider",
+      "Foulwing Rider",
       "Chimaera",
-      "Pyromancer",
+      "Blazebinder",
       "Harpies",
       "Huntress"
     ],
@@ -28,17 +28,17 @@
       "Raptor"
     ],
     "Bloodmage Thalor": [
-      "Chimaera",
+      "Twin Wyrnn",
       "Drake",
-      "Frostwolf Shaman",
+      "Spirit Binder",
       "Gnoll Brute",
       "Necromancer",
-      "Meat Wagon"
+      "Corpse Catapult"
     ],
     "Hogger": [
       "Banshee",
-      "Bat Rider",
-      "Pyromancer",
+      "Foulwing Rider",
+      "Blazebinder",
       "Defias Bandits",
       "Frostwolf Shaman",
       "Gnoll Brute"
@@ -48,14 +48,14 @@
       "Huntress",
       "Abomination",
       "Darkspear Troll",
-      "Pyromancer",
+      "Blazebinder",
       "Witch Doctor"
     ],
     "Lord of Flame": [
-      "Abomination",
-      "Bat Rider",
-      "Chimaera",
-      "Core Hound",
+      "Flesh Golem",
+      "Foulwing Rider",
+      "Twin Wyrnn",
+      "Redhand Thieves",
       "Spirit Binder",
       "Gnoll Brute"
     ],
@@ -68,7 +68,7 @@
       "Gryphon Rider"
     ],
     "Malfurion Stormrage": [
-      "Pyromancer",
+      "Blazebinder",
       "Drake",
       "Gnoll Brute",
       "Frostwolf Shaman",
@@ -86,10 +86,18 @@
     "Rusttooth": [
       "Banshee",
       "Corpse Catapult",
-      "Core Hound",
+      "Magma Beasts",
       "Drake",
       "Gryphon Rider",
       "Harpies"
+    ],
+    "Silvanus Windarrow": [
+      "Jungle Headhunter",
+      "Twin Wyrnn",
+      "Blazebinder",
+      "Flesh Golem",
+      "Corpse Catapult",
+      "Magma Beasts"
     ],
     "Sir Kaelen Lightbane": [
       "Corpse Catapult",
@@ -108,12 +116,12 @@
       "Frostwolf Shaman"
     ],
     "Sorceress Glacia": [
-      "Bat Rider",
-      "Core Hound",
+      "Foulwing Rider",
+      "Magma Beasts",
       "Night Sentinel",
       "Crimson Raider",
       "Corpse Catapult",
-      "Frostwolf Shaman"
+      "Flesh Golem"
     ],
     "Sylvanas Windrunner": [
       "Warsong Raider",
@@ -123,13 +131,29 @@
       "Core Hound",
       "Raptor"
     ],
+    "The Warden": [
+      "Twin Wyrnn",
+      "Blazebinder",
+      "Flesh Golem",
+      "Spirit Binder",
+      "Crimson Raider",
+      "Corpse Catapult"
+    ],
     "Tirion Fordring": [
-      "Pyromancer",
+      "Blazebinder",
       "Chimaera",
       "Darkspear Troll",
       "Defias Bandits",
       "Gryphon Rider",
       "Harpies"
+    ],
+    "Warg Lord": [
+      "Flesh Golem",
+      "Blazebinder",
+      "Spirit Binder",
+      "Night Sentinel",
+      "Corpse Catapult",
+      "Crimson Raider"
     ]
   },
   "gold": 0,
@@ -140,16 +164,16 @@
     "Blazebinder": 3,
     "Chimaera": 1,
     "Core Hound": 5,
-    "Corpse Catapult": 2,
+    "Corpse Catapult": 3,
     "Crimson Raider": 6,
     "Faerie Dragon": 1,
     "Frostwolf Shaman": 10,
     "Harpies": 1,
     "Night Sentinel": 5,
     "Ragnaros": 1,
-    "Sir Kaelen Lightbane": 4,
+    "Sir Kaelen Lightbane": 5,
     "Sorceress Glacia": 27,
-    "Spirit Binder": 1
+    "Spirit Binder": 2
   },
   "pvp_rating": 1373,
   "pvp_rank": "Captain",

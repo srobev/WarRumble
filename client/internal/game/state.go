@@ -270,14 +270,21 @@ type Game struct {
 	// Hover tooltips for Army tab
 	hoveredChampionLevel int // index of hovered champion for level tooltip (-1 if none)
 	hoveredChampionCost  int // index of hovered champion for cost tooltip (-1 if none)
+	hoveredChampionCard  int // index of hovered champion card for frame effect (-1 if none)
 
 	// Additional hover states for all Army tab elements
 	hoveredSelectedChampionLevel bool // true when hovering selected champion level badge
 	hoveredSelectedChampionCost  bool // true when hovering selected champion cost text
+	hoveredSelectedChampionCard  bool // true when hovering selected champion card for frame effect
 	hoveredMiniSlotLevel         int  // index of hovered equipped mini slot level (-1 if none)
 	hoveredMiniSlotCost          int  // index of hovered equipped mini slot cost (-1 if none)
+	hoveredMiniSlotCard          int  // index of hovered equipped mini slot card for frame effect (-1 if none)
 	hoveredCollectionLevel       int  // index of hovered collection item level (-1 if none)
 	hoveredCollectionCost        int  // index of hovered collection item cost (-1 if none)
+	hoveredCollectionCard        int  // index of hovered collection item card for frame effect (-1 if none)
 	hoveredOverlayLevel          bool // true when hovering mini overlay level badge
 	hoveredOverlayCost           bool // true when hovering mini overlay cost text
+
+	// Fantasy UI System
+	fantasyUI *FantasyUI // manages themed UI elements across the home screen
 }

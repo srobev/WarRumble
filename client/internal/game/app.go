@@ -57,6 +57,9 @@ func New(args ...string) ebiten.Game {
 	// Initialize fullscreen state
 	g.fullscreen = false
 
+	// Initialize Fantasy UI System
+	g.fantasyUI = NewFantasyUI(DefaultFantasyTheme())
+
 	// Initialize new interaction defaults
 	g.slotDragFrom = -1
 
@@ -195,6 +198,10 @@ afterMessages:
 		}
 		g.updateLogin()
 	case screenHome:
+		// Update Fantasy UI system
+		if g.fantasyUI != nil {
+			g.fantasyUI.Update()
+		}
 		g.updateHome()
 	case screenBattle:
 		if !g.timerPaused {
