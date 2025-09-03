@@ -1,23 +1,23 @@
 {
-  "playerId": 1517834,
+  "playerId": 240173,
   "name": "silvester",
   "army": [
-    "Silvanus Windarrow",
-    "Jungle Headhunter",
+    "Aethelion Ragestorm",
+    "Flesh Golem",
+    "Foulwing Rider",
     "Twin Wyrnn",
     "Blazebinder",
-    "Flesh Golem",
-    "Corpse Catapult",
-    "Magma Beasts"
+    "Winged Screechers",
+    "Night Sentinel"
   ],
   "armies": {
     "Aethelion Ragestorm": [
-      "Abomination",
+      "Flesh Golem",
       "Foulwing Rider",
-      "Chimaera",
+      "Twin Wyrnn",
       "Blazebinder",
-      "Harpies",
-      "Huntress"
+      "Winged Screechers",
+      "Night Sentinel"
     ],
     "Bloodmage Thalnos": [
       "Abomination",
@@ -29,7 +29,7 @@
     ],
     "Bloodmage Thalor": [
       "Twin Wyrnn",
-      "Drake",
+      "Firedrake",
       "Spirit Binder",
       "Gnoll Brute",
       "Necromancer",
@@ -162,9 +162,10 @@
     "Abomination": 11,
     "Bat Rider": 12,
     "Blazebinder": 3,
+    "Bloodmage Thalor": 1,
     "Chimaera": 1,
     "Core Hound": 5,
-    "Corpse Catapult": 3,
+    "Corpse Catapult": 4,
     "Crimson Raider": 6,
     "Faerie Dragon": 1,
     "Frostwolf Shaman": 10,
@@ -173,7 +174,7 @@
     "Ragnaros": 1,
     "Sir Kaelen Lightbane": 5,
     "Sorceress Glacia": 27,
-    "Spirit Binder": 2
+    "Spirit Binder": 3
   },
   "pvp_rating": 1373,
   "pvp_rank": "Captain",

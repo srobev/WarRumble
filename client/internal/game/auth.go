@@ -122,6 +122,13 @@ func ValidateToken() error {
 		return errors.New("token expired or invalid")
 	}
 
+	// Check for version mismatch (426 Upgrade Required)
+	if resp.StatusCode == 426 {
+		ClearToken()
+		ClearUsername()
+		return errors.New("game version mismatch: please update to the latest version")
+	}
+
 	return nil
 }
 

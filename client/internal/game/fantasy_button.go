@@ -30,6 +30,7 @@ type FantasyButton struct {
 
 	// Special styling flags
 	IsBottomBarButton bool // For bottom bar specific styling
+	IsPvpButton       bool // For PvP section buttons - uses bottom bar colors
 
 	// Animation properties
 	hoverProgress float64
@@ -131,8 +132,8 @@ func (btn *FantasyButton) renderToCache() {
 	hoverColor := btn.Theme.Secondary
 	pressedColor := btn.Theme.Accent
 
-	// For bottom bar buttons, use darker greyish colors instead of gold
-	if btn.IsBottomBarButton {
+	// For bottom bar buttons and PvP buttons, use darker greyish colors instead of gold
+	if btn.IsBottomBarButton || btn.IsPvpButton {
 		// Dark grey for hover/pressed states instead of gold
 		hoverColor = color.NRGBA{70, 70, 80, 255}   // Dark grey
 		pressedColor = color.NRGBA{50, 50, 60, 255} // Even darker grey

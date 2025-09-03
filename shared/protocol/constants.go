@@ -13,6 +13,6 @@ const (
 	GoldTickSec = 1.0
 
 	// Game information
-	GameName    = "War Rumble: reborn"
+	GameName    = "Rumble Ressurection"
 	GameVersion = "0.0.9b" // Force rebuild
 )

@@ -5,13 +5,13 @@ func (g *Game) pvpLayout() (queueBtn, leaveBtn, createBtn, cancelBtn, joinInput,
 	const btnH = 28
 
 	x := pad
-	y := topBarH + pad + 22
+	y := topBarH + pad + 22 + 60 // Added 60 pixels for the title area
 
 	queueBtn = rect{x: x, y: y, w: 150, h: btnH}
-	leaveBtn = rect{x: x + 160, y: y, w: 150, h: btnH}
+	leaveBtn = rect{x: x, y: y, w: 150, h: btnH} // Same position as queueBtn
 
 	createBtn = rect{x: x, y: y + 44, w: 220, h: btnH}
-	cancelBtn = rect{x: x + 230, y: y + 44, w: 150, h: btnH}
+	cancelBtn = rect{x: x, y: y + 44, w: 180, h: btnH} // Same position as createBtn, wider for "Cancel Friendly"
 
 	joinY := y + 100
 	if g.pvpHosting && g.pvpCode != "" {

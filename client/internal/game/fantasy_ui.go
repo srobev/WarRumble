@@ -58,12 +58,23 @@ func (ui *FantasyUI) Update() {
 
 // DrawThemedButton draws a themed button with enhanced styling
 func (ui *FantasyUI) DrawThemedButton(screen *ebiten.Image, x, y, width, height int, label string, state ButtonState) {
+	ui.DrawThemedButtonWithStyle(screen, x, y, width, height, label, state, false)
+}
+
+// DrawThemedButtonWithStyle draws a themed button with optional PvP styling
+func (ui *FantasyUI) DrawThemedButtonWithStyle(screen *ebiten.Image, x, y, width, height int, label string, state ButtonState, isPvpButton bool) {
 	key := label + "_btn"
+	if isPvpButton {
+		key = label + "_pvp_btn"
+	}
 
 	// Get or create cached button
 	btn, exists := ui.buttonCache[key]
 	if !exists {
 		btn = NewFantasyButton(x, y, width, height, label, ui.Theme, nil)
+		if isPvpButton {
+			btn.IsPvpButton = true
+		}
 		ui.buttonCache[key] = btn
 	}
 

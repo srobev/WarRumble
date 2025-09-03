@@ -72,9 +72,22 @@ func New(args ...string) ebiten.Game {
 		})
 		g.connSt = stateIdle
 	} else {
+		// Validate the existing token before attempting to connect
+		if err := ValidateToken(); err != nil {
+			// Token is invalid (likely version mismatch), clear it and show login
+			ClearToken()
+			ClearUsername()
 
-		g.name = LoadUsername()
-		g.retryConnect()
+			apiBase := netcfg.APIBase
+			g.auth = NewAuthUI(apiBase, func(username string) {
+				g.name = username
+			})
+			g.connSt = stateIdle
+		} else {
+			// Token is valid, proceed with auto-connect
+			g.name = LoadUsername()
+			g.retryConnect()
+		}
 	}
 	return g
 }

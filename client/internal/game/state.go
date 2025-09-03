@@ -257,6 +257,7 @@ type Game struct {
 	transferLeaderConfirm bool
 	transferLeaderTarget  string
 	socialTabLoaded       bool
+	guildChatLoaded       bool
 	// Track previous guild roster to generate system events (join/leave/promote)
 	prevGuildRoles      map[string]string
 	havePrevGuildRoster bool

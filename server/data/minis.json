@@ -160,10 +160,10 @@
     "particle": "projectile"
   },
   {
-    "name": "Faerie Dragon",
+    "name": "Mana Wyrm",
     "dmg": 290,
     "hp": 340,
-    "portrait": "faerie-dragon.png",
+    "portrait": "mana_wyrm.png",
     "class": "range",
     "subclass": "air-vs-all",
     "role": "mini",
@@ -212,10 +212,10 @@
     "speed": 2
   },
   {
-    "name": "Gryphon Rider",
+    "name": "Aerie Guard",
     "dmg": 320,
     "hp": 620,
-    "portrait": "gryphon-rider.png",
+    "portrait": "aerie_guard.png",
     "class": "range",
     "subclass": "air-vs-all",
     "role": "mini",
@@ -225,10 +225,10 @@
     "particle": "projectile"
   },
   {
-    "name": "Harpies",
+    "name": "Winged Screechers",
     "dmg": 130,
     "hp": 290,
-    "portrait": "harpies.png",
+    "portrait": "winged_screechers.png",
     "class": "melee",
     "subclass": "air-vs-all",
     "role": "mini",
@@ -330,10 +330,10 @@
     "particle": "projectile"
   },
   {
-    "name": "Molten Giant",
+    "name": "Magma Goliath",
     "dmg": 360,
     "hp": 2000,
-    "portrait": "molten-giant.png",
+    "portrait": "magma_goliath.png",
     "class": "melee",
     "role": "mini",
     "cost": 3,
@@ -370,10 +370,10 @@
     "speed": 1
   },
   {
-    "name": "Quilboar",
+    "name": "Razorboar",
     "dmg": 140,
     "hp": 360,
-    "portrait": "quilboar.png",
+    "portrait": "razorboar.png",
     "class": "melee",
     "role": "mini",
     "cost": 3,
@@ -390,20 +390,20 @@
     "speed": 1
   },
   {
-    "name": "Raptor",
+    "name": "Dino Steed",
     "dmg": 130,
     "hp": 250,
-    "portrait": "raptors.png",
+    "portrait": "dino_steed.png",
     "class": "melee",
     "role": "mini",
     "cost": 2,
     "speed": 3
   },
   {
-    "name": "Mountaineer",
+    "name": "Grizzly Marksman",
     "dmg": 100,
     "hp": 220,
-    "portrait": "mountaineer.png",
+    "portrait": "grizzly_marksman.png",
     "class": "range",
     "role": "mini",
     "cost": 2,
@@ -412,10 +412,10 @@
     "particle": "projectile"
   },
   {
-    "name": "S.A.F.E. Pilot",
+    "name": "Kamikaze Aviator",
     "dmg": 230,
     "hp": 500,
-    "portrait": "s-a-f-e-pilot.png",
+    "portrait": "kamikaze_aviator.png",
     "class": "range",
     "role": "mini",
     "cost": 3,
@@ -444,10 +444,10 @@
     "speed": 1
   },
   {
-    "name": "Stonehoof Tauren",
+    "name": "Earthhoof",
     "dmg": 250,
     "hp": 1200,
-    "portrait": "stonehoof-tauren.png",
+    "portrait": "earthhoof.png",
     "class": "melee",
     "role": "mini",
     "cost": 3,
@@ -513,10 +513,10 @@
     "particle": "projectile"
   },
   {
-    "name": "Prowler",
+    "name": "Nightfang",
     "dmg": 130,
     "hp": 280,
-    "portrait": "prowler.png",
+    "portrait": "nightfang.png",
     "class": "melee",
     "role": "mini",
     "cost": 2,

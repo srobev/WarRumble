@@ -1016,44 +1016,42 @@ func (g *Game) updateHome() {
 		mx, my := ebiten.CursorPosition()
 
 		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-			switch {
-			case queueBtn.hit(mx, my):
-				if !g.pvpQueued {
-					g.pvpQueued = true
-					g.pvpStatus = "Queueing for PvP…"
-					g.send("JoinPvpQueue", struct{}{})
-				}
-			case leaveBtn.hit(mx, my):
-				if g.pvpQueued {
-					g.pvpQueued = false
-					g.pvpStatus = "Left queue."
-					g.send("LeavePvpQueue", struct{}{})
-				}
-			case createBtn.hit(mx, my):
-				if !g.pvpHosting {
-					g.pvpHosting = true
-					g.pvpCode = ""
-					g.pvpStatus = "Requesting friendly code…"
-					g.send("FriendlyCreate", protocol.FriendlyCreate{})
-				}
-			case cancelBtn.hit(mx, my):
-				if g.pvpHosting {
-					g.pvpHosting = false
-					g.pvpStatus = "Cancelled friendly host."
-					g.pvpCode = ""
-					g.send("FriendlyCancel", protocol.FriendlyCancel{})
-				}
-			case joinInput.hit(mx, my):
+			// Handle button clicks based on current state (matching the drawing logic)
+			if !g.pvpQueued && queueBtn.hit(mx, my) {
+				// Queue PvP button clicked
+				g.pvpQueued = true
+				g.pvpStatus = "Queueing for PvP…"
+				g.send("JoinPvpQueue", struct{}{})
+			} else if g.pvpQueued && leaveBtn.hit(mx, my) {
+				// Leave Queue button clicked
+				g.pvpQueued = false
+				g.pvpStatus = "Left queue."
+				g.send("LeavePvpQueue", struct{}{})
+			} else if !g.pvpHosting && createBtn.hit(mx, my) {
+				// Create Friendly Code button clicked
+				g.pvpHosting = true
+				g.pvpCode = ""
+				g.pvpStatus = "Requesting friendly code…"
+				g.send("FriendlyCreate", protocol.FriendlyCreate{})
+			} else if g.pvpHosting && cancelBtn.hit(mx, my) {
+				// Cancel Friendly button clicked
+				g.pvpHosting = false
+				g.pvpStatus = "Cancelled friendly host."
+				g.pvpCode = ""
+				g.send("FriendlyCancel", protocol.FriendlyCancel{})
+			} else if joinInput.hit(mx, my) {
+				// Input field clicked
 				g.pvpInputActive = true
-			case g.pvpCodeArea.hit(mx, my) && g.pvpHosting && g.pvpCode != "":
+			} else if g.pvpCodeArea.hit(mx, my) && g.pvpHosting && g.pvpCode != "" {
+				// Code area clicked (copy to clipboard)
 				if err := clipboard.WriteAll(g.pvpCode); err != nil {
-
-					g.pvpStatus = "Couldn’t copy (install xclip/xsel on Linux)."
+					g.pvpStatus = "Couldn't copy (install xclip/xsel on Linux)."
 					log.Println("clipboard copy failed:", err)
 				} else {
 					g.pvpStatus = "Code copied to clipboard."
 				}
-			case joinBtn.hit(mx, my):
+			} else if joinBtn.hit(mx, my) {
+				// Join button clicked
 				code := strings.ToUpper(strings.TrimSpace(g.pvpCodeInput))
 				if code == "" {
 					g.pvpStatus = "Enter a code first."
@@ -1062,50 +1060,71 @@ func (g *Game) updateHome() {
 					g.send("FriendlyJoin", protocol.FriendlyJoin{Code: code})
 				}
 				g.pvpInputActive = false
-			default:
-
+			} else {
+				// Clicked elsewhere - deactivate input
 				g.pvpInputActive = false
 			}
 		}
 
 		if g.pvpInputActive {
-			for _, k := range inpututil.AppendJustPressedKeys(nil) {
-				switch k {
-				case ebiten.KeyBackspace:
-					if len(g.pvpCodeInput) > 0 {
-						g.pvpCodeInput = g.pvpCodeInput[:len(g.pvpCodeInput)-1]
-					}
-				case ebiten.KeyEnter:
-					code := strings.ToUpper(strings.TrimSpace(g.pvpCodeInput))
-					if code == "" {
-						g.pvpStatus = "Enter a code first."
-					} else {
-						g.pvpStatus = "Joining room " + code + "…"
-						g.send("FriendlyJoin", protocol.FriendlyJoin{Code: code})
-					}
-					g.pvpInputActive = false
-
-				default:
-
-					if k >= ebiten.KeyA && k <= ebiten.KeyZ {
-						if len(g.pvpCodeInput) < 8 {
-							g.pvpCodeInput += string('A' + (k - ebiten.KeyA))
+			// Handle paste functionality (Ctrl+V / Cmd+V)
+			if (ebiten.IsKeyPressed(ebiten.KeyControl) || ebiten.IsKeyPressed(ebiten.KeyMeta)) && inpututil.IsKeyJustPressed(ebiten.KeyV) {
+				if pastedText, err := clipboard.ReadAll(); err == nil {
+					// Filter pasted text to only allow uppercase letters and numbers
+					filtered := ""
+					for _, r := range strings.ToUpper(pastedText) {
+						if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
+							filtered += string(r)
 						}
-						continue
 					}
-
-					if k >= ebiten.Key0 && k <= ebiten.Key9 {
-						if len(g.pvpCodeInput) < 8 {
-							g.pvpCodeInput += string('0' + (k - ebiten.Key0))
+					// Add filtered text up to the 8 character limit
+					for _, r := range filtered {
+						if len(g.pvpCodeInput) >= 8 {
+							break
 						}
-						continue
+						g.pvpCodeInput += string(r)
 					}
-
-					if k >= ebiten.KeyKP0 && k <= ebiten.KeyKP9 {
-						if len(g.pvpCodeInput) < 8 {
-							g.pvpCodeInput += string('0' + (k - ebiten.KeyKP0))
+				}
+			} else {
+				// Handle individual key presses
+				for _, k := range inpututil.AppendJustPressedKeys(nil) {
+					switch k {
+					case ebiten.KeyBackspace:
+						if len(g.pvpCodeInput) > 0 {
+							g.pvpCodeInput = g.pvpCodeInput[:len(g.pvpCodeInput)-1]
 						}
-						continue
+					case ebiten.KeyEnter:
+						code := strings.ToUpper(strings.TrimSpace(g.pvpCodeInput))
+						if code == "" {
+							g.pvpStatus = "Enter a code first."
+						} else {
+							g.pvpStatus = "Joining room " + code + "…"
+							g.send("FriendlyJoin", protocol.FriendlyJoin{Code: code})
+						}
+						g.pvpInputActive = false
+
+					default:
+
+						if k >= ebiten.KeyA && k <= ebiten.KeyZ {
+							if len(g.pvpCodeInput) < 8 {
+								g.pvpCodeInput += string('A' + (k - ebiten.KeyA))
+							}
+							continue
+						}
+
+						if k >= ebiten.Key0 && k <= ebiten.Key9 {
+							if len(g.pvpCodeInput) < 8 {
+								g.pvpCodeInput += string('0' + (k - ebiten.Key0))
+							}
+							continue
+						}
+
+						if k >= ebiten.KeyKP0 && k <= ebiten.KeyKP9 {
+							if len(g.pvpCodeInput) < 8 {
+								g.pvpCodeInput += string('0' + (k - ebiten.KeyKP0))
+							}
+							continue
+						}
 					}
 				}
 			}
@@ -2099,25 +2118,113 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 
 		contentY := topBarH
 		contentH := protocol.ScreenH - menuBarH - contentY
-		ebitenutil.DrawRect(screen, 0, float64(contentY), float64(protocol.ScreenW), float64(contentH), color.NRGBA{0x20, 0x20, 0x28, 0xFF})
+
+		// Draw themed background panel with enhanced styling
+		if g.fantasyUI != nil {
+			g.fantasyUI.DrawThemedPanel(screen, 0, contentY, protocol.ScreenW, contentH, 0.9)
+
+			// Add subtle pattern overlay for PvP section
+			g.fantasyUI.CreateBackgroundPattern(protocol.ScreenW, contentH)
+			pattern := g.fantasyUI.CreateBackgroundPattern(protocol.ScreenW, contentH)
+			if pattern != nil {
+				op := &ebiten.DrawImageOptions{}
+				op.GeoM.Translate(0, float64(contentY))
+				op.ColorM.Scale(1, 1, 1, 0.3) // Very subtle opacity
+				screen.DrawImage(pattern, op)
+			}
+		} else {
+			ebitenutil.DrawRect(screen, 0, float64(contentY), float64(protocol.ScreenW), float64(contentH), color.NRGBA{0x20, 0x20, 0x28, 0xFF})
+		}
+
+		// Add PvP section title with enhanced styling
+		titleY := contentY + 20
+		if g.fantasyUI != nil {
+			// Draw ornate title background
+			vector.DrawFilledRect(screen, float32(pad), float32(titleY-8), float32(protocol.ScreenW-2*pad), 40, g.fantasyUI.Theme.CardBackground, true)
+			vector.StrokeRect(screen, float32(pad), float32(titleY-8), float32(protocol.ScreenW-2*pad), 40, 2, g.fantasyUI.Theme.Border, true)
+
+			// Add title glow effect
+			vector.StrokeRect(screen, float32(pad+2), float32(titleY-6), float32(protocol.ScreenW-2*pad-4), 36, 1, g.fantasyUI.Theme.Glow, true)
+
+			text.Draw(screen, "⚔️ Player vs Player Arena", basicfont.Face7x13, pad+12, titleY+6, g.fantasyUI.Theme.TextPrimary)
+			text.Draw(screen, "Battle other players in ranked matches", basicfont.Face7x13, pad+12, titleY+22, g.fantasyUI.Theme.TextSecondary)
+		} else {
+			text.Draw(screen, "⚔️ Player vs Player Arena", basicfont.Face7x13, pad+8, titleY, color.NRGBA{240, 196, 25, 255})
+			text.Draw(screen, "Battle other players in ranked matches", basicfont.Face7x13, pad+8, titleY+16, color.NRGBA{200, 200, 200, 255})
+		}
 
 		queueBtn, leaveBtn, createBtn, cancelBtn, joinInput, joinBtn := g.pvpLayout()
 
-		ebitenutil.DrawRect(screen, float64(queueBtn.x), float64(queueBtn.y), float64(queueBtn.w), float64(queueBtn.h),
-			map[bool]color.NRGBA{true: {80, 110, 80, 255}, false: {60, 60, 80, 255}}[g.pvpQueued])
-		text.Draw(screen, "Queue PvP", basicfont.Face7x13, queueBtn.x+16, queueBtn.y+18, color.White)
+		// Enhanced button states with hover detection
+		mx, my := ebiten.CursorPosition()
+		queueHovered := queueBtn.hit(mx, my)
+		leaveHovered := leaveBtn.hit(mx, my)
+		createHovered := createBtn.hit(mx, my)
+		cancelHovered := cancelBtn.hit(mx, my)
+		joinHovered := joinBtn.hit(mx, my)
 
-		ebitenutil.DrawRect(screen, float64(leaveBtn.x), float64(leaveBtn.y), float64(leaveBtn.w), float64(leaveBtn.h),
-			color.NRGBA{90, 70, 70, 255})
-		text.Draw(screen, "Leave Queue", basicfont.Face7x13, leaveBtn.x+16, leaveBtn.y+18, color.White)
+		// Draw themed buttons with enhanced states and conditional visibility
+		if g.fantasyUI != nil {
+			// Queue PvP button - only show when not queued
+			if !g.pvpQueued {
+				queueState := ButtonNormal
+				if queueHovered {
+					queueState = ButtonHover
+				}
+				g.fantasyUI.DrawThemedButtonWithStyle(screen, queueBtn.x, queueBtn.y, queueBtn.w, queueBtn.h, "Queue PvP", queueState, true)
+			}
 
-		ebitenutil.DrawRect(screen, float64(createBtn.x), float64(createBtn.y), float64(createBtn.w), float64(createBtn.h),
-			map[bool]color.NRGBA{true: {80, 110, 80, 255}, false: {60, 60, 80, 255}}[g.pvpHosting])
-		text.Draw(screen, "Create Friendly Code", basicfont.Face7x13, createBtn.x+16, createBtn.y+18, color.White)
+			// Leave Queue button - only show when queued
+			if g.pvpQueued {
+				leaveState := ButtonNormal
+				if leaveHovered {
+					leaveState = ButtonHover
+				}
+				g.fantasyUI.DrawThemedButtonWithStyle(screen, leaveBtn.x, leaveBtn.y, leaveBtn.w, leaveBtn.h, "Leave Queue", leaveState, true)
+			}
 
-		ebitenutil.DrawRect(screen, float64(cancelBtn.x), float64(cancelBtn.y), float64(cancelBtn.w), float64(cancelBtn.h),
-			color.NRGBA{90, 70, 70, 255})
-		text.Draw(screen, "Cancel", basicfont.Face7x13, cancelBtn.x+16, cancelBtn.y+18, color.White)
+			// Create Friendly Code button - only show when not hosting
+			if !g.pvpHosting {
+				createState := ButtonNormal
+				if createHovered {
+					createState = ButtonHover
+				}
+				g.fantasyUI.DrawThemedButtonWithStyle(screen, createBtn.x, createBtn.y, createBtn.w, createBtn.h, "Create Friendly Code", createState, true)
+			}
+
+			// Cancel button - only show when hosting
+			if g.pvpHosting {
+				cancelState := ButtonNormal
+				if cancelHovered {
+					cancelState = ButtonHover
+				}
+				g.fantasyUI.DrawThemedButtonWithStyle(screen, cancelBtn.x, cancelBtn.y, cancelBtn.w, cancelBtn.h, "Cancel Friendly", cancelState, true)
+			}
+
+			// Join button - always visible
+			joinState := ButtonNormal
+			if joinHovered {
+				joinState = ButtonHover
+			}
+			g.fantasyUI.DrawThemedButtonWithStyle(screen, joinBtn.x, joinBtn.y, joinBtn.w, joinBtn.h, "Join", joinState, true)
+		} else {
+			// Fallback to basic buttons
+			ebitenutil.DrawRect(screen, float64(queueBtn.x), float64(queueBtn.y), float64(queueBtn.w), float64(queueBtn.h),
+				map[bool]color.NRGBA{true: {80, 110, 80, 255}, false: {60, 60, 80, 255}}[g.pvpQueued])
+			text.Draw(screen, "Queue PvP", basicfont.Face7x13, queueBtn.x+16, queueBtn.y+18, color.White)
+
+			ebitenutil.DrawRect(screen, float64(leaveBtn.x), float64(leaveBtn.y), float64(leaveBtn.w), float64(leaveBtn.h),
+				color.NRGBA{90, 70, 70, 255})
+			text.Draw(screen, "Leave Queue", basicfont.Face7x13, leaveBtn.x+16, leaveBtn.y+18, color.White)
+
+			ebitenutil.DrawRect(screen, float64(createBtn.x), float64(createBtn.y), float64(createBtn.w), float64(createBtn.h),
+				map[bool]color.NRGBA{true: {80, 110, 80, 255}, false: {60, 60, 80, 255}}[g.pvpHosting])
+			text.Draw(screen, "Create Friendly Code", basicfont.Face7x13, createBtn.x+16, createBtn.y+18, color.White)
+
+			ebitenutil.DrawRect(screen, float64(cancelBtn.x), float64(cancelBtn.y), float64(cancelBtn.w), float64(cancelBtn.h),
+				color.NRGBA{90, 70, 70, 255})
+			text.Draw(screen, "Cancel", basicfont.Face7x13, cancelBtn.x+16, cancelBtn.y+18, color.White)
+		}
 
 		g.pvpCodeArea = rect{}
 		if g.pvpHosting && g.pvpCode != "" {
@@ -2131,16 +2238,41 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 
 			g.pvpCodeArea = rect{x: bx, y: by, w: bw, h: bh}
 
-			ebitenutil.DrawRect(screen, float64(bx), float64(by), float64(bw), float64(bh), color.NRGBA{54, 63, 88, 255})
-			text.Draw(screen, msg, basicfont.Face7x13, bx+9, by+18, color.White)
+			// Draw themed code display area
+			if g.fantasyUI != nil {
+				// Draw the card background and border
+				vector.DrawFilledRect(screen, float32(bx), float32(by), float32(bw), float32(bh), g.fantasyUI.Theme.CardBackground, true)
+				vector.StrokeRect(screen, float32(bx), float32(by), float32(bw), float32(bh), 3, g.fantasyUI.Theme.Border, true)
+				vector.StrokeRect(screen, float32(bx+3), float32(by+3), float32(bw-6), float32(bh-6), 1, g.fantasyUI.Theme.Glow, true)
+
+				// Draw the code text centered in the card
+				text.Draw(screen, msg, basicfont.Face7x13, bx+9, by+18, g.fantasyUI.Theme.TextPrimary)
+			} else {
+				ebitenutil.DrawRect(screen, float64(bx), float64(by), float64(bw), float64(bh), color.NRGBA{54, 63, 88, 255})
+				text.Draw(screen, msg, basicfont.Face7x13, bx+9, by+18, color.White)
+			}
 
 			hintX := bx + bw + 12
 			hintY := by + (bh+13)/2 - 2
 			text.Draw(screen, "Click to copy", basicfont.Face7x13, hintX, hintY, color.NRGBA{160, 160, 170, 255})
 		}
 
-		ebitenutil.DrawRect(screen, float64(joinInput.x), float64(joinInput.y), float64(joinInput.w), float64(joinInput.h),
-			color.NRGBA{38, 38, 53, 255})
+		// Enhanced input field with themed styling
+		if g.fantasyUI != nil {
+			// Draw themed input field background - use darker colors for better text visibility
+			inputColor := color.NRGBA{45, 45, 60, 255} // Darker background
+			if g.pvpInputActive {
+				inputColor = color.NRGBA{55, 55, 75, 255} // Slightly lighter when active
+			}
+			vector.DrawFilledRect(screen, float32(joinInput.x), float32(joinInput.y),
+				float32(joinInput.w), float32(joinInput.h), inputColor, true)
+			vector.StrokeRect(screen, float32(joinInput.x), float32(joinInput.y),
+				float32(joinInput.w), float32(joinInput.h), 2, g.fantasyUI.Theme.Border, true)
+		} else {
+			ebitenutil.DrawRect(screen, float64(joinInput.x), float64(joinInput.y), float64(joinInput.w), float64(joinInput.h),
+				color.NRGBA{38, 38, 53, 255})
+		}
+
 		label := g.pvpCodeInput
 		if label == "" && !g.pvpInputActive {
 			label = "Enter code..."
@@ -2149,47 +2281,78 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 			text.Draw(screen, label, basicfont.Face7x13, joinInput.x+8, joinInput.y+17, color.White)
 		}
 
-		ebitenutil.DrawRect(screen, float64(joinBtn.x), float64(joinBtn.y), float64(joinBtn.w), float64(joinBtn.h),
-			color.NRGBA{70, 110, 70, 255})
-		text.Draw(screen, "Join", basicfont.Face7x13, joinBtn.x+38, joinBtn.y+18, color.White)
-
 		bottomY := joinBtn.y + joinBtn.h
 		sepY := bottomY + 20
 
-		ebitenutil.DrawRect(screen, float64(pad), float64(sepY), float64(protocol.ScreenW-2*pad), 1, color.NRGBA{90, 90, 120, 255})
+		// Draw themed separator
+		if g.fantasyUI != nil {
+			vector.DrawFilledRect(screen, float32(pad), float32(sepY), float32(protocol.ScreenW-2*pad), 2, g.fantasyUI.Theme.Border, true)
+		} else {
+			ebitenutil.DrawRect(screen, float64(pad), float64(sepY), float64(protocol.ScreenW-2*pad), 1, color.NRGBA{90, 90, 120, 255})
+		}
 
+		// Status panel with themed styling
 		panelY := sepY + 14
 		panelH := 54
-		ebitenutil.DrawRect(screen, float64(pad), float64(panelY), float64(protocol.ScreenW-2*pad), float64(panelH), color.NRGBA{0x24, 0x24, 0x30, 0xFF})
-		text.Draw(screen, "Status", basicfont.Face7x13, pad+8, panelY+18, color.NRGBA{240, 196, 25, 255})
 
-		msg := g.pvpStatus
-		if msg == "" {
-			msg = "—"
+		if g.fantasyUI != nil {
+			// Draw status panel manually to avoid the underline that passes through the text
+			vector.DrawFilledRect(screen, float32(pad), float32(panelY), float32(protocol.ScreenW-2*pad), float32(panelH), g.fantasyUI.Theme.CardBackground, true)
+			vector.StrokeRect(screen, float32(pad), float32(panelY), float32(protocol.ScreenW-2*pad), float32(panelH), 3, g.fantasyUI.Theme.Border, true)
+			vector.StrokeRect(screen, float32(pad+3), float32(panelY+3), float32(protocol.ScreenW-2*pad-6), float32(panelH-6), 1, g.fantasyUI.Theme.Glow, true)
+
+			// Draw title and content manually without the underline
+			text.Draw(screen, "Status", basicfont.Face7x13, pad+12, panelY+18, g.fantasyUI.Theme.TextPrimary)
+
+			msg := g.pvpStatus
+			if msg == "" {
+				msg = "—"
+			}
+			text.Draw(screen, msg, basicfont.Face7x13, pad+12, panelY+36, g.fantasyUI.Theme.TextSecondary)
+		} else {
+			ebitenutil.DrawRect(screen, float64(pad), float64(panelY), float64(protocol.ScreenW-2*pad), float64(panelH), color.NRGBA{0x24, 0x24, 0x30, 0xFF})
+			text.Draw(screen, "Status", basicfont.Face7x13, pad+8, panelY+18, color.NRGBA{240, 196, 25, 255})
+
+			msg := g.pvpStatus
+			if msg == "" {
+				msg = "—"
+			}
+			text.Draw(screen, msg, basicfont.Face7x13, pad+8, panelY+36, color.White)
 		}
-		text.Draw(screen, msg, basicfont.Face7x13, pad+8, panelY+36, color.White)
 
+		// Leaderboard panel with enhanced styling
 		panelPad := pad
-
 		rows := minInt(50, len(g.pvpLeaders))
 		const rowH = 16
-		panelH = 16 + 16 + rows*rowH + 8
-		if panelH < 120 {
-			panelH = 120
+		leaderboardPanelH := 16 + 16 + rows*rowH + 8
+		if leaderboardPanelH < 120 {
+			leaderboardPanelH = 120
 		}
 
-		panelTop := protocol.ScreenH - menuBarH - panelH - 8
-		if panelTop < topBarH+180 {
-			panelTop = topBarH + 180
+		leaderboardPanelTop := protocol.ScreenH - menuBarH - leaderboardPanelH - 8
+		if leaderboardPanelTop < topBarH+180 {
+			leaderboardPanelTop = topBarH + 180
 		}
 
-		ebitenutil.DrawRect(screen, float64(panelPad), float64(panelTop),
-			float64(protocol.ScreenW-2*panelPad), float64(panelH), color.NRGBA{0x24, 0x24, 0x30, 0xFF})
+		// Draw themed leaderboard panel
+		if g.fantasyUI != nil {
+			g.fantasyUI.DrawThemedCard(screen, panelPad, leaderboardPanelTop,
+				protocol.ScreenW-2*panelPad, leaderboardPanelH, "Top 50 - PvP Leaderboard", []string{})
 
-		text.Draw(screen, "Top 50 - PvP Leaderboard", basicfont.Face7x13, panelPad+8, panelTop+18, color.White)
-		if g.lbLastStamp != 0 {
-			ts := time.UnixMilli(g.lbLastStamp).Format("15:04:05")
-			text.Draw(screen, "as of "+ts, basicfont.Face7x13, panelPad+240, panelTop+18, color.NRGBA{170, 170, 180, 255})
+			// Add timestamp if available
+			if g.lbLastStamp != 0 {
+				ts := time.UnixMilli(g.lbLastStamp).Format("15:04:05")
+				text.Draw(screen, "as of "+ts, basicfont.Face7x13, panelPad+240, leaderboardPanelTop+18, color.NRGBA{170, 170, 180, 255})
+			}
+		} else {
+			ebitenutil.DrawRect(screen, float64(panelPad), float64(leaderboardPanelTop),
+				float64(protocol.ScreenW-2*panelPad), float64(leaderboardPanelH), color.NRGBA{0x24, 0x24, 0x30, 0xFF})
+
+			text.Draw(screen, "Top 50 - PvP Leaderboard", basicfont.Face7x13, panelPad+8, leaderboardPanelTop+18, color.White)
+			if g.lbLastStamp != 0 {
+				ts := time.UnixMilli(g.lbLastStamp).Format("15:04:05")
+				text.Draw(screen, "as of "+ts, basicfont.Face7x13, panelPad+240, leaderboardPanelTop+18, color.NRGBA{170, 170, 180, 255})
+			}
 		}
 
 		colRankX := panelPad + 8
@@ -2197,7 +2360,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 		colRatX := panelPad + 360
 		colTierX := panelPad + 440
 
-		hdrY := panelTop + 36
+		hdrY := leaderboardPanelTop + 36
 		text.Draw(screen, "#", basicfont.Face7x13, colRankX, hdrY, color.NRGBA{200, 200, 210, 255})
 		text.Draw(screen, "Player", basicfont.Face7x13, colNameX, hdrY, color.NRGBA{200, 200, 210, 255})
 		text.Draw(screen, "Rating", basicfont.Face7x13, colRatX, hdrY, color.NRGBA{200, 200, 210, 255})
@@ -2209,9 +2372,15 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 			e := g.pvpLeaders[i]
 			y := rowY + i*rowH
 
+			// Alternate row colors with theme integration
 			if i%2 == 0 {
-				ebitenutil.DrawRect(screen, float64(panelPad+4), float64(y-12),
-					float64(protocol.ScreenW-2*panelPad-8), rowH, color.NRGBA{0x28, 0x28, 0x36, 0xFF})
+				if g.fantasyUI != nil {
+					vector.DrawFilledRect(screen, float32(panelPad+4), float32(y-12),
+						float32(protocol.ScreenW-2*panelPad-8), float32(rowH), g.fantasyUI.Theme.Surface, true)
+				} else {
+					ebitenutil.DrawRect(screen, float64(panelPad+4), float64(y-12),
+						float64(protocol.ScreenW-2*panelPad-8), rowH, color.NRGBA{0x28, 0x28, 0x36, 0xFF})
+				}
 			}
 
 			text.Draw(screen, fmt.Sprintf("%2d.", i+1), basicfont.Face7x13, colRankX, y, color.White)
