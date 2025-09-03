@@ -238,10 +238,10 @@
     "particle": "projectile"
   },
   {
-    "name": "Hogger",
+    "name": "Warg Lord",
     "dmg": 180,
     "hp": 1400,
-    "portrait": "hogger.png",
+    "portrait": "warg_lord.png",
     "class": "melee",
     "role": "champion",
     "cost": 4,
@@ -380,10 +380,10 @@
     "speed": 2
   },
   {
-    "name": "Ragnaros",
+    "name": "Lord of Flame",
     "dmg": 400,
     "hp": 2800,
-    "portrait": "ragnaros.png",
+    "portrait": "lord_of_flame.png",
     "class": "melee",
     "role": "champion",
     "cost": 5,

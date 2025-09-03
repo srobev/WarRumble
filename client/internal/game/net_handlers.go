@@ -307,6 +307,17 @@ func (g *Game) handle(env Msg) {
 		if !tu.IsPaused {
 			g.pauseOverlay = false
 		}
+	case "HealingEvent":
+		var he protocol.HealingEvent
+		json.Unmarshal(env.Data, &he)
+
+		// Trigger healing particle effects
+		if g.particleSystem != nil {
+			// Healing wave from healer
+			g.particleSystem.CreateUnitAbilityEffect(he.HealerX, he.HealerY, "heal")
+			// Green particles on healed target
+			g.particleSystem.CreateTargetHealingEffect(he.TargetX, he.TargetY)
+		}
 	case "MapDef":
 		var md protocol.MapDefMsg
 		json.Unmarshal(env.Data, &md)

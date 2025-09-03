@@ -2219,7 +2219,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 
 		// Version/Info
 		y = protocol.ScreenH - menuBarH - 40
-		text.Draw(screen, "War Rumble v1.0", basicfont.Face7x13, pad+8, y, color.NRGBA{150, 150, 160, 255})
+		text.Draw(screen, protocol.GameName+" v"+protocol.GameVersion, basicfont.Face7x13, pad+8, y, color.NRGBA{150, 150, 160, 255})
 		text.Draw(screen, "Built with Ebiten", basicfont.Face7x13, pad+8, y+16, color.NRGBA{120, 120, 130, 255})
 	}
 }

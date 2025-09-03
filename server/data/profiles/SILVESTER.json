@@ -1,13 +1,13 @@
 {
-  "playerId": 74666,
+  "playerId": 171859,
   "name": "silvester",
   "army": [
-    "Rusttooth",
-    "Banshee",
+    "Sir Kaelen Lightbane",
     "Corpse Catapult",
-    "Core Hound",
-    "Drake",
-    "Gryphon Rider",
+    "Spirit Binder",
+    "Night Sentinel",
+    "Crimson Raider",
+    "Blazebinder",
     "Harpies"
   ],
   "armies": {
@@ -51,6 +51,14 @@
       "Pyromancer",
       "Witch Doctor"
     ],
+    "Lord of Flame": [
+      "Abomination",
+      "Bat Rider",
+      "Chimaera",
+      "Core Hound",
+      "Spirit Binder",
+      "Gnoll Brute"
+    ],
     "Maiev Shadowsong": [
       "Abomination",
       "Banshee",
@@ -81,6 +89,14 @@
       "Core Hound",
       "Drake",
       "Gryphon Rider",
+      "Harpies"
+    ],
+    "Sir Kaelen Lightbane": [
+      "Corpse Catapult",
+      "Spirit Binder",
+      "Night Sentinel",
+      "Crimson Raider",
+      "Blazebinder",
       "Harpies"
     ],
     "Sneed": [
@@ -121,15 +137,19 @@
   "unitXp": {
     "Abomination": 11,
     "Bat Rider": 12,
+    "Blazebinder": 3,
     "Chimaera": 1,
     "Core Hound": 5,
-    "Corpse Catapult": 1,
-    "Crimson Raider": 4,
+    "Corpse Catapult": 2,
+    "Crimson Raider": 6,
     "Faerie Dragon": 1,
     "Frostwolf Shaman": 10,
+    "Harpies": 1,
     "Night Sentinel": 5,
     "Ragnaros": 1,
-    "Sorceress Glacia": 27
+    "Sir Kaelen Lightbane": 4,
+    "Sorceress Glacia": 27,
+    "Spirit Binder": 1
   },
   "pvp_rating": 1373,
   "pvp_rank": "Captain",

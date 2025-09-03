@@ -480,14 +480,36 @@ func (ps *ParticleSystem) CreateHealingEffect(x, y float64) {
 	ps.AddEmitter(emitter)
 }
 
+// CreateTargetHealingEffect creates green particles on the healed target
+func (ps *ParticleSystem) CreateTargetHealingEffect(x, y float64) {
+	emitter := NewParticleEmitter(x, y, 25)
+
+	emitter.StartColor = color.NRGBA{150, 255, 150, 220} // Bright healing green
+	emitter.EndColor = color.NRGBA{100, 255, 100, 0}     // Green to transparent
+	emitter.Shape = "circle"
+	emitter.Spread = 2 * math.Pi // Full circle around target
+	emitter.Speed = 40
+	emitter.SpeedVariance = 10
+	emitter.Life = 1.5
+	emitter.LifeVariance = 0.4
+	emitter.Size = 2.5
+	emitter.SizeVariance = 0.8
+	emitter.EmissionRate = 35
+	emitter.Duration = 1.2
+	emitter.Gravity = -30 // Gentle float upward
+	emitter.Drag = 0.94
+
+	ps.AddEmitter(emitter)
+}
+
 // CreateAuraEffect creates an aura effect around units
 func (ps *ParticleSystem) CreateAuraEffect(x, y float64, auraType string) {
 	emitter := NewParticleEmitter(x, y, 15)
 
 	switch auraType {
 	case "buff":
-		emitter.StartColor = color.NRGBA{255, 255, 100, 150} // Yellow glow
-		emitter.EndColor = color.NRGBA{255, 200, 0, 50}      // Orange glow
+		emitter.StartColor = color.NRGBA{100, 255, 100, 150} // Bright green
+		emitter.EndColor = color.NRGBA{50, 255, 50, 50}      // Green to transparent
 	case "debuff":
 		emitter.StartColor = color.NRGBA{255, 100, 100, 150} // Red glow
 		emitter.EndColor = color.NRGBA{200, 50, 50, 50}      // Dark red glow
@@ -508,6 +530,286 @@ func (ps *ParticleSystem) CreateAuraEffect(x, y float64, auraType string) {
 	emitter.Duration = -1 // Continuous
 	emitter.Gravity = 0
 	emitter.Drag = 0.95
+
+	ps.AddEmitter(emitter)
+}
+
+// CreateUnitAbilityEffect creates visual effects for unit special abilities
+func (ps *ParticleSystem) CreateUnitAbilityEffect(x, y float64, abilityType string) {
+	switch abilityType {
+	case "heal":
+		ps.createHealingWaveEffect(x, y)
+	case "stun":
+		ps.createStunEffect(x, y)
+	case "shield":
+		ps.createShieldEffect(x, y)
+	case "teleport":
+		ps.createTeleportEffect(x, y)
+	case "summon":
+		ps.createSummonEffect(x, y)
+	case "rage":
+		ps.createRageEffect(x, y)
+	case "stealth":
+		ps.createStealthEffect(x, y)
+	case "poison":
+		ps.createPoisonEffect(x, y)
+	}
+}
+
+// createHealingWaveEffect creates a healing wave that expands outward
+func (ps *ParticleSystem) createHealingWaveEffect(x, y float64) {
+	emitter := NewParticleEmitter(x, y, 30)
+
+	emitter.StartColor = color.NRGBA{100, 255, 150, 200} // Bright healing green
+	emitter.EndColor = color.NRGBA{50, 255, 100, 0}      // Green to transparent
+	emitter.Shape = "circle"
+	emitter.Spread = 2 * math.Pi
+	emitter.Speed = 80
+	emitter.SpeedVariance = 20
+	emitter.Life = 1.5
+	emitter.LifeVariance = 0.3
+	emitter.Size = 4
+	emitter.SizeVariance = 1
+	emitter.EmissionRate = 60
+	emitter.Duration = 0.8
+	emitter.Gravity = 0
+	emitter.Drag = 0.9
+
+	ps.AddEmitter(emitter)
+}
+
+// createStunEffect creates a stunning effect with stars and flashes
+func (ps *ParticleSystem) createStunEffect(x, y float64) {
+	emitter := NewParticleEmitter(x, y, 20)
+
+	emitter.StartColor = color.NRGBA{255, 255, 100, 255} // Bright yellow
+	emitter.EndColor = color.NRGBA{255, 200, 0, 0}       // Yellow to transparent
+	emitter.Shape = "star"
+	emitter.Spread = math.Pi / 2 // 90 degrees
+	emitter.Speed = 60
+	emitter.SpeedVariance = 15
+	emitter.Life = 1.2
+	emitter.LifeVariance = 0.4
+	emitter.Size = 3
+	emitter.SizeVariance = 1
+	emitter.EmissionRate = 40
+	emitter.Duration = 1.0
+	emitter.Gravity = -30 // Float upward
+	emitter.Drag = 0.95
+
+	ps.AddEmitter(emitter)
+}
+
+// createShieldEffect creates a protective shield barrier
+func (ps *ParticleSystem) createShieldEffect(x, y float64) {
+	emitter := NewParticleEmitter(x, y, 25)
+
+	emitter.StartColor = color.NRGBA{100, 150, 255, 180} // Light blue
+	emitter.EndColor = color.NRGBA{50, 100, 255, 50}     // Blue to transparent
+	emitter.Shape = "circle"
+	emitter.Spread = 2 * math.Pi
+	emitter.Speed = 40
+	emitter.SpeedVariance = 10
+	emitter.Life = 2.5
+	emitter.LifeVariance = 0.5
+	emitter.Size = 2
+	emitter.SizeVariance = 0.5
+	emitter.EmissionRate = 30
+	emitter.Duration = -1 // Continuous shield
+	emitter.Gravity = 0
+	emitter.Drag = 0.97
+
+	ps.AddEmitter(emitter)
+}
+
+// createTeleportEffect creates a magical teleportation effect
+func (ps *ParticleSystem) createTeleportEffect(x, y float64) {
+	emitter := NewParticleEmitter(x, y, 35)
+
+	emitter.StartColor = color.NRGBA{150, 100, 255, 220} // Purple
+	emitter.EndColor = color.NRGBA{100, 50, 255, 0}      // Purple to transparent
+	emitter.Shape = "circle"
+	emitter.Spread = 2 * math.Pi
+	emitter.Speed = 100
+	emitter.SpeedVariance = 30
+	emitter.Life = 1.0
+	emitter.LifeVariance = 0.2
+	emitter.Size = 3
+	emitter.SizeVariance = 1
+	emitter.EmissionRate = 80
+	emitter.Duration = 0.6
+	emitter.Gravity = 0
+	emitter.Drag = 0.9
+
+	ps.AddEmitter(emitter)
+}
+
+// createSummonEffect creates a summoning ritual effect
+func (ps *ParticleSystem) createSummonEffect(x, y float64) {
+	emitter := NewParticleEmitter(x, y, 40)
+
+	emitter.StartColor = color.NRGBA{200, 100, 255, 200} // Magenta
+	emitter.EndColor = color.NRGBA{150, 50, 255, 0}      // Magenta to transparent
+	emitter.Shape = "star"
+	emitter.Spread = 2 * math.Pi
+	emitter.Speed = 70
+	emitter.SpeedVariance = 20
+	emitter.Life = 2.0
+	emitter.LifeVariance = 0.4
+	emitter.Size = 4
+	emitter.SizeVariance = 1.5
+	emitter.EmissionRate = 50
+	emitter.Duration = 1.5
+	emitter.Gravity = -20 // Float upward
+	emitter.Drag = 0.92
+
+	ps.AddEmitter(emitter)
+}
+
+// createRageEffect creates a berserker rage effect
+func (ps *ParticleSystem) createRageEffect(x, y float64) {
+	emitter := NewParticleEmitter(x, y, 25)
+
+	emitter.StartColor = color.NRGBA{255, 100, 100, 220} // Bright red
+	emitter.EndColor = color.NRGBA{255, 50, 50, 0}       // Red to transparent
+	emitter.Shape = "circle"
+	emitter.Spread = math.Pi // 180 degrees forward
+	emitter.Speed = 90
+	emitter.SpeedVariance = 25
+	emitter.Life = 1.8
+	emitter.LifeVariance = 0.3
+	emitter.Size = 3
+	emitter.SizeVariance = 1
+	emitter.EmissionRate = 45
+	emitter.Duration = 2.0
+	emitter.Gravity = 0
+	emitter.Drag = 0.88
+
+	ps.AddEmitter(emitter)
+}
+
+// createStealthEffect creates an invisibility/cloaking effect
+func (ps *ParticleSystem) createStealthEffect(x, y float64) {
+	emitter := NewParticleEmitter(x, y, 20)
+
+	emitter.StartColor = color.NRGBA{150, 150, 200, 150} // Gray-blue
+	emitter.EndColor = color.NRGBA{100, 100, 150, 0}     // Gray-blue to transparent
+	emitter.Shape = "circle"
+	emitter.Spread = 2 * math.Pi
+	emitter.Speed = 25
+	emitter.SpeedVariance = 8
+	emitter.Life = 3.0
+	emitter.LifeVariance = 0.8
+	emitter.Size = 2
+	emitter.SizeVariance = 0.5
+	emitter.EmissionRate = 25
+	emitter.Duration = -1 // Continuous stealth
+	emitter.Gravity = 0
+	emitter.Drag = 0.96
+
+	ps.AddEmitter(emitter)
+}
+
+// createPoisonEffect creates a toxic/poison effect
+func (ps *ParticleSystem) createPoisonEffect(x, y float64) {
+	emitter := NewParticleEmitter(x, y, 22)
+
+	emitter.StartColor = color.NRGBA{100, 255, 100, 180} // Bright green
+	emitter.EndColor = color.NRGBA{50, 150, 50, 0}       // Green to transparent
+	emitter.Shape = "circle"
+	emitter.Spread = math.Pi / 3 // 60 degrees
+	emitter.Speed = 50
+	emitter.SpeedVariance = 15
+	emitter.Life = 2.2
+	emitter.LifeVariance = 0.5
+	emitter.Size = 2.5
+	emitter.SizeVariance = 0.8
+	emitter.EmissionRate = 35
+	emitter.Duration = 2.5
+	emitter.Gravity = 20 // Sink down
+	emitter.Drag = 0.93
+
+	ps.AddEmitter(emitter)
+}
+
+// CreateBattleBuffEffect creates enhanced buff effects for battle
+func (ps *ParticleSystem) CreateBattleBuffEffect(x, y float64, buffType string) {
+	emitter := NewParticleEmitter(x, y, 18)
+
+	switch buffType {
+	case "attack":
+		emitter.StartColor = color.NRGBA{255, 150, 150, 200} // Red-orange
+		emitter.EndColor = color.NRGBA{255, 100, 100, 50}
+	case "defense":
+		emitter.StartColor = color.NRGBA{150, 150, 255, 200} // Blue
+		emitter.EndColor = color.NRGBA{100, 100, 255, 50}
+	case "speed":
+		emitter.StartColor = color.NRGBA{255, 255, 150, 200} // Yellow
+		emitter.EndColor = color.NRGBA{255, 255, 100, 50}
+	case "health":
+		emitter.StartColor = color.NRGBA{150, 255, 150, 200} // Green
+		emitter.EndColor = color.NRGBA{100, 255, 100, 50}
+	default:
+		emitter.StartColor = color.NRGBA{200, 200, 255, 200} // Light blue
+		emitter.EndColor = color.NRGBA{150, 150, 255, 50}
+	}
+
+	emitter.Shape = "star"
+	emitter.Spread = 2 * math.Pi
+	emitter.Speed = 35
+	emitter.SpeedVariance = 12
+	emitter.Life = 3.0
+	emitter.LifeVariance = 0.7
+	emitter.Size = 2.5
+	emitter.SizeVariance = 0.7
+	emitter.EmissionRate = 22
+	emitter.Duration = -1 // Continuous buff
+	emitter.Gravity = -15 // Float upward
+	emitter.Drag = 0.94
+
+	ps.AddEmitter(emitter)
+}
+
+// CreateCriticalHitEffect creates a spectacular critical hit effect
+func (ps *ParticleSystem) CreateCriticalHitEffect(x, y float64) {
+	emitter := NewParticleEmitter(x, y, 40)
+
+	emitter.StartColor = color.NRGBA{255, 215, 0, 255} // Pure gold
+	emitter.EndColor = color.NRGBA{255, 140, 0, 0}     // Gold to transparent
+	emitter.Shape = "star"
+	emitter.Spread = 2 * math.Pi
+	emitter.Speed = 120
+	emitter.SpeedVariance = 40
+	emitter.Life = 1.5
+	emitter.LifeVariance = 0.3
+	emitter.Size = 5
+	emitter.SizeVariance = 2
+	emitter.EmissionRate = 100
+	emitter.Duration = 0.4
+	emitter.Gravity = -50 // Shoot upward
+	emitter.Drag = 0.85
+
+	ps.AddEmitter(emitter)
+}
+
+// CreateLevelUpEffect creates a celebration effect for leveling up
+func (ps *ParticleSystem) CreateLevelUpEffect(x, y float64) {
+	emitter := NewParticleEmitter(x, y, 50)
+
+	emitter.StartColor = color.NRGBA{255, 255, 100, 255} // Bright yellow
+	emitter.EndColor = color.NRGBA{255, 200, 0, 0}       // Yellow to transparent
+	emitter.Shape = "star"
+	emitter.Spread = 2 * math.Pi
+	emitter.Speed = 150
+	emitter.SpeedVariance = 50
+	emitter.Life = 2.5
+	emitter.LifeVariance = 0.5
+	emitter.Size = 4
+	emitter.SizeVariance = 1.5
+	emitter.EmissionRate = 80
+	emitter.Duration = 1.2
+	emitter.Gravity = -80 // Celebrate upward
+	emitter.Drag = 0.8
 
 	ps.AddEmitter(emitter)
 }

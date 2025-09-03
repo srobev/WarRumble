@@ -2,12 +2,16 @@
 
 package game
 
-import "github.com/hajimehoshi/ebiten/v2"
+import (
+	"rumble/shared/protocol"
+
+	"github.com/hajimehoshi/ebiten/v2"
+)
 
 func init() {
 	// Your default window size/title (optional)
 	ebiten.SetWindowSize(600, 1000)
-	ebiten.SetWindowTitle("War Rumble")
+	ebiten.SetWindowTitle(protocol.GameName)
 
 	// Ebiten v2.8+: preferred API
 	ebiten.SetWindowResizingMode(ebiten.WindowResizingModeEnabled)

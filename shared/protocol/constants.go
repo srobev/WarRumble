@@ -12,6 +12,7 @@ const (
 	GoldMax     = 10
 	GoldTickSec = 1.0
 
-	// Game version for compatibility checking
-	GameVersion = "1.0.0" // Force rebuild
+	// Game information
+	GameName    = "WarRRR Rumble"
+	GameVersion = "0.0.9b" // Force rebuild
 )

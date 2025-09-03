@@ -138,6 +138,18 @@ type StateDelta struct {
 	Events       []string    `json:"events,omitempty"`
 }
 
+type HealingEvent struct {
+	HealerID   int64   `json:"healerId"`   // ID of the healing unit
+	HealerX    float64 `json:"healerX"`    // Position of healer
+	HealerY    float64 `json:"healerY"`    // Position of healer
+	TargetID   int64   `json:"targetId"`   // ID of the healed unit
+	TargetX    float64 `json:"targetX"`    // Position of target
+	TargetY    float64 `json:"targetY"`    // Position of target
+	HealAmount int     `json:"healAmount"` // Amount healed
+	HealerName string  `json:"healerName"` // Name of healer unit
+	TargetName string  `json:"targetName"` // Name of target unit
+}
+
 type FullSnapshot struct {
 	Tick  int64       `json:"tick"`
 	Units []UnitState `json:"units"`

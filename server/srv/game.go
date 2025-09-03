@@ -499,6 +499,24 @@ func (g *Game) Step(dt float64) protocol.StateDelta {
 			if u.HealCD <= 0 {
 				for _, v := range g.units {
 					if v.OwnerID == u.OwnerID && v.HP < v.MaxHP && hypot(u.X, u.Y, v.X, v.Y) <= float64(u.Range) {
+						// Send healing event to all clients
+						healingEvent := protocol.HealingEvent{
+							HealerID:   u.ID,
+							HealerX:    u.X,
+							HealerY:    u.Y,
+							TargetID:   v.ID,
+							TargetX:    v.X,
+							TargetY:    v.Y,
+							HealAmount: u.Heal,
+							HealerName: u.Name,
+							TargetName: v.Name,
+						}
+
+						// TODO: Broadcast healing event to all connected clients
+						// This would require implementing a messaging system to send the healingEvent
+						// to all clients so they can trigger the particle effects
+						_ = healingEvent // Placeholder for future implementation
+
 						v.HP += u.Heal
 						if v.HP > v.MaxHP {
 							v.HP = v.MaxHP

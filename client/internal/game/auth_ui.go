@@ -183,6 +183,9 @@ type AuthUI struct {
 	// remember me
 	remember     bool
 	rememberRect image.Rectangle
+
+	// fantasy theme for enhanced UI
+	fantasyTheme *FantasyTheme
 }
 
 func NewAuthUI(apiBase string, onSuccess func(username string)) *AuthUI {
@@ -204,6 +207,10 @@ func NewAuthUI(apiBase string, onSuccess func(username string)) *AuthUI {
 	a.pass = newTextBox("Password", 0, 0, 360, true, inpFace)
 	a.confirm = newTextBox("Confirm", 0, 0, 360, true, inpFace)
 	a.user.focused = true
+
+	// Initialize fantasy theme for enhanced UI
+	a.fantasyTheme = DefaultFantasyTheme()
+
 	return a
 }
 
@@ -307,7 +314,7 @@ func (a *AuthUI) Draw(screen *ebiten.Image) {
 		title = "Register"
 	}
 	titleCol := color.NRGBA{220, 230, 255, 255}
-	text.Draw(screen, "WAR RUMBLE", a.titleFace, a.cardX+24, a.cardY+40, titleCol)
+	text.Draw(screen, protocol.GameName, a.titleFace, a.cardX+24, a.cardY+40, titleCol)
 	text.Draw(screen, "— "+title+" —", a.uiFace, a.cardX+24, a.cardY+66, color.NRGBA{160, 190, 255, 200})
 
 	// Segmented (Login | Register) — rounded pill
@@ -386,7 +393,7 @@ func (a *AuthUI) Draw(screen *ebiten.Image) {
 	}
 
 	// Version display at bottom of screen
-	versionText := "WarRumble v" + protocol.GameVersion
+	versionText := protocol.GameName + " v" + protocol.GameVersion
 	versionBounds := text.BoundString(a.uiFace, versionText)
 	versionX := (sw - versionBounds.Dx()) / 2
 	versionY := sh - 20

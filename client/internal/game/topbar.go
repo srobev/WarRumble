@@ -3,6 +3,7 @@ package game
 import (
 	"fmt"
 	"image/color"
+
 	"rumble/shared/protocol"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -113,7 +114,7 @@ func (g *Game) drawTopBarHome(screen *ebiten.Image) {
 		text.Draw(screen, ratingVal, basicfont.Face7x13, tx+leftTextX+rlW+10, ty+61, color.White)
 	}
 
-	title := "War Rumble"
+	title := protocol.GameName
 	tb := text.BoundString(basicfont.Face7x13, title)
 	ty := g.titleArea.y + (topBarH+tb.Dy())/2 - 2
 	text.Draw(screen, title, basicfont.Face7x13, g.titleArea.x+8, ty, color.White)
@@ -180,7 +181,7 @@ func (g *Game) computeTopBarLayout() {
 		h: topBarH,
 	}
 
-	title := "War Rumble"
+	title := protocol.GameName
 	tb := text.BoundString(basicfont.Face7x13, title)
 	tx := (protocol.ScreenW - tb.Dx()) / 2
 	g.titleArea = rect{x: tx - 8, y: 0, w: tb.Dx() + 16, h: topBarH}

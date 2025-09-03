@@ -255,6 +255,66 @@ afterMessages:
 				g.particleSystem.CreateAuraEffect(float64(protocol.ScreenW/2), float64(protocol.ScreenH/2), "buff")
 			}
 		}
+
+		// New ability effect shortcuts
+		if inpututil.IsKeyJustPressed(ebiten.KeyQ) {
+			// Healing ability
+			if g.particleSystem != nil {
+				g.particleSystem.CreateUnitAbilityEffect(float64(protocol.ScreenW/2), float64(protocol.ScreenH/2), "heal")
+			}
+		}
+		if inpututil.IsKeyJustPressed(ebiten.KeyW) {
+			// Stun ability
+			if g.particleSystem != nil {
+				g.particleSystem.CreateUnitAbilityEffect(float64(protocol.ScreenW/2), float64(protocol.ScreenH/2), "stun")
+			}
+		}
+		if inpututil.IsKeyJustPressed(ebiten.KeyR) {
+			// Rage ability
+			if g.particleSystem != nil {
+				g.particleSystem.CreateUnitAbilityEffect(float64(protocol.ScreenW/2), float64(protocol.ScreenH/2), "rage")
+			}
+		}
+		if inpututil.IsKeyJustPressed(ebiten.KeyT) {
+			// Teleport ability
+			if g.particleSystem != nil {
+				g.particleSystem.CreateUnitAbilityEffect(float64(protocol.ScreenW/2-50), float64(protocol.ScreenH/2), "teleport")
+				time.Sleep(200 * time.Millisecond) // Small delay for effect
+				g.particleSystem.CreateUnitAbilityEffect(float64(protocol.ScreenW/2+50), float64(protocol.ScreenH/2), "teleport")
+			}
+		}
+		if inpututil.IsKeyJustPressed(ebiten.KeyY) {
+			// Critical hit effect
+			if g.particleSystem != nil {
+				g.particleSystem.CreateCriticalHitEffect(float64(protocol.ScreenW/2), float64(protocol.ScreenH/2))
+			}
+		}
+		if inpututil.IsKeyJustPressed(ebiten.KeyU) {
+			// Level up celebration
+			if g.particleSystem != nil {
+				g.particleSystem.CreateLevelUpEffect(float64(protocol.ScreenW/2), float64(protocol.ScreenH/2))
+			}
+		}
+		if inpututil.IsKeyJustPressed(ebiten.KeyI) {
+			// Battle buff effect
+			if g.particleSystem != nil {
+				g.particleSystem.CreateBattleBuffEffect(float64(protocol.ScreenW/2), float64(protocol.ScreenH/2), "attack")
+			}
+		}
+		if inpututil.IsKeyJustPressed(ebiten.KeyP) {
+			// Target healing effect (green particles on healed unit)
+			if g.particleSystem != nil {
+				// Simulate healer at left side healing target at right side
+				healerX := float64(protocol.ScreenW / 4)
+				targetX := float64(3 * protocol.ScreenW / 4)
+				targetY := float64(protocol.ScreenH / 2)
+
+				// Healing wave from healer
+				g.particleSystem.CreateUnitAbilityEffect(healerX, targetY, "heal")
+				// Green particles on healed target
+				g.particleSystem.CreateTargetHealingEffect(targetX, targetY)
+			}
+		}
 	}
 
 	return nil
@@ -680,7 +740,7 @@ func mathMin(a, b float64) float64 {
 func desktopMain() {
 	fitToScreen()
 	ebiten.SetWindowResizable(true)
-	ebiten.SetWindowTitle("War Rumble — by s.robev")
+	ebiten.SetWindowTitle(protocol.GameName + " — by s.robev")
 	if err := ebiten.RunGame(New("Player")); err != nil {
 		log.Fatal(err)
 	}
