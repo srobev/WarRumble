@@ -11,4 +11,7 @@ const (
 	// Your current gameplay constants
 	GoldMax     = 10
 	GoldTickSec = 1.0
+
+	// Game version for compatibility checking
+	GameVersion = "1.0.0" // Force rebuild
 )

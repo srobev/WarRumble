@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	"rumble/shared/protocol"
+
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
@@ -173,14 +175,14 @@ type AuthUI struct {
 	uiFace    font.Face
 	inputFace font.Face
 
-    // tappables
-    btnSubmit image.Rectangle
-    segLogin  image.Rectangle
-    segReg    image.Rectangle
+	// tappables
+	btnSubmit image.Rectangle
+	segLogin  image.Rectangle
+	segReg    image.Rectangle
 
-    // remember me
-    remember     bool
-    rememberRect image.Rectangle
+	// remember me
+	remember     bool
+	rememberRect image.Rectangle
 }
 
 func NewAuthUI(apiBase string, onSuccess func(username string)) *AuthUI {
@@ -188,16 +190,16 @@ func NewAuthUI(apiBase string, onSuccess func(username string)) *AuthUI {
 	uiFace := loadTTF("internal/game/assets/ui/fonts/medieval.ttf", 18)
 	inpFace := loadTTF("internal/game/assets/ui/fonts/medieval.ttf", 18)
 
-    a := &AuthUI{
-        mode:      AuthLogin,
-        apiBase:   apiBase,
-        onSuccess: onSuccess,
-        titleFace: titleFace,
-        uiFace:    uiFace,
-        inputFace: inpFace,
-        focus:     0,
-        remember:  true,
-    }
+	a := &AuthUI{
+		mode:      AuthLogin,
+		apiBase:   apiBase,
+		onSuccess: onSuccess,
+		titleFace: titleFace,
+		uiFace:    uiFace,
+		inputFace: inpFace,
+		focus:     0,
+		remember:  true,
+	}
 	a.user = newTextBox("Username", 0, 0, 360, false, inpFace)
 	a.pass = newTextBox("Password", 0, 0, 360, true, inpFace)
 	a.confirm = newTextBox("Confirm", 0, 0, 360, true, inpFace)
@@ -234,12 +236,12 @@ func (a *AuthUI) Update() {
 			a.setFocus(1)
 		case a.mode == AuthRegister && a.confirm.rectContains(mx, my):
 			a.setFocus(2)
-        case ptIn(mx, my, a.btnSubmit):
-            a.submit()
-        case ptIn(mx, my, a.rememberRect):
-            a.remember = !a.remember
-        }
-    }
+		case ptIn(mx, my, a.btnSubmit):
+			a.submit()
+		case ptIn(mx, my, a.rememberRect):
+			a.remember = !a.remember
+		}
+	}
 
 	// TAB / Shift+TAB
 	if inpututil.IsKeyJustPressed(ebiten.KeyTab) {
@@ -289,9 +291,9 @@ func (a *AuthUI) Draw(screen *ebiten.Image) {
 	fieldH := 54  // each field block height
 	gap := 14
 	buttonH := 54
-    footerH := 28
-    rememberH := 28
-    a.cardH = headerH + fieldCount*fieldH + (fieldCount-1)*gap + rememberH + buttonH + footerH
+	footerH := 28
+	rememberH := 28
+	a.cardH = headerH + fieldCount*fieldH + (fieldCount-1)*gap + rememberH + buttonH + footerH
 
 	a.cardX = (sw - a.cardW) / 2
 	a.cardY = (sh - a.cardH) / 2
@@ -345,34 +347,34 @@ func (a *AuthUI) Draw(screen *ebiten.Image) {
 	a.pass.drawField(screen, a.focus == 1)
 	a.pass.drawText(screen, color.White, "Password")
 
-    y += fieldH
-    if a.mode == AuthRegister {
+	y += fieldH
+	if a.mode == AuthRegister {
 		a.confirm.X, a.confirm.Y = left, y+4
 		a.confirm.W, a.confirm.H = a.cardW-48, 44
 		a.confirm.drawField(screen, a.focus == 2)
 		a.confirm.drawText(screen, color.White, "Confirm Password")
-        y += fieldH
-    }
+		y += fieldH
+	}
 
-    // Remember me checkbox row
-    cbSize := 18
-    cbX := left
-    cbY := y + (28-cbSize)/2
-    a.rememberRect = image.Rect(cbX, cbY, cbX+cbSize, cbY+cbSize)
-    // box + fill
-    ebitenutil.DrawRect(screen, float64(cbX-1), float64(cbY-1), float64(cbSize+2), float64(cbSize+2), color.NRGBA{0, 0, 0, 80})
-    ebitenutil.DrawRect(screen, float64(cbX), float64(cbY), float64(cbSize), float64(cbSize), color.NRGBA{24, 28, 40, 220})
-    if a.remember {
-        vector.DrawFilledRect(screen, float32(cbX+3), float32(cbY+3), float32(cbSize-6), float32(cbSize-6), color.NRGBA{240, 196, 25, 220}, false)
-    }
-    text.Draw(screen, "Remember me", a.uiFace, cbX+cbSize+10, cbY+cbSize-2, color.NRGBA{210, 210, 220, 255})
-    y += rememberH
+	// Remember me checkbox row
+	cbSize := 18
+	cbX := left
+	cbY := y + (28-cbSize)/2
+	a.rememberRect = image.Rect(cbX, cbY, cbX+cbSize, cbY+cbSize)
+	// box + fill
+	ebitenutil.DrawRect(screen, float64(cbX-1), float64(cbY-1), float64(cbSize+2), float64(cbSize+2), color.NRGBA{0, 0, 0, 80})
+	ebitenutil.DrawRect(screen, float64(cbX), float64(cbY), float64(cbSize), float64(cbSize), color.NRGBA{24, 28, 40, 220})
+	if a.remember {
+		vector.DrawFilledRect(screen, float32(cbX+3), float32(cbY+3), float32(cbSize-6), float32(cbSize-6), color.NRGBA{240, 196, 25, 220}, false)
+	}
+	text.Draw(screen, "Remember me", a.uiFace, cbX+cbSize+10, cbY+cbSize-2, color.NRGBA{210, 210, 220, 255})
+	y += rememberH
 
 	// Submit button (gold, chunky)
 	btnW := 260
 	btnH := 48
 	btnX := a.cardX + (a.cardW-btnW)/2
-    btnY := a.cardY + a.cardH - footerH - btnH
+	btnY := a.cardY + a.cardH - footerH - btnH
 	a.btnSubmit = image.Rect(btnX, btnY, btnX+btnW, btnY+btnH)
 	drawGoldButton(screen, a.btnSubmit, "Submit", a.uiFace)
 
@@ -382,6 +384,13 @@ func (a *AuthUI) Draw(screen *ebiten.Image) {
 	} else if a.msg != "" {
 		text.Draw(screen, a.msg, a.uiFace, a.cardX+24, a.cardY+a.cardH-10, color.NRGBA{255, 160, 160, 255})
 	}
+
+	// Version display at bottom of screen
+	versionText := "WarRumble v" + protocol.GameVersion
+	versionBounds := text.BoundString(a.uiFace, versionText)
+	versionX := (sw - versionBounds.Dx()) / 2
+	versionY := sh - 20
+	text.Draw(screen, versionText, a.uiFace, versionX, versionY, color.NRGBA{120, 130, 140, 180})
 }
 
 /* ------------------------ Visual Helpers ------------------------ */
@@ -472,38 +481,44 @@ func (a *AuthUI) submit() {
 	a.busy = true
 	a.msg = ""
 
-    go func() {
-        defer func() { a.busy = false }()
-        var err error
-        var token string
-        switch a.mode {
-        case AuthRegister:
-            err = apiRegister(a.apiBase, user, pass)
-            if err == nil {
-                token, err = apiLogin(a.apiBase, user, pass)
-            }
-        case AuthLogin:
-            token, err = apiLogin(a.apiBase, user, pass)
-        }
-        if err != nil {
-            a.msg = "Error: " + err.Error()
-            return
-        }
-        if a.remember {
-            if err := SaveToken(token); err != nil { a.msg = "Error: " + err.Error(); return }
-            if err := SaveUsername(user); err != nil { a.msg = "Error: " + err.Error(); return }
-        } else {
-            ClearToken()
-            ClearUsername()
-        }
-        SetSessionToken(token)
-        a.username = strings.TrimSpace(user)
-        a.done = true
-        a.msg = "Success!"
-        if a.onSuccess != nil {
-            a.onSuccess(a.username)
-        }
-    }()
+	go func() {
+		defer func() { a.busy = false }()
+		var err error
+		var token string
+		switch a.mode {
+		case AuthRegister:
+			err = apiRegister(a.apiBase, user, pass)
+			if err == nil {
+				token, err = apiLogin(a.apiBase, user, pass)
+			}
+		case AuthLogin:
+			token, err = apiLogin(a.apiBase, user, pass)
+		}
+		if err != nil {
+			a.msg = "Error: " + err.Error()
+			return
+		}
+		if a.remember {
+			if err := SaveToken(token); err != nil {
+				a.msg = "Error: " + err.Error()
+				return
+			}
+			if err := SaveUsername(user); err != nil {
+				a.msg = "Error: " + err.Error()
+				return
+			}
+		} else {
+			ClearToken()
+			ClearUsername()
+		}
+		SetSessionToken(token)
+		a.username = strings.TrimSpace(user)
+		a.done = true
+		a.msg = "Success!"
+		if a.onSuccess != nil {
+			a.onSuccess(a.username)
+		}
+	}()
 }
 
 func apiBaseFromEnv(defaultBase string) string {
@@ -539,30 +554,44 @@ func apiRegister(base, user, pass string) error {
 }
 
 func apiLogin(base, user, pass string) (string, error) {
-    base = apiBaseFromEnv(base)
-    body := map[string]string{"username": user, "password": pass}
-    b, _ := json.Marshal(body)
+	base = apiBaseFromEnv(base)
+	body := map[string]string{
+		"username": user,
+		"password": pass,
+		"version":  protocol.GameVersion,
+	}
+	b, _ := json.Marshal(body)
 
-    req, _ := http.NewRequest("POST", base+"/api/login", bytes.NewReader(b))
-    req.Header.Set("Content-Type", "application/json")
-    resp, err := http.DefaultClient.Do(req)
-    if err != nil {
-        return "", err
-    }
-    defer resp.Body.Close()
+	req, _ := http.NewRequest("POST", base+"/api/login", bytes.NewReader(b))
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return "", err
+	}
+	defer resp.Body.Close()
 
-    if resp.StatusCode != http.StatusOK {
-        rb, _ := io.ReadAll(resp.Body)
-        return "", errors.New(resp.Status + ": " + string(rb))
-    }
+	if resp.StatusCode != http.StatusOK {
+		rb, _ := io.ReadAll(resp.Body)
+		errMsg := resp.Status + ": " + string(rb)
 
-    var out struct {
-        Token string `json:"token"`
-    }
-    if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
-        return "", err
-    }
-    return strings.TrimSpace(out.Token), nil
+		// Check for version mismatch in token
+		if resp.StatusCode == http.StatusUnauthorized && strings.Contains(string(rb), "version mismatch") {
+			// Clear invalid token
+			ClearToken()
+			ClearUsername()
+			return "", errors.New("session expired due to version update: please login again")
+		}
+
+		return "", errors.New(errMsg)
+	}
+
+	var out struct {
+		Token string `json:"token"`
+	}
+	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(out.Token), nil
 }
 
 func (a *AuthUI) Done() bool       { return a.done }

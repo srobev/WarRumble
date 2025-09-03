@@ -1,25 +1,25 @@
 package game
 
 import (
-    "encoding/json"
-    "fmt"
-    "log"
-    "rumble/shared/protocol"
-    "strings"
-    "time"
+	"encoding/json"
+	"fmt"
+	"log"
+	"rumble/shared/protocol"
+	"strings"
+	"time"
 )
 
 // safeTrim is a UI-safe version of trim that avoids odd replacement glyphs.
 func safeTrim(s string, n int) string {
-    r := []rune(s)
-    if len(r) <= n {
-        return s
-    }
-    return string(r[:n-1]) + "..."
+	r := []rune(s)
+	if len(r) <= n {
+		return s
+	}
+	return string(r[:n-1]) + "..."
 }
 
 func (g *Game) handle(env Msg) {
-    switch env.Type {
+	switch env.Type {
 	case "Profile":
 		var p protocol.Profile
 		json.Unmarshal(env.Data, &p)
@@ -38,7 +38,9 @@ func (g *Game) handle(env Msg) {
 			g.avatars = g.listAvatars()
 		}
 
-		if g.champToMinis == nil { g.champToMinis = map[string]map[string]bool{} }
+		if g.champToMinis == nil {
+			g.champToMinis = map[string]map[string]bool{}
+		}
 		g.champToMinis = map[string]map[string]bool{}
 		g.champToOrder = map[string][6]string{}
 		for ch, minis := range p.Armies {
@@ -46,7 +48,9 @@ func (g *Game) handle(env Msg) {
 			var ord [6]string
 			for i, m := range minis {
 				set[m] = true
-				if i < 6 { ord[i] = m }
+				if i < 6 {
+					ord[i] = m
+				}
 			}
 			g.champToMinis[ch] = set
 			g.champToOrder[ch] = ord
@@ -76,7 +80,10 @@ func (g *Game) handle(env Msg) {
 				idx := 0
 				for _, m := range g.minisOnly {
 					if g.selectedMinis[m.Name] {
-						if idx < 6 { g.selectedOrder[idx] = m.Name; idx++ }
+						if idx < 6 {
+							g.selectedOrder[idx] = m.Name
+							idx++
+						}
 					}
 				}
 			}
@@ -96,7 +103,10 @@ func (g *Game) handle(env Msg) {
 					idx := 0
 					for _, mi := range g.minisOnly {
 						if g.selectedMinis[mi.Name] {
-							if idx < 6 { g.selectedOrder[idx] = mi.Name; idx++ }
+							if idx < 6 {
+								g.selectedOrder[idx] = mi.Name
+								idx++
+							}
 						}
 					}
 				}
@@ -113,13 +123,15 @@ func (g *Game) handle(env Msg) {
 			if ru.Delta < 0 {
 				sign = ""
 			}
-            // Show names vs names with ranks/ratings in brackets
-            me := safeTrim(g.name, 14)
-            opp := safeTrim(ru.OppName, 14)
-            result := "lost"
-            if ru.Delta > 0 { result = "won" }
-            g.pvpStatus = fmt.Sprintf("%s (%s) vs %s (%d) — %s, Rating %s%d => %d",
-                me, ru.Rank, opp, ru.OppRating, result, sign, ru.Delta, ru.NewRating)
+			// Show names vs names with ranks/ratings in brackets
+			me := safeTrim(g.name, 14)
+			opp := safeTrim(ru.OppName, 14)
+			result := "lost"
+			if ru.Delta > 0 {
+				result = "won"
+			}
+			g.pvpStatus = fmt.Sprintf("%s (%s) vs %s (%d) — %s, Rating %s%d => %d",
+				me, ru.Rank, opp, ru.OppRating, result, sign, ru.Delta, ru.NewRating)
 		}
 	case "Leaderboard":
 		var lb protocol.Leaderboard
@@ -188,6 +200,17 @@ func (g *Game) handle(env Msg) {
 		g.enemyAvatar = ""
 		g.enemyTargetThumb = nil
 		g.enemyBossPortrait = ""
+
+		// Initialize timer for battle
+		g.timerRemainingSeconds = 180 // Default 3:00 minutes
+		g.timerPaused = false
+		g.pauseOverlay = false
+
+		// Clear particle effects when transitioning to battle
+		if g.particleSystem != nil {
+			g.particleSystem = NewParticleSystem()
+		}
+
 		g.scr = screenBattle
 
 	case "GoldUpdate":
@@ -197,30 +220,36 @@ func (g *Game) handle(env Msg) {
 			g.gold = m.Gold
 		}
 
-    case "StateDelta":
-        var d protocol.StateDelta
-        json.Unmarshal(env.Data, &d)
-        // Ensure we have a pre-battle XP snapshot (in case RoomCreated arrived before Profile)
-        if g.preBattleXP == nil || len(g.preBattleXP) == 0 {
-            if g.unitXP != nil {
-                g.preBattleXP = map[string]int{}
-                for k, v := range g.unitXP { g.preBattleXP[k] = v }
-            }
-        }
-        g.world.ApplyDelta(d)
+	case "StateDelta":
+		var d protocol.StateDelta
+		json.Unmarshal(env.Data, &d)
+		// Ignore state updates if game is paused
+		if g.timerPaused {
+			return
+		}
+		// Ensure we have a pre-battle XP snapshot (in case RoomCreated arrived before Profile)
+		if g.preBattleXP == nil || len(g.preBattleXP) == 0 {
+			if g.unitXP != nil {
+				g.preBattleXP = map[string]int{}
+				for k, v := range g.unitXP {
+					g.preBattleXP[k] = v
+				}
+			}
+		}
+		g.world.ApplyDelta(d)
 
 	case "FullSnapshot":
 		var s protocol.FullSnapshot
 		json.Unmarshal(env.Data, &s)
 		g.world = buildWorldFromSnapshot(s)
 
-    case "Error":
-        var em protocol.ErrorMsg
-        json.Unmarshal(env.Data, &em)
-        log.Println("server error:", em.Message)
-        if g.socialActive() == socialFriends {
-            g.friendSearchError = strings.TrimSpace(em.Message)
-        }
+	case "Error":
+		var em protocol.ErrorMsg
+		json.Unmarshal(env.Data, &em)
+		log.Println("server error:", em.Message)
+		if g.socialActive() == socialFriends {
+			g.friendSearchError = strings.TrimSpace(em.Message)
+		}
 
 	case "HandUpdate":
 		var hu protocol.HandUpdate
@@ -228,186 +257,241 @@ func (g *Game) handle(env Msg) {
 		g.hand = hu.Hand
 		g.next = hu.Next
 
-    case "GameOver":
-        var m protocol.GameOver
-        json.Unmarshal(env.Data, &m)
-        g.gameOver = true
-        g.victory = (m.WinnerID == g.playerID)
-        // Compute XP gains from pre-battle snapshot
-        g.xpGains = map[string]int{}
-        if g.preBattleXP != nil && g.unitXP != nil {
-            names := g.battleArmy
-            if len(names) == 0 {
-                if g.selectedChampion != "" { names = append(names, g.selectedChampion) }
-                for i := 0; i < 6; i++ { if g.selectedOrder[i] != "" { names = append(names, g.selectedOrder[i]) } }
-            }
-            // helper: case-insensitive lookup
-            getXP := func(m map[string]int, key string) int {
-                if v, ok := m[key]; ok { return v }
-                for k, v := range m { if strings.EqualFold(k, key) { return v } }
-                return 0
-            }
-            for _, n := range names {
-                after := getXP(g.unitXP, n)
-                before := getXP(g.preBattleXP, n)
-                if d := after - before; d > 0 { g.xpGains[n] = d } else { g.xpGains[n] = 0 }
-            }
-        }
+	case "GameOver":
+		var m protocol.GameOver
+		json.Unmarshal(env.Data, &m)
+		g.gameOver = true
+		g.victory = (m.WinnerID == g.playerID)
+		// Compute XP gains from pre-battle snapshot
+		g.xpGains = map[string]int{}
+		if g.preBattleXP != nil && g.unitXP != nil {
+			names := g.battleArmy
+			if len(names) == 0 {
+				if g.selectedChampion != "" {
+					names = append(names, g.selectedChampion)
+				}
+				for i := 0; i < 6; i++ {
+					if g.selectedOrder[i] != "" {
+						names = append(names, g.selectedOrder[i])
+					}
+				}
+			}
+			// helper: case-insensitive lookup
+			getXP := func(m map[string]int, key string) int {
+				if v, ok := m[key]; ok {
+					return v
+				}
+				for k, v := range m {
+					if strings.EqualFold(k, key) {
+						return v
+					}
+				}
+				return 0
+			}
+			for _, n := range names {
+				after := getXP(g.unitXP, n)
+				before := getXP(g.preBattleXP, n)
+				if d := after - before; d > 0 {
+					g.xpGains[n] = d
+				} else {
+					g.xpGains[n] = 0
+				}
+			}
+		}
+	case "TimerUpdate":
+		var tu protocol.TimerUpdate
+		json.Unmarshal(env.Data, &tu)
+		g.timerRemainingSeconds = tu.RemainingSeconds
+		g.timerPaused = tu.IsPaused
+		// Close pause overlay if game is resumed
+		if !tu.IsPaused {
+			g.pauseOverlay = false
+		}
+	case "MapDef":
+		var md protocol.MapDefMsg
+		json.Unmarshal(env.Data, &md)
+		g.currentMapDef = &md.Def
+		// Set current arena for background loading if this is an arena
+		if md.Def.IsArena {
+			g.currentArena = md.Def.ID
+		}
 	case "FriendlyCode":
 		var m protocol.FriendlyCode
 		json.Unmarshal(env.Data, &m)
 		g.pvpCode = strings.ToUpper(strings.TrimSpace(m.Code))
 		g.pvpStatus = "Share this code: " + g.pvpCode
 
-    case "RoomCreated":
-        var rc protocol.RoomCreated
-        json.Unmarshal(env.Data, &rc)
-        g.roomID = rc.RoomID
+	case "RoomCreated":
+		var rc protocol.RoomCreated
+		json.Unmarshal(env.Data, &rc)
+		g.roomID = rc.RoomID
 
-        g.pvpQueued = false
-        g.pvpHosting = false
-        // Snapshot XP before battle starts
-        g.preBattleXP = map[string]int{}
-        for k, v := range g.unitXP { g.preBattleXP[k] = v }
-        // Capture the army composition at battle start
-        g.battleArmy = nil
-        if g.selectedChampion != "" { g.battleArmy = append(g.battleArmy, g.selectedChampion) }
-        for i := 0; i < 6; i++ { if g.selectedOrder[i] != "" { g.battleArmy = append(g.battleArmy, g.selectedOrder[i]) } }
+		g.pvpQueued = false
+		g.pvpHosting = false
+		// Snapshot XP before battle starts
+		g.preBattleXP = map[string]int{}
+		for k, v := range g.unitXP {
+			g.preBattleXP[k] = v
+		}
+		// Capture the army composition at battle start
+		g.battleArmy = nil
+		if g.selectedChampion != "" {
+			g.battleArmy = append(g.battleArmy, g.selectedChampion)
+		}
+		for i := 0; i < 6; i++ {
+			if g.selectedOrder[i] != "" {
+				g.battleArmy = append(g.battleArmy, g.selectedOrder[i])
+			}
+		}
 
-    case "LoggedOut":
+	case "LoggedOut":
 
-        g.resetToLoginNoAutoConnect()
-        return
+		g.resetToLoginNoAutoConnect()
+		return
 
-    // -------- Guild / Social --------
-    case "GuildNone":
-        g.guildID = ""
-        g.guildName = ""
-        g.guildMembers = nil
-        g.selectedGuildMember = ""
-        g.guildChat = nil
-        g.guildBrowse = true
-        g.prevGuildRoles = nil
-        g.havePrevGuildRoster = false
-        g.guildList = nil
-        g.send("ListGuilds", protocol.ListGuilds{Query: ""})
-    case "GuildInfo":
-        var gi protocol.GuildInfo
-        json.Unmarshal(env.Data, &gi)
-        g.guildID = gi.Profile.GuildID
-        g.guildName = gi.Profile.Name
-        g.guildDescEdit = gi.Profile.Desc
-        // Load any persisted chat first (so new system lines append to existing)
-        g.guildChat = g.loadGuildChatFromDisk(g.guildID)
-        // compute diffs before overwriting
-        old := g.prevGuildRoles
-        curr := make(map[string]string, len(gi.Profile.Members))
-        for _, m := range gi.Profile.Members { curr[m.Name] = strings.ToLower(m.Role) }
-        if !g.havePrevGuildRoster {
-            g.prevGuildRoles = curr
-            g.havePrevGuildRoster = true
-        } else {
-            // joins
-            for name := range curr {
-                if _, ok := old[name]; !ok {
-                    g.guildChat = append(g.guildChat, protocol.GuildChatMsg{From: "", Text: name + " joined the guild", Ts: time.Now().UnixMilli(), System: true})
-                }
-            }
-            // leaves
-            for name := range old {
-                if _, ok := curr[name]; !ok {
-                    g.guildChat = append(g.guildChat, protocol.GuildChatMsg{From: "", Text: name + " left the guild", Ts: time.Now().UnixMilli(), System: true})
-                }
-            }
-            // promotions/demotions
-            for name, newRole := range curr {
-                if prevRole, ok := old[name]; ok && prevRole != newRole {
-                    msg := name + " is now " + newRole
-                    g.guildChat = append(g.guildChat, protocol.GuildChatMsg{From: "", Text: msg, Ts: time.Now().UnixMilli(), System: true})
-                }
-            }
-            g.prevGuildRoles = curr
-        }
-        g.guildMembers = gi.Profile.Members
-        // If we are no longer in the roster, treat as GuildNone fallback
-        meIn := false
-        for _, m := range g.guildMembers { if strings.EqualFold(m.Name, g.name) { meIn = true; break } }
-        if !meIn {
-            g.guildID = ""
-            g.guildName = ""
-            g.guildMembers = nil
-            g.selectedGuildMember = ""
-            g.guildChat = nil
-            g.guildBrowse = true
-            g.prevGuildRoles = nil
-            g.havePrevGuildRoster = false
-            g.guildList = nil
-            g.send("ListGuilds", protocol.ListGuilds{Query: ""})
-            return
-        }
-        // Persist chat updates if any (after appending system lines)
-        if g.guildID != "" { g.saveGuildChatToDisk(g.guildID, g.guildChat) }
-    case "GuildList":
-        var gl protocol.GuildList
-        json.Unmarshal(env.Data, &gl)
-        g.guildList = gl.Items
-    case "GuildChatMsg":
-        var m protocol.GuildChatMsg
-        json.Unmarshal(env.Data, &m)
-        g.guildChat = append(g.guildChat, m)
-        g.saveGuildChatToDisk(g.guildID, g.guildChat)
+	// -------- Guild / Social --------
+	case "GuildNone":
+		g.guildID = ""
+		g.guildName = ""
+		g.guildMembers = nil
+		g.selectedGuildMember = ""
+		g.guildChat = nil
+		g.guildBrowse = true
+		g.prevGuildRoles = nil
+		g.havePrevGuildRoster = false
+		g.guildList = nil
+		g.send("ListGuilds", protocol.ListGuilds{Query: ""})
+	case "GuildInfo":
+		var gi protocol.GuildInfo
+		json.Unmarshal(env.Data, &gi)
+		g.guildID = gi.Profile.GuildID
+		g.guildName = gi.Profile.Name
+		g.guildDescEdit = gi.Profile.Desc
+		// Load any persisted chat first (so new system lines append to existing)
+		g.guildChat = g.loadGuildChatFromDisk(g.guildID)
+		// compute diffs before overwriting
+		old := g.prevGuildRoles
+		curr := make(map[string]string, len(gi.Profile.Members))
+		for _, m := range gi.Profile.Members {
+			curr[m.Name] = strings.ToLower(m.Role)
+		}
+		if !g.havePrevGuildRoster {
+			g.prevGuildRoles = curr
+			g.havePrevGuildRoster = true
+		} else {
+			// joins
+			for name := range curr {
+				if _, ok := old[name]; !ok {
+					g.guildChat = append(g.guildChat, protocol.GuildChatMsg{From: "", Text: name + " joined the guild", Ts: time.Now().UnixMilli(), System: true})
+				}
+			}
+			// leaves
+			for name := range old {
+				if _, ok := curr[name]; !ok {
+					g.guildChat = append(g.guildChat, protocol.GuildChatMsg{From: "", Text: name + " left the guild", Ts: time.Now().UnixMilli(), System: true})
+				}
+			}
+			// promotions/demotions
+			for name, newRole := range curr {
+				if prevRole, ok := old[name]; ok && prevRole != newRole {
+					msg := name + " is now " + newRole
+					g.guildChat = append(g.guildChat, protocol.GuildChatMsg{From: "", Text: msg, Ts: time.Now().UnixMilli(), System: true})
+				}
+			}
+			g.prevGuildRoles = curr
+		}
+		g.guildMembers = gi.Profile.Members
+		// If we are no longer in the roster, treat as GuildNone fallback
+		meIn := false
+		for _, m := range g.guildMembers {
+			if strings.EqualFold(m.Name, g.name) {
+				meIn = true
+				break
+			}
+		}
+		if !meIn {
+			g.guildID = ""
+			g.guildName = ""
+			g.guildMembers = nil
+			g.selectedGuildMember = ""
+			g.guildChat = nil
+			g.guildBrowse = true
+			g.prevGuildRoles = nil
+			g.havePrevGuildRoster = false
+			g.guildList = nil
+			g.send("ListGuilds", protocol.ListGuilds{Query: ""})
+			return
+		}
+		// Persist chat updates if any (after appending system lines)
+		if g.guildID != "" {
+			g.saveGuildChatToDisk(g.guildID, g.guildChat)
+		}
+	case "GuildList":
+		var gl protocol.GuildList
+		json.Unmarshal(env.Data, &gl)
+		g.guildList = gl.Items
+	case "GuildChatMsg":
+		var m protocol.GuildChatMsg
+		json.Unmarshal(env.Data, &m)
+		g.guildChat = append(g.guildChat, m)
+		g.saveGuildChatToDisk(g.guildID, g.guildChat)
 
-    // Friends / DMs
-    case "FriendsList":
-        var fl protocol.FriendsList
-        json.Unmarshal(env.Data, &fl)
-        g.friends = fl.Items
-    case "FriendDM":
-        var dm protocol.FriendDM
-        json.Unmarshal(env.Data, &dm)
-        // Append only if relevant (to or from me)
-        g.dmHistory = append(g.dmHistory, dm)
-    case "FriendHistory":
-        var fh protocol.FriendHistory
-        json.Unmarshal(env.Data, &fh)
-        // Replace local history when fetching
-        g.dmHistory = fh.Items
-    // (handled earlier)
-    case "UserProfile":
-        var up protocol.UserProfile
-        json.Unmarshal(env.Data, &up)
-        // If we're in the middle of an Add Friend lookup, handle that flow
-        if name := strings.TrimSpace(g.friendAddLookup); name != "" {
-            // Clear lookup flag now; we'll set error or send add
-            g.friendAddLookup = ""
-            profName := strings.TrimSpace(up.Profile.Name)
-            if profName != "" && strings.EqualFold(profName, name) && !strings.EqualFold(profName, g.name) {
-                // Check not already a friend
-                already := false
-                for _, fr := range g.friends { if strings.EqualFold(fr.Name, profName) { already = true; break } }
-                if already {
-                    g.friendSearchError = "Already in your friends"
-                } else {
-                    g.friendSearchError = ""
-                    g.send("AddFriend", protocol.AddFriend{Name: profName})
-                    // After server responds FriendsList, UI will refresh
-                    g.friendSearch = ""
-                    g.friendSearchFocus = false
-                }
-            } else {
-                if strings.EqualFold(profName, g.name) {
-                    g.friendSearchError = "Cannot add yourself"
-                } else {
-                    g.friendSearchError = "Player not found"
-                }
-            }
-            // Do not open overlay when it's an add lookup
-            return
-        }
-        // Otherwise, open profile overlay as usual
-        g.memberProfile = up.Profile
-        g.memberProfileOverlay = true
-    }
+	// Friends / DMs
+	case "FriendsList":
+		var fl protocol.FriendsList
+		json.Unmarshal(env.Data, &fl)
+		g.friends = fl.Items
+	case "FriendDM":
+		var dm protocol.FriendDM
+		json.Unmarshal(env.Data, &dm)
+		// Append only if relevant (to or from me)
+		g.dmHistory = append(g.dmHistory, dm)
+	case "FriendHistory":
+		var fh protocol.FriendHistory
+		json.Unmarshal(env.Data, &fh)
+		// Replace local history when fetching
+		g.dmHistory = fh.Items
+	// (handled earlier)
+	case "UserProfile":
+		var up protocol.UserProfile
+		json.Unmarshal(env.Data, &up)
+		// If we're in the middle of an Add Friend lookup, handle that flow
+		if name := strings.TrimSpace(g.friendAddLookup); name != "" {
+			// Clear lookup flag now; we'll set error or send add
+			g.friendAddLookup = ""
+			profName := strings.TrimSpace(up.Profile.Name)
+			if profName != "" && strings.EqualFold(profName, name) && !strings.EqualFold(profName, g.name) {
+				// Check not already a friend
+				already := false
+				for _, fr := range g.friends {
+					if strings.EqualFold(fr.Name, profName) {
+						already = true
+						break
+					}
+				}
+				if already {
+					g.friendSearchError = "Already in your friends"
+				} else {
+					g.friendSearchError = ""
+					g.send("AddFriend", protocol.AddFriend{Name: profName})
+					// After server responds FriendsList, UI will refresh
+					g.friendSearch = ""
+					g.friendSearchFocus = false
+				}
+			} else {
+				if strings.EqualFold(profName, g.name) {
+					g.friendSearchError = "Cannot add yourself"
+				} else {
+					g.friendSearchError = "Player not found"
+				}
+			}
+			// Do not open overlay when it's an add lookup
+			return
+		}
+		// Otherwise, open profile overlay as usual
+		g.memberProfile = up.Profile
+		g.memberProfileOverlay = true
+	}
 }
 
 func (g *Game) onArmySave(cards []string) {
@@ -421,6 +505,6 @@ func (g *Game) onMapClicked(arenaID string) {
 }
 func (g *Game) onStartBattle() { g.send("StartBattle", protocol.StartBattle{}) }
 func (g *Game) onLeaveRoom() {
-    g.send("LeaveRoom", protocol.LeaveRoom{})
-    g.currentArena = ""
+	g.send("LeaveRoom", protocol.LeaveRoom{})
+	g.currentArena = ""
 }

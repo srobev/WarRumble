@@ -77,6 +77,15 @@ type Game struct {
 	players map[int64]*Player
 	width   int
 	height  int
+	mapDef  *protocol.MapDef // Current map definition
+
+	// Timer system
+	timerActive   bool
+	timeRemaining float64 // in seconds
+	timeLimit     int     // configured time limit in seconds
+	isPaused      bool
+	matchEnded    bool
+	timerWinnerID int64 // winner when timer expires (-1 for draw)
 }
 
 func NewGame() *Game {
@@ -131,15 +140,50 @@ func (g *Game) AddPlayerWithArmy(id int64, name string, armyNames []string) *Pla
 	bottomMargin := 180 // leave space for 160px HUD + padding
 	topMargin := 28
 
-	p.Base = Base{
-		OwnerID: id,
-		HP:      3000, MaxHP: 3000,
-		W: baseW, H: baseH,
-		X: g.width/2 - baseW/2,
-		Y: g.height - baseH - bottomMargin,
-	}
-	if len(g.players) == 1 {
-		p.Base.Y = topMargin
+	// Use map-defined base positions if available
+	if g.mapDef != nil {
+		var baseX, baseY int
+		if len(g.players) == 0 {
+			// First player (human) - use playerBase
+			if g.mapDef.PlayerBase.X >= 0 && g.mapDef.PlayerBase.Y >= 0 {
+				baseX = int(g.mapDef.PlayerBase.X * float64(g.width))
+				baseY = int(g.mapDef.PlayerBase.Y * float64(g.height))
+			} else {
+				// Fallback to bottom center
+				baseX = g.width/2 - baseW/2
+				baseY = g.height - baseH - bottomMargin
+			}
+		} else {
+			// Second player (AI or enemy) - use enemyBase
+			if g.mapDef.EnemyBase.X >= 0 && g.mapDef.EnemyBase.Y >= 0 {
+				baseX = int(g.mapDef.EnemyBase.X * float64(g.width))
+				baseY = int(g.mapDef.EnemyBase.Y * float64(g.height))
+			} else {
+				// Fallback to top center
+				baseX = g.width/2 - baseW/2
+				baseY = topMargin
+			}
+		}
+
+		p.Base = Base{
+			OwnerID: id,
+			HP:      3000, MaxHP: 3000,
+			W: baseW, H: baseH,
+			X: baseX,
+			Y: baseY,
+		}
+	} else {
+		// Fallback to hardcoded positions when no map definition
+		p.Base = Base{
+			OwnerID: id,
+			HP:      3000, MaxHP: 3000,
+			W: baseW, H: baseH,
+			X: g.width/2 - baseW/2,
+			Y: g.height - baseH - bottomMargin, // Player base at bottom
+		}
+		if len(g.players) == 1 {
+			p.Base.Y = topMargin // Enemy base at top
+		}
 	}
 
 	g.players[id] = p
@@ -279,7 +323,126 @@ func (g *Game) InitFor(pid int64) protocol.Init {
 	return protocol.Init{PlayerID: pid, MapWidth: g.width, MapHeight: g.height, Hand: hand, Next: nx}
 }
 
+// InitializeTimer sets up the match timer based on map configuration
+func (g *Game) InitializeTimer() {
+	if g.mapDef != nil && g.mapDef.TimeLimit > 0 {
+		g.timeLimit = g.mapDef.TimeLimit
+	} else {
+		g.timeLimit = 180 // default 3:00 minutes
+	}
+	g.timeRemaining = float64(g.timeLimit)
+	g.timerActive = true
+	g.isPaused = false
+	g.matchEnded = false
+}
+
+// UpdateTimer updates the timer and checks for expiration
+func (g *Game) UpdateTimer(dt float64) (timerExpired bool, winnerID int64) {
+	if !g.timerActive || g.isPaused || g.matchEnded {
+		return false, 0
+	}
+
+	g.timeRemaining -= dt
+	if g.timeRemaining <= 0 {
+		g.timeRemaining = 0
+		g.timerActive = false
+		g.matchEnded = true
+
+		// Determine winner based on base health
+		var player1, player2 *Player
+		for _, p := range g.players {
+			if player1 == nil {
+				player1 = p
+			} else {
+				player2 = p
+			}
+		}
+
+		if player1 != nil && player2 != nil {
+			if player1.Base.HP > player2.Base.HP {
+				return true, player1.ID
+			} else if player2.Base.HP > player1.Base.HP {
+				return true, player2.ID
+			} else {
+				// Draw - both lose
+				return true, -1
+			}
+		}
+	}
+	return false, 0
+}
+
+// PauseTimer pauses the match timer
+func (g *Game) PauseTimer() {
+	if g.timerActive {
+		g.isPaused = true
+	}
+}
+
+// ResumeTimer resumes the match timer
+func (g *Game) ResumeTimer() {
+	if g.timerActive {
+		g.isPaused = false
+	}
+}
+
+// RestartMatch resets the entire match
+func (g *Game) RestartMatch() {
+	// Reset timer
+	g.InitializeTimer()
+
+	// Reset bases
+	for _, p := range g.players {
+		p.Base.HP = p.Base.MaxHP
+	}
+
+	// Clear all units
+	g.units = make(map[int64]*Unit)
+
+	// Reset players' state
+	for _, p := range g.players {
+		p.Gold = 4
+		p.GoldT = 0
+		p.Ready = false
+		// Re-deal army
+		if ok := g.tryBuildArmyByNames(p, nil); !ok {
+			g.dealArmy(p)
+		}
+	}
+
+	g.matchEnded = false
+}
+
+// SurrenderMatch ends the match as a loss for the surrendering player
+func (g *Game) SurrenderMatch(playerID int64) int64 {
+	g.matchEnded = true
+	g.timerActive = false
+
+	// Find the winner (the other player)
+	for _, p := range g.players {
+		if p.ID != playerID {
+			return p.ID
+		}
+	}
+	return 0 // Should not happen
+}
+
+// GetTimerState returns current timer information
+func (g *Game) GetTimerState() (remainingSeconds int, isPaused bool) {
+	return int(math.Ceil(g.timeRemaining)), g.isPaused
+}
+
 func (g *Game) Step(dt float64) protocol.StateDelta {
+	// If game is paused, don't update anything
+	if g.isPaused {
+		// Return empty delta to indicate no changes
+		return protocol.StateDelta{
+			UnitsUpsert:  []protocol.UnitState{},
+			UnitsRemoved: []int64{},
+			Bases:        []protocol.BaseState{},
+		}
+	}
+
 	// gold
 	for _, p := range g.players {
 		p.GoldT += dt

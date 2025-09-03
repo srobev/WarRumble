@@ -48,10 +48,14 @@ func New(args ...string) ebiten.Game {
 		currentMap:       defaultMapID,
 		hpFxUnits:        make(map[int64]*hpFx),
 		hpFxBases:        make(map[int64]*hpFx),
+		particleSystem:   NewParticleSystem(),
 
 		connCh: make(chan connResult, 4),
 		connSt: stateConnected,
 	}
+
+	// Initialize fullscreen state
+	g.fullscreen = false
 
 	// Initialize new interaction defaults
 	g.slotDragFrom = -1
@@ -121,6 +125,11 @@ func (g *Game) Update() error {
 		g.lobbyRequested = true
 		g.scr = screenHome
 
+		// Clear particle effects when transitioning to home screen
+		if g.particleSystem != nil {
+			g.particleSystem = NewParticleSystem()
+		}
+
 	default:
 	}
 
@@ -135,6 +144,8 @@ func (g *Game) Update() error {
 		}
 	}
 
+afterMessages:
+
 	if g.profileOpen && inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		mx, my := ebiten.CursorPosition()
 		if g.profCloseBtn.hit(mx, my) {
@@ -143,7 +154,6 @@ func (g *Game) Update() error {
 			g.profLogoutBtn = rect{}
 		}
 	}
-afterMessages:
 
 	if g.scr == screenBattle {
 		myHP, enemyHP := -1, -1
@@ -155,10 +165,9 @@ afterMessages:
 			}
 		}
 		if myHP >= 0 && enemyHP >= 0 {
-			g.endActive = (myHP <= 0 || enemyHP <= 0)
-			g.endVictory = (enemyHP <= 0 && myHP > 0)
+			g.endActive = (myHP <= 0 || enemyHP <= 0 || g.timerRemainingSeconds <= 0)
+			g.endVictory = (enemyHP <= 0 && myHP > 0) || (enemyHP <= 0 && g.timerRemainingSeconds <= 0 && myHP > 0)
 		} else {
-
 			g.endActive = false
 			g.endVictory = false
 		}
@@ -188,10 +197,66 @@ afterMessages:
 	case screenHome:
 		g.updateHome()
 	case screenBattle:
-		g.updateBattle()
+		if !g.timerPaused {
+			g.updateBattle()
+		}
+		g.updateTimerInput()
 	}
 
-	g.world.LerpPositions()
+	// Skip world updates if game is paused
+	if !g.timerPaused {
+		g.world.LerpPositions()
+
+		// Update particle system
+		if g.particleSystem != nil {
+			g.particleSystem.Update(1.0 / 60.0) // Assuming 60 FPS
+		}
+	}
+
+	// Update timer countdown (every second)
+	if g.scr == screenBattle && !g.timerPaused && !g.gameOver && !g.endActive {
+		currentTime := time.Now().Unix()
+		if g.lastTimerUpdate == 0 {
+			g.lastTimerUpdate = currentTime
+		}
+
+		if currentTime > g.lastTimerUpdate {
+			// Decrement timer by 1 second
+			if g.timerRemainingSeconds > 0 {
+				g.timerRemainingSeconds--
+			}
+			g.lastTimerUpdate = currentTime
+		}
+	}
+
+	// Test particle effects with keyboard shortcuts (for development)
+	if g.scr == screenBattle {
+		if inpututil.IsKeyJustPressed(ebiten.KeyE) {
+			// Create explosion effect at center of screen
+			if g.particleSystem != nil {
+				g.particleSystem.CreateExplosionEffect(float64(protocol.ScreenW/2), float64(protocol.ScreenH/2), 1.0)
+			}
+		}
+		if inpututil.IsKeyJustPressed(ebiten.KeyS) {
+			// Create spell effect
+			if g.particleSystem != nil {
+				g.particleSystem.CreateSpellEffect(float64(protocol.ScreenW/2), float64(protocol.ScreenH/2), "fire")
+			}
+		}
+		if inpututil.IsKeyJustPressed(ebiten.KeyH) {
+			// Create healing effect
+			if g.particleSystem != nil {
+				g.particleSystem.CreateHealingEffect(float64(protocol.ScreenW/2), float64(protocol.ScreenH/2))
+			}
+		}
+		if inpututil.IsKeyJustPressed(ebiten.KeyA) {
+			// Create aura effect
+			if g.particleSystem != nil {
+				g.particleSystem.CreateAuraEffect(float64(protocol.ScreenW/2), float64(protocol.ScreenH/2), "buff")
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -233,15 +298,8 @@ func (g *Game) updateLogin() {
 }
 
 func (g *Game) Draw(screen *ebiten.Image) {
-
-	if g.activeTab == tabArmy {
-		g.ensureArmyBgLayer()
-		if g.armyBgLayer != nil {
-			var op ebiten.DrawImageOptions
-			op.GeoM.Translate(0, float64(topBarH))
-			screen.DrawImage(g.armyBgLayer, &op)
-		}
-	}
+	// Clear screen to prevent rendering artifacts
+	screen.Clear()
 
 	if g.auth != nil {
 		g.auth.Draw(screen)
@@ -279,75 +337,6 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		g.profCloseBtn = rect{}
 		g.profLogoutBtn = rect{}
 	}
-	if g.scr == screenBattle {
-		g.drawArenaBG(screen)
-	}
-	nowMs := time.Now().UnixMilli()
-
-	for id, b := range g.world.Bases {
-		g.assets.ensureInit()
-		img := g.assets.baseEnemy
-		if b.OwnerID == g.playerID {
-			img = g.assets.baseMe
-		}
-		drawBaseImg(screen, img, b)
-
-		if b.MaxHP > 0 {
-			fx := g.hpfxStep(g.hpFxBases, id, b.HP, nowMs)
-			isPlayer := (b.OwnerID == g.playerID)
-			x := float64(b.X)
-			y := float64(b.Y - 6)
-			w := float64(b.W)
-			h := 4.0
-			g.DrawHPBarForOwner(screen, x, y, w, h, b.HP, b.MaxHP, fx.ghostHP, fx.healGhostHP, isPlayer)
-			// Base level badge left of bar
-			rx0 := int(x + 0.5)
-			ry0 := int(y + 0.5)
-			rx1 := int(x + w + 0.5)
-			ry1 := int(y + h + 0.5)
-			barRect := image.Rect(rx0, ry0, rx1, ry1)
-			lvl := 1
-			if isPlayer {
-				lvl = g.currentArmyRoundedLevel()
-			}
-			g.drawLevelBadge(screen, barRect, lvl)
-		}
-	}
-
-	// Draw projectiles first (behind units)
-	g.drawProjectiles(screen)
-
-	// Units
-	const unitTargetPX = 42.0
-	for id, u := range g.world.Units {
-		if img := g.ensureMiniImageByName(u.Name); img != nil {
-			op := &ebiten.DrawImageOptions{}
-			iw, ih := img.Bounds().Dx(), img.Bounds().Dy()
-			s := unitTargetPX / float64(maxInt(1, maxInt(iw, ih)))
-			op.GeoM.Scale(s, s)
-			op.GeoM.Translate(u.X-float64(iw)*s/2, u.Y-float64(ih)*s/2)
-			screen.DrawImage(img, op)
-		} else {
-			ebitenutil.DrawRect(screen, u.X-6, u.Y-6, 12, 12, color.White)
-		}
-
-		if u.MaxHP > 0 {
-			barW := 26.0 * 1.05
-			bx := u.X - barW/2
-			by := u.Y - unitTargetPX/2 - 6
-
-			fx := g.hpfxStep(g.hpFxUnits, id, u.HP, nowMs)
-			g.DrawHPBarForOwner(screen, bx, by, barW, 3, u.HP, u.MaxHP, fx.ghostHP, fx.healGhostHP, u.OwnerID == g.playerID)
-			// Level badge left of HP bar
-			rx0 := int(bx + 0.5)
-			ry0 := int(by + 0.5)
-			rx1 := int(bx + barW + 0.5)
-			ry1 := int(by + 3 + 0.5)
-			barRect := image.Rect(rx0, ry0, rx1, ry1)
-			lvl := g.levelForUnitName(u.Name)
-			g.drawLevelBadge(screen, barRect, lvl)
-		}
-	}
 
 	switch g.scr {
 	case screenLogin:
@@ -356,6 +345,16 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		text.Draw(screen, g.nameInput, basicfont.Face7x13, pad+4, 68, color.White)
 
 	case screenHome:
+		// Draw home screen background
+		if g.activeTab == tabArmy {
+			g.ensureArmyBgLayer()
+			if g.armyBgLayer != nil {
+				var op ebiten.DrawImageOptions
+				op.GeoM.Translate(0, float64(topBarH))
+				screen.DrawImage(g.armyBgLayer, &op)
+			}
+		}
+
 		g.drawHomeContent(screen)
 		g.drawTopBarHome(screen)
 		g.drawBottomBar(screen)
@@ -365,6 +364,156 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		}
 
 	case screenBattle:
+		nowMs := time.Now().UnixMilli()
+
+		// Check if this is PvP (has exactly 2 bases with different owners)
+		isPvP := false
+		playerBaseY := 0.0
+		playerBaseCount := 0
+		enemyBaseCount := 0
+		for _, b := range g.world.Bases {
+			if b.OwnerID == g.playerID {
+				playerBaseY = float64(b.Y)
+				playerBaseCount++
+			} else {
+				enemyBaseCount++
+			}
+		}
+		// Only consider it PvP if there are exactly 2 bases AND it's actually a PvP room
+		// (PvE also has 2 bases but should not be mirrored)
+		if playerBaseCount == 1 && enemyBaseCount == 1 && strings.Contains(g.roomID, "pvp-") {
+			isPvP = true
+		}
+
+		// PvP Mirroring: Ensure both players see their base at bottom
+		// Mirror if player's base is at the TOP (needs to be moved to bottom)
+		// Only apply mirroring in actual PvP scenarios (2+ players)
+		// PVE should never be mirrored
+		shouldMirror := false
+		if isPvP && g.currentMapDef != nil {
+			shouldMirror = playerBaseY < float64(protocol.ScreenH)/2
+		}
+
+		// Draw battle arena background first
+		g.drawArenaBG(screen)
+
+		// Draw deploy zones (alpha rectangles)
+		g.drawDeployZones(screen, shouldMirror)
+
+		// Helper function to mirror Y coordinate
+		mirrorY := func(y float64) float64 {
+			if shouldMirror {
+				return float64(protocol.ScreenH) - y
+			}
+			return y
+		}
+
+		// Draw bases
+		for id, b := range g.world.Bases {
+			g.assets.ensureInit()
+			img := g.assets.baseEnemy
+			if b.OwnerID == g.playerID {
+				img = g.assets.baseMe
+			}
+
+			// Apply mirroring to base position for PvP (only player's own base)
+			renderBaseX := b.X
+			renderBaseY := b.Y
+			if shouldMirror && b.OwnerID == g.playerID {
+				renderBaseY = int(mirrorY(float64(b.Y)))
+			}
+
+			// Create base with mirrored position for rendering
+			renderBase := protocol.BaseState{
+				X:       renderBaseX,
+				Y:       renderBaseY,
+				W:       b.W,
+				H:       b.H,
+				HP:      b.HP,
+				MaxHP:   b.MaxHP,
+				OwnerID: b.OwnerID,
+			}
+			drawBaseImg(screen, img, renderBase)
+
+			if b.MaxHP > 0 {
+				fx := g.hpfxStep(g.hpFxBases, id, b.HP, nowMs)
+				isPlayer := (b.OwnerID == g.playerID)
+				x := float64(renderBaseX)
+				y := float64(b.Y - 6)
+				if shouldMirror && b.OwnerID == g.playerID {
+					y = mirrorY(float64(b.Y - 6))
+				}
+				w := float64(b.W)
+				h := 4.0
+				g.DrawHPBarForOwner(screen, x, y, w, h, b.HP, b.MaxHP, fx.ghostHP, fx.healGhostHP, isPlayer)
+				// Base level badge left of bar
+				rx0 := int(x + 0.5)
+				ry0 := int(y + 0.5)
+				rx1 := int(x + w + 0.5)
+				ry1 := int(y + h + 0.5)
+				barRect := image.Rect(rx0, ry0, rx1, ry1)
+				lvl := 1
+				if isPlayer {
+					lvl = g.currentArmyRoundedLevel()
+				}
+				g.drawLevelBadge(screen, barRect, lvl)
+			}
+		}
+
+		// Draw projectiles (behind units) with consistent mirroring
+		g.drawProjectiles(screen, shouldMirror, mirrorY, g.playerID)
+
+		// Draw units
+		const unitTargetPX = 42.0
+		for id, u := range g.world.Units {
+			// Apply mirroring to unit position (only player's own units)
+			renderX := u.X
+			renderY := u.Y
+			if shouldMirror && u.OwnerID == g.playerID {
+				renderY = float64(protocol.ScreenH) - u.Y
+			}
+
+			if img := g.ensureMiniImageByName(u.Name); img != nil {
+				op := &ebiten.DrawImageOptions{}
+				iw, ih := img.Bounds().Dx(), img.Bounds().Dy()
+				s := unitTargetPX / float64(maxInt(1, maxInt(iw, ih)))
+				op.GeoM.Scale(s, s)
+				op.GeoM.Translate(renderX-float64(iw)*s/2, renderY-float64(ih)*s/2)
+				screen.DrawImage(img, op)
+			} else {
+				ebitenutil.DrawRect(screen, renderX-6, renderY-6, 12, 12, color.White)
+			}
+
+			if u.MaxHP > 0 {
+				barW := 26.0 * 1.05
+				bx := renderX - barW/2
+				by := renderY - unitTargetPX/2 - 6
+
+				fx := g.hpfxStep(g.hpFxUnits, id, u.HP, nowMs)
+				g.DrawHPBarForOwner(screen, bx, by, barW, 3, u.HP, u.MaxHP, fx.ghostHP, fx.healGhostHP, u.OwnerID == g.playerID)
+				// Level badge left of HP bar
+				rx0 := int(bx + 0.5)
+				ry0 := int(by + 0.5)
+				rx1 := int(bx + barW + 0.5)
+				ry1 := int(by + 3 + 0.5)
+				barRect := image.Rect(rx0, ry0, rx1, ry1)
+				lvl := g.levelForUnitName(u.Name)
+				g.drawLevelBadge(screen, barRect, lvl)
+			}
+		}
+
+		// Draw particle effects (after units, before UI)
+		if g.particleSystem != nil {
+			// Apply mirroring to particle system if needed
+			if shouldMirror {
+				// Create a temporary mirrored particle system for rendering
+				g.drawMirroredParticles(screen, mirrorY)
+			} else {
+				g.particleSystem.Draw(screen)
+			}
+		}
+
+		// Draw battle UI
 		g.drawBattleBar(screen)
 
 		myCur, myMax, enCur, enMax := g.battleHPs()
@@ -441,9 +590,36 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			}
 		}
 
-		g.continueBtn = rect{x: x + (w-120)/2, y: y + h - 50, w: 120, h: 32}
-		ebitenutil.DrawRect(screen, float64(g.continueBtn.x), float64(g.continueBtn.y), float64(g.continueBtn.w), float64(g.continueBtn.h), color.NRGBA{70, 110, 70, 255})
-		text.Draw(screen, "Continue", basicfont.Face7x13, g.continueBtn.x+18, g.continueBtn.y+20, color.White)
+		continueBtnX := x + (w-120)/2
+		continueBtnY := y + h - 50
+		ebitenutil.DrawRect(screen, float64(continueBtnX), float64(continueBtnY), 120, 32, color.NRGBA{70, 110, 70, 255})
+		text.Draw(screen, "Continue", basicfont.Face7x13, continueBtnX+18, continueBtnY+20, color.White)
+
+		// Store continue button rect for click detection
+		g.continueBtn = rect{x: int(continueBtnX), y: int(continueBtnY), w: 120, h: 32}
+
+		// Handle continue button click
+		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+			mx, my := ebiten.CursorPosition()
+			if g.continueBtn.hit(mx, my) {
+				g.onLeaveRoom()
+				g.roomID = ""
+				g.scr = screenHome
+
+				g.endActive = false
+				g.endVictory = false
+				g.gameOver = false
+				g.victory = false
+				g.hand = nil
+				g.next = protocol.MiniCardView{}
+				g.selectedIdx = -1
+				g.dragActive = false
+				g.world = &World{
+					Units: make(map[int64]*RenderUnit),
+					Bases: make(map[int64]protocol.BaseState),
+				}
+			}
+		}
 	}
 }
 
@@ -584,22 +760,49 @@ func (b *battleHPBar) Draw(dst *ebiten.Image) {
 	ebitenutil.DrawRect(dst, float64(b.x+b.w-1), float64(b.y), 1, float64(b.h), color.NRGBA{0, 0, 0, 160})
 }
 
-func (g *Game) drawProjectiles(screen *ebiten.Image) {
-	// Simple projectile rendering - draw lines from ranged units to their targets
+func (g *Game) drawProjectiles(screen *ebiten.Image, shouldMirror bool, mirrorY func(float64) float64, playerID int64) {
+
+	// Enhanced projectile rendering with particle effects
 	for _, u := range g.world.Units {
-		// Only draw projectiles for ranged units that have a particle type
-		if strings.ToLower(u.Class) == "range" && u.Particle != "" && u.Particle != "projectile" {
+		// Only draw projectiles for ranged units that belong to the player
+		if strings.ToLower(u.Class) == "range" && u.OwnerID == playerID {
 			// Find target
 			tx, ty := g.findTargetForUnit(u)
 			dist := math.Hypot(tx-u.X, ty-u.Y)
 
 			// Only draw if in range
 			if dist <= float64(u.Range) && dist > 10 {
-				// Draw a simple line projectile
-				ebitenutil.DrawLine(screen, u.X, u.Y, tx, ty, color.NRGBA{255, 255, 100, 200})
+				// Apply mirroring to projectile coordinates
+				renderUX := u.X
+				renderUY := u.Y
+				renderTX := tx
+				renderTY := ty
+				if shouldMirror {
+					renderUY = mirrorY(u.Y)
+					renderTY = mirrorY(ty)
+				}
+
+				// Create particle trail for projectile
+				if g.particleSystem != nil {
+					g.particleSystem.CreateProjectileTrail(renderUX, renderUY, renderTX, renderTY)
+				}
+
+				// Draw a simple line projectile (fallback)
+				ebitenutil.DrawLine(screen, renderUX, renderUY, renderTX, renderTY, color.NRGBA{255, 255, 100, 200})
 
 				// Draw a small circle at the projectile tip
-				ebitenutil.DrawCircle(screen, tx, ty, 3, color.NRGBA{255, 255, 0, 255})
+				ebitenutil.DrawCircle(screen, renderTX, renderTY, 3, color.NRGBA{255, 255, 0, 255})
+
+				// Create impact effect when projectile reaches target
+				if dist < 15 && g.particleSystem != nil {
+					impactType := "default"
+					if strings.Contains(strings.ToLower(u.Name), "fire") {
+						impactType = "fire"
+					} else if strings.Contains(strings.ToLower(u.Name), "ice") {
+						impactType = "ice"
+					}
+					g.particleSystem.CreateImpactEffect(renderTX, renderTY, impactType)
+				}
 			}
 		}
 	}
@@ -628,4 +831,139 @@ func (g *Game) findTargetForUnit(u *RenderUnit) (float64, float64) {
 		}
 	}
 	return float64(protocol.ScreenW / 2), float64(protocol.ScreenH / 2)
+}
+
+// drawMirroredParticles draws particle effects with Y-axis mirroring for PvP
+func (g *Game) drawMirroredParticles(screen *ebiten.Image, mirrorY func(float64) float64) {
+	if g.particleSystem == nil {
+		return
+	}
+
+	for _, emitter := range g.particleSystem.Emitters {
+		if !emitter.Active {
+			continue
+		}
+
+		emitter.DrawMirrored(screen, mirrorY)
+	}
+}
+
+// updateTimerInput handles timer-related input (pause button, pause overlay buttons)
+func (g *Game) updateTimerInput() {
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		mx, my := ebiten.CursorPosition()
+
+		// Handle pause button click first (always active, even during pause overlay)
+		if g.roomID != "" && !strings.Contains(g.roomID, "pvp-") && g.timerBtn.hit(mx, my) {
+			if g.timerPaused {
+				g.send("ResumeGame", protocol.ResumeGame{})
+				// Immediately resume locally as fallback
+				g.timerPaused = false
+				g.pauseOverlay = false
+			} else {
+				g.send("PauseGame", protocol.PauseGame{})
+				// Immediately pause locally as fallback
+				g.timerPaused = true
+				g.pauseOverlay = true
+			}
+			return // Pause button was clicked, don't process other inputs
+		}
+
+		// Handle pause overlay buttons (only when overlay is active)
+		if g.pauseOverlay {
+			// Define button positions for pause overlay
+			menuW := 300
+			menuH := 250
+			menuX := (protocol.ScreenW - menuW) / 2
+			menuY := (protocol.ScreenH - menuH) / 2
+
+			resumeBtnX := menuX + 50
+			resumeBtnY := menuY + 50
+			restartBtnX := menuX + 50
+			restartBtnY := menuY + 100
+			surrenderBtnX := menuX + 50
+			surrenderBtnY := menuY + 150
+
+			if mx >= resumeBtnX && mx <= resumeBtnX+200 && my >= resumeBtnY && my <= resumeBtnY+40 {
+				g.send("ResumeGame", protocol.ResumeGame{})
+				g.pauseOverlay = false
+			} else if mx >= restartBtnX && mx <= restartBtnX+200 && my >= restartBtnY && my <= restartBtnY+40 {
+				g.send("RestartMatch", protocol.RestartMatch{})
+				g.pauseOverlay = false
+			} else if mx >= surrenderBtnX && mx <= surrenderBtnX+200 && my >= surrenderBtnY && my <= surrenderBtnY+40 {
+				g.send("SurrenderMatch", protocol.SurrenderMatch{})
+				g.pauseOverlay = false
+			}
+			return // Don't handle other clicks when pause overlay is active
+		}
+	}
+}
+
+// drawDeployZones draws the deploy zones as alpha rectangles
+func (g *Game) drawDeployZones(screen *ebiten.Image, shouldMirror bool) {
+	if g.currentMapDef == nil {
+		return
+	}
+
+	// Check if this is PvP (has exactly 2 bases with different owners)
+	isPvP := g.isPvPMode()
+
+	// Only show deploy zones when a unit is selected or being dragged
+	if g.selectedIdx == -1 && !g.dragActive {
+		return
+	}
+
+	for _, zone := range g.currentMapDef.DeployZones {
+		// In PvP mode, only show player's own deploy zones (not enemy zones)
+		if isPvP && zone.Owner != "player" {
+			continue // Skip enemy zones in PvP - players should only see their own zones
+		}
+
+		// In PvE mode, skip enemy deploy zones (they're not relevant to player)
+		if !isPvP && zone.Owner != "player" {
+			continue // Skip enemy zones in PvE
+		}
+
+		// Convert normalized coordinates to screen coordinates
+		x := zone.X * float64(protocol.ScreenW)
+		y := zone.Y * float64(protocol.ScreenH)
+		w := zone.W * float64(protocol.ScreenW)
+		h := zone.H * float64(protocol.ScreenH)
+
+		// Apply mirroring if needed
+		if shouldMirror {
+			y = float64(protocol.ScreenH) - y - h
+		}
+
+		// Deploy zone color - only blue for player zones (since enemy zones are hidden in PvP)
+		var deployZoneColor color.NRGBA
+		var borderColor color.NRGBA
+
+		deployZoneColor = color.NRGBA{70, 130, 255, 100} // Player deploy zones - blue tint, more opaque
+		borderColor = color.NRGBA{100, 160, 255, 180}
+
+		// Draw the deploy zone rectangle
+		ebitenutil.DrawRect(screen, x, y, w, h, deployZoneColor)
+
+		// Draw a subtle border
+		ebitenutil.DrawRect(screen, x, y, w, 1, borderColor)     // Top
+		ebitenutil.DrawRect(screen, x, y+h-1, w, 1, borderColor) // Bottom
+		ebitenutil.DrawRect(screen, x, y, 1, h, borderColor)     // Left
+		ebitenutil.DrawRect(screen, x+w-1, y, 1, h, borderColor) // Right
+	}
+}
+
+// isPvPMode checks if the current game is in PvP mode
+func (g *Game) isPvPMode() bool {
+	playerBaseCount := 0
+	enemyBaseCount := 0
+	for _, b := range g.world.Bases {
+		if b.OwnerID == g.playerID {
+			playerBaseCount++
+		} else {
+			enemyBaseCount++
+		}
+	}
+	// PvP has exactly 2 bases (1 player + 1 enemy) AND it's a PvP room
+	return playerBaseCount == 1 && enemyBaseCount == 1 && strings.Contains(g.roomID, "pvp-")
 }

@@ -1,14 +1,14 @@
 {
-  "playerId": 151277,
+  "playerId": 434877,
   "name": "tester2",
   "army": [
-    "Bloodmage Thalnos",
-    "Banshee",
+    "The Warden",
+    "Frostwolf Shaman",
     "Bat Rider",
-    "Darkspear Troll",
+    "Pyromancer",
+    "Faerie Dragon",
     "Defias Bandits",
-    "Gargoyle",
-    "Gnoll Brute"
+    "Abomination"
   ],
   "armies": {
     "Bloodmage Thalnos": [
@@ -18,11 +18,27 @@
       "Defias Bandits",
       "Gargoyle",
       "Gnoll Brute"
+    ],
+    "Hogger": [
+      "Bat Rider",
+      "Drake",
+      "Gnoll Brute",
+      "Night Sentinel",
+      "Frostwolf Shaman",
+      "Gryphon Rider"
+    ],
+    "The Warden": [
+      "Frostwolf Shaman",
+      "Bat Rider",
+      "Pyromancer",
+      "Faerie Dragon",
+      "Defias Bandits",
+      "Abomination"
     ]
   },
   "gold": 0,
   "accountXp": 0,
-  "pvp_rating": 774,
+  "pvp_rating": 819,
   "pvp_rank": "Grunt",
   "avatar": "default.png",
   "guildId": "g-1756713614348685400"

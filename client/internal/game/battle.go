@@ -35,6 +35,10 @@ type hpFx struct {
 }
 
 func (g *Game) updateBattle() {
+	// Skip battle updates if game is paused
+	if g.timerPaused {
+		return
+	}
 
 	if g.endActive {
 
@@ -70,9 +74,18 @@ func (g *Game) updateBattle() {
 	mx, my := ebiten.CursorPosition()
 	handTop := protocol.ScreenH - battleHUDH
 
+	// Use raw mouse coordinates for deployment (server handles logical positioning)
+	deployX, deployY := float64(mx), float64(my)
+
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		// Check if clicking on a hand card
 		for i, r := range g.handRects() {
 			if r.hit(mx, my) {
+				// If clicking on already selected card, deselect it
+				if g.selectedIdx == i && !g.dragActive {
+					g.selectedIdx = -1
+					return
+				}
 				g.selectedIdx = i
 				g.dragActive = true
 				g.dragIdx = i
@@ -81,25 +94,42 @@ func (g *Game) updateBattle() {
 			}
 		}
 
+		// If clicking outside hand area and a card is selected, deploy it
 		if my < handTop && g.selectedIdx >= 0 && g.selectedIdx < len(g.hand) {
-			g.send("DeployMiniAt", protocol.DeployMiniAt{
-				CardIndex: g.selectedIdx,
-				X:         float64(mx),
-				Y:         float64(my),
-				ClientTs:  time.Now().UnixMilli(),
-			})
+			// Check if deployment is within a valid deploy zone
+			if g.isInDeployZone(deployX, deployY) {
+				g.send("DeployMiniAt", protocol.DeployMiniAt{
+					CardIndex: g.selectedIdx,
+					X:         deployX,
+					Y:         deployY,
+					ClientTs:  time.Now().UnixMilli(),
+				})
+				// Successfully deployed, deselect the unit
+				g.selectedIdx = -1
+			}
 			return
+		}
+
+		// If clicking outside hand area with no card selected, deselect
+		if my < handTop {
+			g.selectedIdx = -1
 		}
 	}
 
 	if g.dragActive && inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) {
 		if my < handTop && g.dragIdx >= 0 && g.dragIdx < len(g.hand) {
-			g.send("DeployMiniAt", protocol.DeployMiniAt{
-				CardIndex: g.dragIdx,
-				X:         float64(mx),
-				Y:         float64(my),
-				ClientTs:  time.Now().UnixMilli(),
-			})
+			// Check if deployment is within a valid deploy zone
+			if g.isInDeployZone(deployX, deployY) {
+				g.send("DeployMiniAt", protocol.DeployMiniAt{
+					CardIndex: g.dragIdx,
+					X:         deployX,
+					Y:         deployY,
+					ClientTs:  time.Now().UnixMilli(),
+				})
+				// Successfully deployed, deselect the unit
+				g.selectedIdx = -1
+			}
+			// If deployment failed (invalid zone), still deselect the unit
 		}
 		g.dragActive = false
 		g.dragIdx = -1
@@ -182,18 +212,54 @@ func (g *Game) drawBattleBar(screen *ebiten.Image) {
 
 	if g.dragActive && g.dragIdx >= 0 && g.dragIdx < len(g.hand) {
 		mx, my := ebiten.CursorPosition()
+
+		// Drag preview should show at EXACT mouse position (no mirroring)
+		previewX, previewY := float64(mx), float64(my)
+
 		if img := g.ensureMiniImageByName(g.hand[g.dragIdx].Name); img != nil {
 			iw, ih := img.Bounds().Dx(), img.Bounds().Dy()
 			s := 0.5 * mathMin(1, 48.0/float64(maxInt(iw, ih)))
 			op := &ebiten.DrawImageOptions{}
 			op.GeoM.Scale(s, s)
-			op.GeoM.Translate(float64(mx)-float64(iw)*s/2, float64(my)-float64(ih)*s/2)
+			op.GeoM.Translate(previewX-float64(iw)*s/2, previewY-float64(ih)*s/2)
 			op.ColorScale.Scale(1, 1, 1, 0.75)
 			screen.DrawImage(img, op)
 		} else {
-			ebitenutil.DrawRect(screen, float64(mx-12), float64(my-12), 24, 24, color.NRGBA{220, 220, 220, 200})
+			ebitenutil.DrawRect(screen, previewX-12, previewY-12, 24, 24, color.NRGBA{220, 220, 220, 200})
 		}
 	}
+}
+
+// isInDeployZone checks if a given point (x, y) is within any deploy zone
+func (g *Game) isInDeployZone(x, y float64) bool {
+	if g.currentMapDef == nil {
+		return true // Allow deployment anywhere if no map definition
+	}
+
+	// Check if PvP mirroring is active
+	shouldMirror := g.shouldMirrorForPvp()
+
+	// Convert screen coordinates to normalized coordinates (0-1)
+	normX := x / float64(protocol.ScreenW)
+	normY := y / float64(protocol.ScreenH)
+
+	// If mirroring is active, we need to check against the mirrored deploy zones
+	// The deploy zones in the map definition are in their original positions,
+	// but when the screen is mirrored, we need to check the mirrored positions
+	if shouldMirror {
+		// Apply inverse mirroring to the normalized coordinates
+		normY = 1.0 - normY
+	}
+
+	// Check if point is within any deploy zone
+	for _, zone := range g.currentMapDef.DeployZones {
+		if normX >= zone.X && normX <= zone.X+zone.W &&
+			normY >= zone.Y && normY <= zone.Y+zone.H {
+			return true
+		}
+	}
+
+	return false
 }
 
 func (g *Game) handRects() []rect {
@@ -474,4 +540,229 @@ type battleHPBar struct {
 	colBase    color.NRGBA
 	colFlash   color.NRGBA
 	colMissing color.NRGBA
+}
+
+// shouldMirrorForPvp determines if the screen should be mirrored for PvP
+// to ensure each player sees their base at the bottom
+func (g *Game) shouldMirrorForPvp() bool {
+	// Check if this is PvP (has exactly 2 bases with different owners)
+	isPvP := false
+	playerBaseY := 0.0
+	playerBaseCount := 0
+	enemyBaseCount := 0
+	for _, b := range g.world.Bases {
+		if b.OwnerID == g.playerID {
+			playerBaseY = float64(b.Y)
+			playerBaseCount++
+		} else {
+			enemyBaseCount++
+		}
+	}
+	// Only consider it PvP if there are exactly 2 bases AND it's actually a PvP room
+	// (PvE also has 2 bases but should not be mirrored)
+	if playerBaseCount == 1 && enemyBaseCount == 1 && strings.Contains(g.roomID, "pvp-") {
+		isPvP = true
+	}
+
+	// Only apply mirroring in actual PvP scenarios (2+ players)
+	// PVE should never be mirrored
+	if !isPvP {
+		return false
+	}
+
+	// PvP Mirroring: Ensure both players see their base at bottom
+	// Mirror if player's base is at the TOP (needs to be moved to bottom)
+	return playerBaseY < float64(protocol.ScreenH)/2
+}
+
+// battleHPs returns player and enemy HP values for battle UI
+func (g *Game) battleHPs() (myCur, myMax, enCur, enMax int) {
+	for _, b := range g.world.Bases {
+		if b.OwnerID == g.playerID {
+			myCur = b.HP
+			myMax = b.MaxHP
+		} else {
+			enCur = b.HP
+			enMax = b.MaxHP
+		}
+	}
+	return
+}
+
+// drawBattleTopBars draws the HP bars and timer at the top of the battle screen
+func (g *Game) drawBattleTopBars(screen *ebiten.Image, myCur, myMax, enCur, enMax int) {
+	const pad = 12
+	const barH = 18
+	const avatar = 40
+	const gap = 8
+
+	y := 8
+
+	base := protocol.ScreenW/2 - (pad + avatar + gap + pad)
+	lw := int(float64(base) * 0.67)
+	if lw < 120 {
+		lw = 120
+	}
+	rw := lw
+
+	lx := pad + avatar + gap
+	if g.playerHB == nil {
+		g.playerHB = &battleHPBar{
+			x: lx, y: y, w: lw, h: barH,
+			colBase:    color.NRGBA{70, 130, 255, 255},
+			colFlash:   color.NRGBA{240, 196, 25, 255},
+			colMissing: color.NRGBA{10, 10, 14, 255},
+		}
+	}
+	g.playerHB.x, g.playerHB.y, g.playerHB.w, g.playerHB.h = lx, y, lw, barH
+	g.playerHB.Set(myCur, myMax)
+	g.playerHB.Update()
+	g.playerHB.Draw(screen)
+	if img := g.ensureAvatarImage(g.avatar); img != nil {
+		iw, ih := img.Bounds().Dx(), img.Bounds().Dy()
+		s := math.Min(float64(avatar)/float64(iw), float64(avatar)/float64(ih))
+		var op ebiten.DrawImageOptions
+		op.GeoM.Scale(s, s)
+		ax := float64(pad) + (float64(avatar)-float64(iw)*s)/2
+		ay := float64(y) + (float64(barH)-float64(avatar))/2
+		if ay < 2 {
+			ay = 2
+		}
+		op.GeoM.Translate(ax, ay)
+		screen.DrawImage(img, &op)
+	}
+
+	rx := protocol.ScreenW - pad - avatar - gap - rw
+	if g.enemyHB == nil {
+		g.enemyHB = &battleHPBar{
+			x: rx, y: y, w: rw, h: barH,
+			colBase:    color.NRGBA{220, 70, 70, 255},
+			colFlash:   color.NRGBA{240, 196, 25, 255},
+			colMissing: color.NRGBA{10, 10, 14, 255},
+		}
+	}
+	g.enemyHB.x, g.enemyHB.y, g.enemyHB.w, g.enemyHB.h = rx, y, rw, barH
+	g.enemyHB.Set(enCur, enMax)
+	g.enemyHB.Update()
+	g.enemyHB.Draw(screen)
+	// Enemy avatar: PvP -> opponent avatar; PvE -> target (base/boss)
+	var eimg *ebiten.Image
+	if g.enemyAvatar != "" {
+		eimg = g.ensureAvatarImage(g.enemyAvatar)
+	} else {
+		eimg = g.enemyTargetAvatarImage()
+	}
+	if eimg != nil {
+		iw, ih := eimg.Bounds().Dx(), eimg.Bounds().Dy()
+		s := math.Min(float64(avatar)/float64(iw), float64(avatar)/float64(ih))
+		var op ebiten.DrawImageOptions
+		op.GeoM.Scale(s, s)
+		ax := float64(protocol.ScreenW-pad-avatar) + (float64(avatar)-float64(iw)*s)/2
+		ay := float64(y) + (float64(barH)-float64(avatar))/2
+		if ay < 2 {
+			ay = 2
+		}
+		op.GeoM.Translate(ax, ay)
+		screen.DrawImage(eimg, &op)
+	}
+
+	// Draw timer in the middle between HP bars (smaller and more compact)
+	timerX := (lx + lw + rx) / 2
+	timerY := y
+
+	// Update timer display
+	minutes := g.timerRemainingSeconds / 60
+	seconds := g.timerRemainingSeconds % 60
+	if g.timerPaused {
+		g.timerDisplay = "PAUSED"
+	} else {
+		g.timerDisplay = fmt.Sprintf("%02d:%02d", minutes, seconds)
+	}
+
+	// Smaller timer background
+	timerBgW := 80
+	timerBgH := 24
+	timerBgX := timerX - timerBgW/2
+	ebitenutil.DrawRect(screen, float64(timerBgX-1), float64(timerY-1), float64(timerBgW+2), float64(timerBgH+2), color.NRGBA{0, 0, 0, 255})
+	ebitenutil.DrawRect(screen, float64(timerBgX), float64(timerY), float64(timerBgW), float64(timerBgH), color.NRGBA{32, 32, 44, 255})
+
+	// Draw timer text (centered)
+	textW := text.BoundString(basicfont.Face7x13, g.timerDisplay).Dx()
+	textX := timerBgX + (timerBgW-textW)/2
+	text.Draw(screen, g.timerDisplay, basicfont.Face7x13, textX, timerY+18, color.NRGBA{239, 229, 182, 255})
+
+	// Draw pause button (PvE only) - smaller and attached to timer
+	if g.roomID != "" && !strings.Contains(g.roomID, "pvp-") {
+		pauseBtnW := 24
+		pauseBtnH := 24
+		pauseBtnX := timerBgX + timerBgW + 2         // Attached to timer with small gap
+		pauseBtnY := timerY + (timerBgH-pauseBtnH)/2 // Vertically centered
+
+		g.timerBtn = rect{x: pauseBtnX, y: pauseBtnY, w: pauseBtnW, h: pauseBtnH}
+
+		// Button background
+		ebitenutil.DrawRect(screen, float64(pauseBtnX-1), float64(pauseBtnY-1), float64(pauseBtnW+2), float64(pauseBtnH+2), color.NRGBA{0, 0, 0, 255})
+		ebitenutil.DrawRect(screen, float64(pauseBtnX), float64(pauseBtnY), float64(pauseBtnW), float64(pauseBtnH), color.NRGBA{70, 110, 70, 255})
+
+		if g.timerPaused {
+			// Play symbol (triangle pointing right) when paused
+			triangleX := pauseBtnX + 4
+			triangleY := pauseBtnY + 4
+			// Draw triangle pointing right using rectangles
+			for i := 0; i < 8; i++ {
+				height := 16 - i*2
+				if height > 0 {
+					ebitenutil.DrawRect(screen, float64(triangleX+i), float64(triangleY+i), 1, float64(height), color.NRGBA{239, 229, 182, 255})
+				}
+			}
+		} else {
+			// Pause symbol (two vertical bars) when playing
+			barW := 3
+			barH := 12
+			bar1X := pauseBtnX + 6
+			bar2X := pauseBtnX + 13
+			barY := pauseBtnY + 6
+			ebitenutil.DrawRect(screen, float64(bar1X), float64(barY), float64(barW), float64(barH), color.NRGBA{239, 229, 182, 255})
+			ebitenutil.DrawRect(screen, float64(bar2X), float64(barY), float64(barW), float64(barH), color.NRGBA{239, 229, 182, 255})
+		}
+	}
+
+	// Draw pause overlay if active
+	if g.pauseOverlay {
+		// Semi-transparent overlay
+		overlay := ebiten.NewImage(protocol.ScreenW, protocol.ScreenH)
+		overlay.Fill(color.NRGBA{0, 0, 0, 140})
+		screen.DrawImage(overlay, nil)
+
+		// Pause menu
+		menuW := 300
+		menuH := 250
+		menuX := (protocol.ScreenW - menuW) / 2
+		menuY := (protocol.ScreenH - menuH) / 2
+
+		ebitenutil.DrawRect(screen, float64(menuX), float64(menuY), float64(menuW), float64(menuH), color.NRGBA{32, 32, 44, 255})
+		ebitenutil.DrawRect(screen, float64(menuX), float64(menuY), float64(menuW), 2, color.NRGBA{239, 229, 182, 255})
+		ebitenutil.DrawRect(screen, float64(menuX), float64(menuY+menuH-2), float64(menuW), 2, color.NRGBA{239, 229, 182, 255})
+
+		// Title
+		text.Draw(screen, "GAME PAUSED", basicfont.Face7x13, menuX+100, menuY+30, color.NRGBA{239, 229, 182, 255})
+
+		// Resume button
+		resumeBtnX := menuX + 50
+		resumeBtnY := menuY + 50
+		ebitenutil.DrawRect(screen, float64(resumeBtnX), float64(resumeBtnY), 200, 40, color.NRGBA{70, 130, 70, 255})
+		text.Draw(screen, "RESUME", basicfont.Face7x13, resumeBtnX+70, resumeBtnY+25, color.NRGBA{239, 229, 182, 255})
+
+		// Restart button
+		restartBtnX := menuX + 50
+		restartBtnY := menuY + 100
+		ebitenutil.DrawRect(screen, float64(restartBtnX), float64(restartBtnY), 200, 40, color.NRGBA{100, 100, 70, 255})
+		text.Draw(screen, "RESTART MATCH", basicfont.Face7x13, restartBtnX+40, restartBtnY+25, color.NRGBA{239, 229, 182, 255})
+
+		// Surrender button
+		surrenderBtnX := menuX + 50
+		surrenderBtnY := menuY + 150
+		ebitenutil.DrawRect(screen, float64(surrenderBtnX), float64(surrenderBtnY), 200, 40, color.NRGBA{110, 70, 70, 255})
+		text.Draw(screen, "SURRENDER", basicfont.Face7x13, surrenderBtnX+60, surrenderBtnY+25, color.NRGBA{239, 229, 182, 255})
+	}
 }

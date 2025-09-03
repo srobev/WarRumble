@@ -81,6 +81,8 @@ type Game struct {
 	// settings
 	fullscreen        bool
 	fsOnBtn, fsOffBtn rect
+	autoSaveEnabled   bool
+	logoutBtn         rect
 
 	assets     Assets
 	nameToMini map[string]protocol.MiniInfo // by mini Name
@@ -163,6 +165,12 @@ type Game struct {
 	hpFxUnits map[int64]*hpFx
 	hpFxBases map[int64]*hpFx
 
+	// Particle effects system
+	particleSystem *ParticleSystem
+
+	// Map definition for deploy zones
+	currentMapDef *protocol.MapDef
+
 	// --- PvP UI state ---
 	pvpStatus      string // status line at the top of the PvP tab
 	pvpQueued      bool   // currently in matchmaking queue
@@ -178,6 +186,16 @@ type Game struct {
 	pvpLeaders  []protocol.LeaderboardEntry
 	lbLastReq   time.Time
 	lbLastStamp int64 // server GeneratedAt (optional)
+
+	// --- Timer UI state ---
+	timerRemainingSeconds int    // remaining seconds
+	timerPaused           bool   // whether timer is paused
+	timerBtn              rect   // pause button rect
+	timerDisplay          string // formatted time display
+	lastTimerUpdate       int64  // last time timer was updated (Unix timestamp)
+	pauseOverlay          bool   // whether pause overlay is shown
+	pauseRestartBtn       rect   // restart button in pause overlay
+	pauseSurrenderBtn     rect   // surrender button in pause overlay
 
 	//Avatars and profile
 	avatar      string
@@ -248,4 +266,18 @@ type Game struct {
 	lastGuildQuery   string
 	lastGuildInfoReq time.Time
 	guildSendClickAt time.Time
+
+	// Hover tooltips for Army tab
+	hoveredChampionLevel int // index of hovered champion for level tooltip (-1 if none)
+	hoveredChampionCost  int // index of hovered champion for cost tooltip (-1 if none)
+
+	// Additional hover states for all Army tab elements
+	hoveredSelectedChampionLevel bool // true when hovering selected champion level badge
+	hoveredSelectedChampionCost  bool // true when hovering selected champion cost text
+	hoveredMiniSlotLevel         int  // index of hovered equipped mini slot level (-1 if none)
+	hoveredMiniSlotCost          int  // index of hovered equipped mini slot cost (-1 if none)
+	hoveredCollectionLevel       int  // index of hovered collection item level (-1 if none)
+	hoveredCollectionCost        int  // index of hovered collection item cost (-1 if none)
+	hoveredOverlayLevel          bool // true when hovering mini overlay level badge
+	hoveredOverlayCost           bool // true when hovering mini overlay cost text
 }

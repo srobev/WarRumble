@@ -43,10 +43,10 @@
     "particle": "projectile"
   },
   {
-    "name": "Pyromancer",
+    "name": "Blazebinder",
     "dmg": 180,
     "hp": 340,
-    "portrait": "pyromancer.png",
+    "portrait": "blazebinder.png",
     "class": "range",
     "subclass": "spellcaster",
     "role": "mini",
@@ -56,10 +56,10 @@
     "particle": "projectile"
   },
   {
-    "name": "Bloodmage Thalnos",
+    "name": "Bloodmage Thalor",
     "dmg": 230,
     "hp": 320,
-    "portrait": "bloodmage-thalnos.png",
+    "portrait": "bloodmage_thalor.png",
     "class": "range",
     "subclass": "spellcaster",
     "role": "champion",
@@ -173,12 +173,12 @@
     "particle": "projectile"
   },
   {
-    "name": "Frostwolf Shaman",
+    "name": "Spirit Binder",
     "dmg": 160,
     "hp": 360,
     "heal": 300,
     "hps": 100,
-    "portrait": "frostwolf-shaman.png",
+    "portrait": "spirit_binder.png",
     "class": "range",
     "subclass": "healer",
     "role": "mini",
@@ -258,10 +258,10 @@
     "speed": 1
   },
   {
-    "name": "Huntress",
+    "name": "Night Sentinel",
     "dmg": 160,
     "hp": 600,
-    "portrait": "huntress.png",
+    "portrait": "night_sentinel.png",
     "class": "range",
     "role": "mini",
     "cost": 3,
@@ -270,10 +270,10 @@
     "particle": "projectile"
   },
   {
-    "name": "Jaina Proudmoore",
+    "name": "Sorceress Glacia",
     "dmg": 220,
     "hp": 530,
-    "portrait": "jaina-proudmoore.png",
+    "portrait": "sorceress_glacia.png",
     "class": "range",
     "role": "champion",
     "cost": 3,
@@ -292,22 +292,22 @@
     "speed": 1
   },
   {
-    "name": "Maiev Shadowsong",
+    "name": "The Warden",
     "dmg": 200,
     "hp": 940,
-    "portrait": "maiev-shadowsong.png",
+    "portrait": "the_warden.png",
     "class": "melee",
     "role": "champion",
     "cost": 3,
     "speed": 2
   },
   {
-    "name": "Malfurion Stormrage",
+    "name": "Aethelion Ragestorm",
     "dmg": 160,
     "hp": 1000,
     "heal": 100,
     "hps": 100,
-    "portrait": "malfurion.png",
+    "portrait": "aethelion.png",
     "class": "range",
     "subclass": "healer",
     "role": "champion",
@@ -317,10 +317,10 @@
     "particle": "projectile"
   },
   {
-    "name": "Meat Wagon",
+    "name": "Corpse Catapult",
     "dmg": 130,
     "hp": 500,
-    "portrait": "meat-wagon.png",
+    "portrait": "corpse_catapult.png",
     "class": "range",
     "subclass": "siege-vs-base",
     "role": "mini",
@@ -454,12 +454,12 @@
     "speed": 2
   },
   {
-    "name": "Sylvanas Windrunner",
+    "name": "Silvanus Windarrow",
     "dmg": 170,
     "hp": 650,
-    "portrait": "sylvanas-windrunner.png",
+    "portrait": "silvanus_windarrow.png",
     "class": "range",
-    "role": "mini",
+    "role": "champion",
     "cost": 5,
     "speed": 2,
     "range": 200,
@@ -467,10 +467,10 @@
     "particle": "projectile"
   },
   {
-    "name": "Sneed",
+    "name": "Rusttooth",
     "dmg": 300,
     "hp": 1500,
-    "portrait": "sneed.png",
+    "portrait": "rusttooth.png",
     "class": "melee",
     "role": "champion",
     "cost": 4,
@@ -478,10 +478,10 @@
     "cooldown": 1.8
   },
   {
-    "name": "Tirion Fordring",
+    "name": "Sir Kaelen Lightbane",
     "dmg": 230,
     "hp": 1300,
-    "portrait": "tirion-fordring.png",
+    "portrait": "sir_kaelen_lightbane.png",
     "class": "melee",
     "role": "champion",
     "cost": 4,
@@ -523,10 +523,10 @@
     "speed": 4
   },
   {
-    "name": "Warsong Raider",
+    "name": "Crimson Raider",
     "dmg": 180,
     "hp": 540,
-    "portrait": "warsong-raider.png",
+    "portrait": "crimson_raider.png",
     "class": "melee",
     "role": "mini",
     "cost": 3,

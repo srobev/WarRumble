@@ -5,13 +5,14 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"errors"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"rumble/shared/protocol"
 	"strings"
 	"sync"
 	"time"
-	"log"
 
 	"github.com/golang-jwt/jwt/v5"
 	"golang.org/x/crypto/bcrypt"
@@ -93,30 +94,39 @@ type RegisterReq struct {
 	Password        string `json:"password"`
 	PasswordConfirm string `json:"password_confirm"`
 }
-type RegisterResp struct{ OK bool `json:"ok"` }
+type RegisterResp struct {
+	OK bool `json:"ok"`
+}
 
 func (a *Auth) HandleRegister(w http.ResponseWriter, r *http.Request) {
 	log.Println("HandleRegister")
 	var req RegisterReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest); return
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
 	}
 	req.Username = strings.TrimSpace(req.Username)
 	if req.Username == "" || len(req.Password) < 6 || req.Password != req.PasswordConfirm {
-		http.Error(w, "invalid username or password mismatch / too short", http.StatusBadRequest); return
+		http.Error(w, "invalid username or password mismatch / too short", http.StatusBadRequest)
+		return
 	}
 	if a.users.exists(req.Username) {
-		http.Error(w, "username already exists", http.StatusConflict); return
+		http.Error(w, "username already exists", http.StatusConflict)
+		return
 	}
 	hash, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
 	u := &User{Username: req.Username, PasswordHash: string(hash), CreatedAt: time.Now()}
-	if err := a.users.put(u); err != nil { http.Error(w, "save failed", http.StatusInternalServerError); return }
+	if err := a.users.put(u); err != nil {
+		http.Error(w, "save failed", http.StatusInternalServerError)
+		return
+	}
 	_ = json.NewEncoder(w).Encode(RegisterResp{OK: true})
 }
 
 type LoginReq struct {
 	Username string `json:"username"`
 	Password string `json:"password"`
+	Version  string `json:"version"`
 }
 type LoginResp struct {
 	Token    string `json:"token"`
@@ -127,17 +137,29 @@ func (a *Auth) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	log.Println("HandleLogin")
 	var req LoginReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		http.Error(w, "invalid json", http.StatusBadRequest); return
+		http.Error(w, "invalid json", http.StatusBadRequest)
+		return
 	}
+
+	// Check game version compatibility
+	log.Printf("Client version: %q, Server version: %q", req.Version, protocol.GameVersion)
+	if req.Version != protocol.GameVersion {
+		log.Printf("Version mismatch detected: client=%q, server=%q", req.Version, protocol.GameVersion)
+		http.Error(w, "version mismatch: please update your game to the latest version", http.StatusUpgradeRequired)
+		return
+	}
+
 	u, ok := a.users.get(req.Username)
 	if !ok || bcrypt.CompareHashAndPassword([]byte(u.PasswordHash), []byte(req.Password)) != nil {
-		http.Error(w, "invalid credentials", http.StatusUnauthorized); return
+		http.Error(w, "invalid credentials", http.StatusUnauthorized)
+		return
 	}
 	claims := jwt.MapClaims{
 		"sub": u.Username,
 		"iss": a.issuer,
 		"iat": time.Now().Unix(),
 		"exp": time.Now().Add(24 * time.Hour).Unix(),
+		"ver": protocol.GameVersion, // Include client version in token
 	}
 	t := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
 	signed, _ := t.SignedString(a.jwtKey)
@@ -145,13 +167,26 @@ func (a *Auth) HandleLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (a *Auth) ParseToken(tok string) (string, error) {
-	if tok == "" { return "", errors.New("missing token") }
+	if tok == "" {
+		return "", errors.New("missing token")
+	}
 	t, err := jwt.Parse(tok, func(t *jwt.Token) (interface{}, error) {
 		return a.jwtKey, nil
 	})
-	if err != nil || !t.Valid { return "", errors.New("invalid token") }
+	if err != nil || !t.Valid {
+		return "", errors.New("invalid token")
+	}
 	if claims, ok := t.Claims.(jwt.MapClaims); ok {
-		if sub, ok := claims["sub"].(string); ok { return sub, nil }
+		// Check version compatibility in token claims
+		if ver, ok := claims["ver"].(string); ok {
+			if ver != protocol.GameVersion {
+				log.Printf("Token version mismatch: token=%q, server=%q", ver, protocol.GameVersion)
+				return "", errors.New("token version mismatch: please re-login")
+			}
+		}
+		if sub, ok := claims["sub"].(string); ok {
+			return sub, nil
+		}
 	}
 	return "", errors.New("bad claims")
 }
@@ -167,9 +202,9 @@ func (a *Auth) RequireAuth(next http.Handler) http.Handler {
 		}
 		user, err := a.ParseToken(tok)
 		if err != nil || user == "" {
-			http.Error(w, "unauthorized", http.StatusUnauthorized); return
+			http.Error(w, "unauthorized", http.StatusUnauthorized)
+			return
 		}
 		next.ServeHTTP(w, r)
 	})
 }
-

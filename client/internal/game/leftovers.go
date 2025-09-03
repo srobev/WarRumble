@@ -107,6 +107,8 @@ func drawBaseImg(screen *ebiten.Image, img *ebiten.Image, b protocol.BaseState) 
 	oy := float64(b.Y) + (float64(b.H)-float64(ih)*s)/2
 	op.GeoM.Scale(s, s)
 	op.GeoM.Translate(ox, oy)
+	// Use linear filtering for smoother scaling on high-resolution displays
+	op.Filter = ebiten.FilterLinear
 	screen.DrawImage(img, op)
 }
 
@@ -252,6 +254,14 @@ func (g *Game) updateHome() {
 		}
 		if g.settingsBtn.hit(mx, my) {
 			g.activeTab = tabSettings
+		}
+		if g.logoutBtn.hit(mx, my) && g.activeTab == tabSettings {
+			if g.net != nil && !g.net.IsClosed() {
+				g.send("Logout", protocol.Logout{})
+			}
+			ClearToken()
+			ClearUsername()
+			g.resetToLoginNoAutoConnect()
 		}
 		if g.pvpBtn.hit(mx, my) {
 			g.activeTab = tabPvp
@@ -659,6 +669,85 @@ func (g *Game) updateHome() {
 			}
 		}
 
+		// Reset hover states (already declared above)
+		g.hoveredChampionLevel = -1
+		g.hoveredChampionCost = -1
+		g.hoveredSelectedChampionLevel = false
+		g.hoveredSelectedChampionCost = false
+		g.hoveredMiniSlotLevel = -1
+		g.hoveredMiniSlotCost = -1
+		g.hoveredCollectionLevel = -1
+		g.hoveredCollectionCost = -1
+		g.hoveredOverlayLevel = false
+		g.hoveredOverlayCost = false
+
+		// Check hover for champion strip (top selection area)
+		for i, r := range g.champStripRects {
+			if r.hit(mx, my) {
+				idx := start + i
+				if idx >= 0 && idx < len(g.champions) {
+					it := g.champions[idx]
+
+					// Check level badge area (top-left corner)
+					levelBadgeRect := rect{x: r.x + 4, y: r.y + 4, w: 24, h: 24}
+					if levelBadgeRect.hit(mx, my) {
+						g.hoveredChampionLevel = idx
+					}
+
+					// Check cost text area (top-right corner)
+					costS := fmt.Sprintf("%d", it.Cost)
+					cw := text.BoundString(basicfont.Face7x13, costS).Dx()
+					costRect := rect{x: r.x + r.w - 6 - cw, y: r.y + 8, w: cw, h: 16}
+					if costRect.hit(mx, my) {
+						g.hoveredChampionCost = idx
+					}
+				}
+				break
+			}
+		}
+
+		// Check hover for selected champion card (big one in middle)
+		if g.selectedChampion != "" {
+			chRect := g.armySlotRects[0] // champion slot rect
+			if chRect.hit(mx, my) {
+				// Check level badge area
+				levelBadgeRect := rect{x: chRect.x + 4, y: chRect.y + 4, w: 24, h: 24}
+				if levelBadgeRect.hit(mx, my) {
+					g.hoveredSelectedChampionLevel = true
+				}
+
+				// Check cost text area (would be in bottom area of big card)
+				costRect := rect{x: chRect.x + 8, y: chRect.y + chRect.h - 20, w: chRect.w - 16, h: 16}
+				if costRect.hit(mx, my) {
+					g.hoveredSelectedChampionCost = true
+				}
+			}
+		}
+
+		// Check hover for equipped mini slots (2x3 grid)
+		for i := 1; i <= 6; i++ {
+			slotRect := g.armySlotRects[i]
+			if slotRect.hit(mx, my) && i-1 < len(g.selectedOrder) && g.selectedOrder[i-1] != "" {
+				name := g.selectedOrder[i-1]
+
+				// Check level badge area (top-left)
+				levelBadgeRect := rect{x: slotRect.x + 4, y: slotRect.y + 4, w: 24, h: 24}
+				if levelBadgeRect.hit(mx, my) {
+					g.hoveredMiniSlotLevel = i - 1
+				}
+
+				// Check cost text area (top-right)
+				if info, ok := g.nameToMini[name]; ok {
+					costS := fmt.Sprintf("%d", info.Cost)
+					cw := text.BoundString(basicfont.Face7x13, costS).Dx()
+					costRect := rect{x: slotRect.x + slotRect.w - 6 - cw, y: slotRect.y + 8, w: cw, h: 16}
+					if costRect.hit(mx, my) {
+						g.hoveredMiniSlotCost = i - 1
+					}
+				}
+			}
+		}
+
 		gridTop := topY + bigH + 16
 		gridLeft := pad
 		gridRight := protocol.ScreenW - pad
@@ -710,15 +799,72 @@ func (g *Game) updateHome() {
 			g.collRects = append(g.collRects, rect{x: x, y: y, w: miniCardW, h: miniCardH})
 		}
 
-		if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) && !g.miniOverlayOpen && g.collArea.hit(mx, my) && !g.collDragActive &&
-			(my-g.collDragStartY <= dragThresh && g.collDragStartY-my <= dragThresh) {
-			// Build the same available minis list as in draw
-			avail := make([]protocol.MiniInfo, 0, len(g.minisOnly))
-			for _, mi := range g.minisOnly {
-				if !g.selectedMinis[mi.Name] {
-					avail = append(avail, mi)
+		// Check hover for collection grid items - reset hover states first
+		g.hoveredCollectionLevel = -1
+		g.hoveredCollectionCost = -1
+
+		// Build current visible items list to match drawing order
+		avail := make([]protocol.MiniInfo, 0, len(g.minisOnly))
+		for _, mi := range g.minisOnly {
+			if !g.selectedMinis[mi.Name] {
+				avail = append(avail, mi)
+			}
+		}
+
+		// Check each visible grid rectangle
+		for i, r := range g.collRects {
+			if r.hit(mx, my) {
+				idx := start2 + i
+				if idx >= 0 && idx < len(avail) {
+					it := avail[idx]
+
+					// Check level badge area (top-left) - matches draw position exactly: r.x+4, r.y+4
+					levelBadgeRect := rect{x: r.x + 4, y: r.y + 4, w: 24, h: 24}
+					if levelBadgeRect.hit(mx, my) {
+						g.hoveredCollectionLevel = idx
+					}
+
+					// Check cost text area (top-right) - matches draw position exactly: r.x+r.w-6-cw, r.y+14
+					costS := fmt.Sprintf("%d", it.Cost)
+					cw := text.BoundString(basicfont.Face7x13, costS).Dx()
+					costRect := rect{x: r.x + r.w - 6 - cw, y: r.y + 14, w: cw, h: 16}
+					if costRect.hit(mx, my) {
+						g.hoveredCollectionCost = idx
+					}
 				}
 			}
+		}
+
+		// Check hover for mini overlay (when open)
+		if g.miniOverlayOpen {
+			// Position calculations matching the draw function
+			w, h := 580, 300
+			x := (protocol.ScreenW - w) / 2
+			stripY := topBarH + pad
+			stripH := 116 + 8
+			topY := stripY + stripH + 12
+			slotsBottom := topY + 2*(miniCardH+gap) - gap
+			y := slotsBottom + 28
+			if y+h > protocol.ScreenH-12 {
+				y = (protocol.ScreenH - h) / 2
+			}
+
+			// Check level badge area in overlay - matches draw position exactly (px+0, py+0)
+			// where px = x + 16, py = y + 36
+			levelBadgeRect := rect{x: x + 16, y: y + 36, w: 24, h: 24}
+			if levelBadgeRect.hit(mx, my) {
+				g.hoveredOverlayLevel = true
+			}
+
+			// Check cost text area in overlay (right side stats) - matches draw position
+			costRect := rect{x: x + 170, y: y + 50, w: 100, h: 16}
+			if costRect.hit(mx, my) {
+				g.hoveredOverlayCost = true
+			}
+		}
+
+		if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) && !g.miniOverlayOpen && g.collArea.hit(mx, my) && !g.collDragActive &&
+			(my-g.collDragStartY <= dragThresh && g.collDragStartY-my <= dragThresh) {
 			for i, r := range g.collRects {
 				if r.hit(mx, my) {
 					idx := start2 + i
@@ -965,6 +1111,7 @@ func (g *Game) updateHome() {
 				ebiten.SetFullscreen(false)
 				g.fullscreen = false
 			}
+
 		}
 	}
 }
@@ -1183,6 +1330,346 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 
 			if g.selectedMinis[it.Name] {
 				ebitenutil.DrawRect(screen, float64(r.x), float64(r.y), float64(r.w), 2, color.NRGBA{240, 196, 25, 255})
+			}
+		}
+
+		// Draw hover tooltips for champion cards
+		mx, my := ebiten.CursorPosition()
+		if g.hoveredChampionLevel >= 0 && g.hoveredChampionLevel < len(g.champions) {
+			it := g.champions[g.hoveredChampionLevel]
+			lvl := 1
+			if g.unitXP != nil {
+				if xp, ok := g.unitXP[it.Name]; ok {
+					l, _, _ := computeLevel(xp)
+					if l > 0 {
+						lvl = l
+					}
+				}
+			}
+
+			tooltipText := fmt.Sprintf("Level %d", lvl)
+			tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
+			th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
+
+			// Position tooltip above the level badge
+			tooltipX := mx - tw/2
+			tooltipY := my - th - 8
+
+			// Keep tooltip on screen
+			if tooltipX < 4 {
+				tooltipX = 4
+			}
+			if tooltipX+tw+8 > protocol.ScreenW {
+				tooltipX = protocol.ScreenW - tw - 8
+			}
+			if tooltipY < 4 {
+				tooltipY = my + 16
+			}
+
+			// Draw tooltip background
+			ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
+
+			// Draw tooltip text
+			text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.White)
+		}
+
+		if g.hoveredChampionCost >= 0 && g.hoveredChampionCost < len(g.champions) {
+			it := g.champions[g.hoveredChampionCost]
+
+			tooltipText := fmt.Sprintf("Deploy cost %d", it.Cost)
+			tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
+			th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
+
+			// Position tooltip above the cost text
+			tooltipX := mx - tw/2
+			tooltipY := my - th - 8
+
+			// Keep tooltip on screen
+			if tooltipX < 4 {
+				tooltipX = 4
+			}
+			if tooltipX+tw+8 > protocol.ScreenW {
+				tooltipX = protocol.ScreenW - tw - 8
+			}
+			if tooltipY < 4 {
+				tooltipY = my + 16
+			}
+
+			// Draw tooltip background
+			ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
+
+			// Draw tooltip text
+			text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.NRGBA{255, 215, 0, 255}) // Gold color for cost
+		}
+
+		// Draw tooltips for selected champion
+		if g.hoveredSelectedChampionLevel && g.selectedChampion != "" {
+			lvl := 1
+			if g.unitXP != nil {
+				if xp, ok := g.unitXP[g.selectedChampion]; ok {
+					l, _, _ := computeLevel(xp)
+					if l > 0 {
+						lvl = l
+					}
+				}
+			}
+
+			tooltipText := fmt.Sprintf("Level %d", lvl)
+			tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
+			th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
+
+			// Position tooltip above the level badge
+			tooltipX := mx - tw/2
+			tooltipY := my - th - 8
+
+			// Keep tooltip on screen
+			if tooltipX < 4 {
+				tooltipX = 4
+			}
+			if tooltipX+tw+8 > protocol.ScreenW {
+				tooltipX = protocol.ScreenW - tw - 8
+			}
+			if tooltipY < 4 {
+				tooltipY = my + 16
+			}
+
+			// Draw tooltip background
+			ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
+
+			// Draw tooltip text
+			text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.White)
+		}
+
+		if g.hoveredSelectedChampionCost && g.selectedChampion != "" {
+			if info, ok := g.nameToMini[g.selectedChampion]; ok {
+				tooltipText := fmt.Sprintf("Deploy cost %d", info.Cost)
+				tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
+				th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
+
+				// Position tooltip above the cost text
+				tooltipX := mx - tw/2
+				tooltipY := my - th - 8
+
+				// Keep tooltip on screen
+				if tooltipX < 4 {
+					tooltipX = 4
+				}
+				if tooltipX+tw+8 > protocol.ScreenW {
+					tooltipX = protocol.ScreenW - tw - 8
+				}
+				if tooltipY < 4 {
+					tooltipY = my + 16
+				}
+
+				// Draw tooltip background
+				ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
+
+				// Draw tooltip text
+				text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.NRGBA{255, 215, 0, 255}) // Gold color for cost
+			}
+		}
+
+		// Draw tooltips for equipped mini slots
+		if g.hoveredMiniSlotLevel >= 0 && g.hoveredMiniSlotLevel < len(g.selectedOrder) && g.selectedOrder[g.hoveredMiniSlotLevel] != "" {
+			name := g.selectedOrder[g.hoveredMiniSlotLevel]
+			lvl := 1
+			if g.unitXP != nil {
+				if xp, ok := g.unitXP[name]; ok {
+					l, _, _ := computeLevel(xp)
+					if l > 0 {
+						lvl = l
+					}
+				}
+			}
+
+			tooltipText := fmt.Sprintf("Level %d", lvl)
+			tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
+			th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
+
+			// Position tooltip above the level badge
+			tooltipX := mx - tw/2
+			tooltipY := my - th - 8
+
+			// Keep tooltip on screen
+			if tooltipX < 4 {
+				tooltipX = 4
+			}
+			if tooltipX+tw+8 > protocol.ScreenW {
+				tooltipX = protocol.ScreenW - tw - 8
+			}
+			if tooltipY < 4 {
+				tooltipY = my + 16
+			}
+
+			// Draw tooltip background
+			ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
+
+			// Draw tooltip text
+			text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.White)
+		}
+
+		if g.hoveredMiniSlotCost >= 0 && g.hoveredMiniSlotCost < len(g.selectedOrder) && g.selectedOrder[g.hoveredMiniSlotCost] != "" {
+			name := g.selectedOrder[g.hoveredMiniSlotCost]
+			if info, ok := g.nameToMini[name]; ok {
+				tooltipText := fmt.Sprintf("Deploy cost %d", info.Cost)
+				tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
+				th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
+
+				// Position tooltip above the cost text
+				tooltipX := mx - tw/2
+				tooltipY := my - th - 8
+
+				// Keep tooltip on screen
+				if tooltipX < 4 {
+					tooltipX = 4
+				}
+				if tooltipX+tw+8 > protocol.ScreenW {
+					tooltipX = protocol.ScreenW - tw - 8
+				}
+				if tooltipY < 4 {
+					tooltipY = my + 16
+				}
+
+				// Draw tooltip background
+				ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
+
+				// Draw tooltip text
+				text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.NRGBA{255, 215, 0, 255}) // Gold color for cost
+			}
+		}
+
+		// Draw tooltips for collection grid items
+		if g.hoveredCollectionLevel >= 0 && g.hoveredCollectionLevel < len(avail) {
+			it := avail[g.hoveredCollectionLevel]
+			lvl := 1
+			if g.unitXP != nil {
+				if xp, ok := g.unitXP[it.Name]; ok {
+					l, _, _ := computeLevel(xp)
+					if l > 0 {
+						lvl = l
+					}
+				}
+			}
+
+			tooltipText := fmt.Sprintf("Level %d", lvl)
+			tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
+			th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
+
+			// Position tooltip above the level badge
+			tooltipX := mx - tw/2
+			tooltipY := my - th - 8
+
+			// Keep tooltip on screen
+			if tooltipX < 4 {
+				tooltipX = 4
+			}
+			if tooltipX+tw+8 > protocol.ScreenW {
+				tooltipX = protocol.ScreenW - tw - 8
+			}
+			if tooltipY < 4 {
+				tooltipY = my + 16
+			}
+
+			// Draw tooltip background
+			ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
+
+			// Draw tooltip text
+			text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.White)
+		}
+
+		if g.hoveredCollectionCost >= 0 && g.hoveredCollectionCost < len(avail) {
+			it := avail[g.hoveredCollectionCost]
+
+			tooltipText := fmt.Sprintf("Deploy cost %d", it.Cost)
+			tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
+			th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
+
+			// Position tooltip above the cost text
+			tooltipX := mx - tw/2
+			tooltipY := my - th - 8
+
+			// Keep tooltip on screen
+			if tooltipX < 4 {
+				tooltipX = 4
+			}
+			if tooltipX+tw+8 > protocol.ScreenW {
+				tooltipX = protocol.ScreenW - tw - 8
+			}
+			if tooltipY < 4 {
+				tooltipY = my + 16
+			}
+
+			// Draw tooltip background
+			ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
+
+			// Draw tooltip text
+			text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.NRGBA{255, 215, 0, 255}) // Gold color for cost
+		}
+
+		// Draw tooltips for mini overlay
+		if g.hoveredOverlayLevel && g.miniOverlayName != "" {
+			lvl := 1
+			if g.unitXP != nil {
+				if xp, ok := g.unitXP[g.miniOverlayName]; ok {
+					l, _, _ := computeLevel(xp)
+					if l > 0 {
+						lvl = l
+					}
+				}
+			}
+
+			tooltipText := fmt.Sprintf("Level %d", lvl)
+			tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
+			th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
+
+			// Position tooltip above the level badge
+			tooltipX := mx - tw/2
+			tooltipY := my - th - 8
+
+			// Keep tooltip on screen
+			if tooltipX < 4 {
+				tooltipX = 4
+			}
+			if tooltipX+tw+8 > protocol.ScreenW {
+				tooltipX = protocol.ScreenW - tw - 8
+			}
+			if tooltipY < 4 {
+				tooltipY = my + 16
+			}
+
+			// Draw tooltip background
+			ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
+
+			// Draw tooltip text
+			text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.White)
+		}
+
+		if g.hoveredOverlayCost && g.miniOverlayName != "" {
+			if info, ok := g.nameToMini[g.miniOverlayName]; ok {
+				tooltipText := fmt.Sprintf("Deploy cost %d", info.Cost)
+				tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
+				th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
+
+				// Position tooltip above the cost text
+				tooltipX := mx - tw/2
+				tooltipY := my - th - 8
+
+				// Keep tooltip on screen
+				if tooltipX < 4 {
+					tooltipX = 4
+				}
+				if tooltipX+tw+8 > protocol.ScreenW {
+					tooltipX = protocol.ScreenW - tw - 8
+				}
+				if tooltipY < 4 {
+					tooltipY = my + 16
+				}
+
+				// Draw tooltip background
+				ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
+
+				// Draw tooltip text
+				text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.NRGBA{255, 215, 0, 255}) // Gold color for cost
 			}
 		}
 
@@ -1467,6 +1954,8 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 			op := &ebiten.DrawImageOptions{}
 			op.GeoM.Scale(s, s)
 			op.GeoM.Translate(float64(offX), float64(offY))
+			// Use linear filtering for smoother scaling on high-resolution displays
+			op.Filter = ebiten.FilterLinear
 			screen.DrawImage(bg, op)
 		}
 
@@ -1651,12 +2140,23 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 	case tabSocial:
 		g.drawSocial(screen)
 	case tabSettings:
+		// Settings panel background
+		contentY := topBarH + pad
+		contentH := protocol.ScreenH - menuBarH - contentY
+		ebitenutil.DrawRect(screen, float64(pad), float64(contentY), float64(protocol.ScreenW-2*pad), float64(contentH), color.NRGBA{0x20, 0x20, 0x28, 0xFF})
 
-		y := topBarH + pad + 40
-		text.Draw(screen, "Settings", basicfont.Face7x13, pad, y-20, color.White)
-		text.Draw(screen, "Fullscreen:", basicfont.Face7x13, pad, y, color.White)
+		// Title
+		y := contentY + 20
+		text.Draw(screen, "⚙️ Settings", basicfont.Face7x13, pad+8, y, color.NRGBA{240, 196, 25, 255})
 
-		g.fsOnBtn = rect{x: pad + 120, y: y - 14, w: 80, h: 20}
+		// Display Settings Section
+		y += 40
+		text.Draw(screen, "Display Settings", basicfont.Face7x13, pad+8, y, color.NRGBA{200, 200, 210, 255})
+
+		y += 25
+		text.Draw(screen, "Fullscreen:", basicfont.Face7x13, pad+16, y, color.White)
+
+		g.fsOnBtn = rect{x: pad + 140, y: y - 14, w: 80, h: 20}
 		g.fsOffBtn = rect{x: g.fsOnBtn.x + 90, y: y - 14, w: 80, h: 20}
 
 		onCol := color.NRGBA{70, 110, 70, 255}
@@ -1671,7 +2171,56 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 			map[bool]color.NRGBA{true: neutral, false: offCol}[g.fullscreen])
 		text.Draw(screen, "OFF", basicfont.Face7x13, g.fsOffBtn.x+24, g.fsOffBtn.y+14, color.White)
 
-		text.Draw(screen, "Tip: press F to toggle fullscreen", basicfont.Face7x13, pad, y+40, color.White)
+		// Game Settings Section
+		y += 50
+		text.Draw(screen, "Game Settings", basicfont.Face7x13, pad+8, y, color.NRGBA{200, 200, 210, 255})
+
+		y += 25
+		text.Draw(screen, "Auto-save Army:", basicfont.Face7x13, pad+16, y, color.White)
+
+		// Auto-save toggle (for now, just show current state)
+		autoSaveStatus := "Enabled"
+		if !g.autoSaveEnabled {
+			autoSaveStatus = "Disabled"
+		}
+		text.Draw(screen, autoSaveStatus, basicfont.Face7x13, pad+140, y, color.NRGBA{180, 180, 190, 255})
+
+		// Account Settings Section
+		y += 50
+		text.Draw(screen, "Account Settings", basicfont.Face7x13, pad+8, y, color.NRGBA{200, 200, 210, 255})
+
+		y += 25
+		text.Draw(screen, "Player:", basicfont.Face7x13, pad+16, y, color.White)
+		text.Draw(screen, g.name, basicfont.Face7x13, pad+140, y, color.NRGBA{240, 196, 25, 255})
+
+		y += 20
+		text.Draw(screen, "Gold:", basicfont.Face7x13, pad+16, y, color.White)
+		goldStr := fmt.Sprintf("%d", g.accountGold)
+		text.Draw(screen, goldStr, basicfont.Face7x13, pad+140, y, color.NRGBA{255, 215, 0, 255})
+
+		// Logout button
+		y += 30
+		g.logoutBtn = rect{x: pad + 16, y: y - 6, w: 100, h: 24}
+		ebitenutil.DrawRect(screen, float64(g.logoutBtn.x), float64(g.logoutBtn.y), float64(g.logoutBtn.w), float64(g.logoutBtn.h), color.NRGBA{110, 70, 70, 255})
+		text.Draw(screen, "Logout", basicfont.Face7x13, g.logoutBtn.x+20, g.logoutBtn.y+16, color.White)
+
+		// Controls Section
+		y += 50
+		text.Draw(screen, "Controls", basicfont.Face7x13, pad+8, y, color.NRGBA{200, 200, 210, 255})
+
+		y += 25
+		text.Draw(screen, "F - Toggle Fullscreen", basicfont.Face7x13, pad+16, y, color.NRGBA{180, 180, 190, 255})
+		y += 18
+		text.Draw(screen, "Alt+F - Fit to Screen", basicfont.Face7x13, pad+16, y, color.NRGBA{180, 180, 190, 255})
+		y += 18
+		text.Draw(screen, "Mouse - Navigate & Select", basicfont.Face7x13, pad+16, y, color.NRGBA{180, 180, 190, 255})
+		y += 18
+		text.Draw(screen, "Touch - Mobile Controls", basicfont.Face7x13, pad+16, y, color.NRGBA{180, 180, 190, 255})
+
+		// Version/Info
+		y = protocol.ScreenH - menuBarH - 40
+		text.Draw(screen, "War Rumble v1.0", basicfont.Face7x13, pad+8, y, color.NRGBA{150, 150, 160, 255})
+		text.Draw(screen, "Built with Ebiten", basicfont.Face7x13, pad+8, y+16, color.NRGBA{120, 120, 130, 255})
 	}
 }
 
@@ -1730,94 +2279,6 @@ func (b *battleHPBar) Set(cur, max int) {
 	b.targetHP = cur
 }
 
-func (g *Game) drawBattleTopBars(dst *ebiten.Image, myCur, myMax, enemyCur, enemyMax int) {
-	const pad = 12
-	const barH = 18
-	const avatar = 40
-	const gap = 8
-
-	y := 8
-
-	base := protocol.ScreenW/2 - (pad + avatar + gap + pad)
-	lw := int(float64(base) * 0.67)
-	if lw < 120 {
-		lw = 120
-	}
-	rw := lw
-
-	lx := pad + avatar + gap
-	if g.playerHB == nil {
-		g.playerHB = &battleHPBar{
-			x: lx, y: y, w: lw, h: barH,
-			colBase:    color.NRGBA{70, 130, 255, 255},
-			colFlash:   color.NRGBA{240, 196, 25, 255},
-			colMissing: color.NRGBA{10, 10, 14, 255},
-		}
-	}
-	g.playerHB.x, g.playerHB.y, g.playerHB.w, g.playerHB.h = lx, y, lw, barH
-	g.playerHB.Set(myCur, myMax)
-	g.playerHB.Update()
-	g.playerHB.Draw(dst)
-	if img := g.ensureAvatarImage(g.avatar); img != nil {
-		iw, ih := img.Bounds().Dx(), img.Bounds().Dy()
-		s := math.Min(float64(avatar)/float64(iw), float64(avatar)/float64(ih))
-		var op ebiten.DrawImageOptions
-		op.GeoM.Scale(s, s)
-		ax := float64(pad) + (float64(avatar)-float64(iw)*s)/2
-		ay := float64(y) + (float64(barH)-float64(avatar))/2
-		if ay < 2 {
-			ay = 2
-		}
-		op.GeoM.Translate(ax, ay)
-		dst.DrawImage(img, &op)
-	}
-
-	rx := protocol.ScreenW - pad - avatar - gap - rw
-	if g.enemyHB == nil {
-		g.enemyHB = &battleHPBar{
-			x: rx, y: y, w: rw, h: barH,
-			colBase:    color.NRGBA{220, 70, 70, 255},
-			colFlash:   color.NRGBA{240, 196, 25, 255},
-			colMissing: color.NRGBA{10, 10, 14, 255},
-		}
-	}
-	g.enemyHB.x, g.enemyHB.y, g.enemyHB.w, g.enemyHB.h = rx, y, rw, barH
-	g.enemyHB.Set(enemyCur, enemyMax)
-	g.enemyHB.Update()
-	g.enemyHB.Draw(dst)
-	// Enemy avatar: PvP -> opponent avatar; PvE -> target (base/boss)
-	var eimg *ebiten.Image
-	if g.enemyAvatar != "" {
-		eimg = g.ensureAvatarImage(g.enemyAvatar)
-	} else {
-		eimg = g.enemyTargetAvatarImage()
-	}
-	if eimg != nil {
-		iw, ih := eimg.Bounds().Dx(), eimg.Bounds().Dy()
-		s := math.Min(float64(avatar)/float64(iw), float64(avatar)/float64(ih))
-		var op ebiten.DrawImageOptions
-		op.GeoM.Scale(s, s)
-		ax := float64(protocol.ScreenW-pad-avatar) + (float64(avatar)-float64(iw)*s)/2
-		ay := float64(y) + (float64(barH)-float64(avatar))/2
-		if ay < 2 {
-			ay = 2
-		}
-		op.GeoM.Translate(ax, ay)
-		dst.DrawImage(eimg, &op)
-	}
-}
-
-func (g *Game) battleHPs() (myCur, myMax, enCur, enMax int) {
-	for _, b := range g.world.Bases {
-		if b.OwnerID == g.playerID {
-			myCur, myMax = b.HP, b.MaxHP
-		} else {
-			enCur, enMax = b.HP, b.MaxHP
-		}
-	}
-	return
-}
-
 // Returns the image to show as the enemy "avatar" — base for now, boss later.
 func (g *Game) enemyTargetAvatarImage() *ebiten.Image {
 	if g.enemyTargetThumb != nil {
@@ -1832,12 +2293,11 @@ func (g *Game) enemyTargetAvatarImage() *ebiten.Image {
 	}
 
 	tryPaths := []string{
-		"internal/game/assets/field/thebase.png",
-		"internal/game/assets/ui/base_avatar.png",
+		"assets/ui/base.png",
 		"assets/ui/base_avatar.png",
 	}
 	for _, p := range tryPaths {
-		if img, _, err := ebitenutil.NewImageFromFile(p); err == nil {
+		if img := loadImage(p); img != nil {
 			g.enemyTargetThumb = img
 			return img
 		}

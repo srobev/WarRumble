@@ -9,8 +9,8 @@ func getenv(k, def string) string {
 	return def
 }
 
+//var APIBase = getenv("WAR_API_BASE", "http://34.173.240.153:8080")  // REST
+//var ServerURL = getenv("WAR_WS_URL", "ws://34.173.240.153:8080/ws") // WebSocket
+
 var APIBase = getenv("WAR_API_BASE", "http://127.0.0.1:8080")  // REST
 var ServerURL = getenv("WAR_WS_URL", "ws://127.0.0.1:8080/ws") // WebSocket
-
-//var APIBase   = getenv("WAR_API_BASE", "http://34.173.240.153:8080") // REST
-//var ServerURL = getenv("WAR_WS_URL", "ws://34.173.240.153:8080/ws") // WebSocket

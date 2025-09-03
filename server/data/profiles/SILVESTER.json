@@ -1,16 +1,24 @@
 {
-  "playerId": 598058,
+  "playerId": 74666,
   "name": "silvester",
   "army": [
-    "Hogger",
+    "Rusttooth",
     "Banshee",
-    "Bat Rider",
-    "Pyromancer",
-    "Defias Bandits",
-    "Gargoyle",
-    "Gnoll Brute"
+    "Corpse Catapult",
+    "Core Hound",
+    "Drake",
+    "Gryphon Rider",
+    "Harpies"
   ],
   "armies": {
+    "Aethelion Ragestorm": [
+      "Abomination",
+      "Bat Rider",
+      "Chimaera",
+      "Pyromancer",
+      "Harpies",
+      "Huntress"
+    ],
     "Bloodmage Thalnos": [
       "Abomination",
       "Banshee",
@@ -19,12 +27,20 @@
       "Necromancer",
       "Raptor"
     ],
+    "Bloodmage Thalor": [
+      "Chimaera",
+      "Drake",
+      "Frostwolf Shaman",
+      "Gnoll Brute",
+      "Necromancer",
+      "Meat Wagon"
+    ],
     "Hogger": [
       "Banshee",
       "Bat Rider",
       "Pyromancer",
       "Defias Bandits",
-      "Gargoyle",
+      "Frostwolf Shaman",
       "Gnoll Brute"
     ],
     "Jaina Proudmoore": [
@@ -59,12 +75,28 @@
       "Frostwolf Shaman",
       "Necromancer"
     ],
+    "Rusttooth": [
+      "Banshee",
+      "Corpse Catapult",
+      "Core Hound",
+      "Drake",
+      "Gryphon Rider",
+      "Harpies"
+    ],
     "Sneed": [
       "Abomination",
       "Harpies",
       "Huntress",
       "Darkspear Troll",
       "Faerie Dragon",
+      "Frostwolf Shaman"
+    ],
+    "Sorceress Glacia": [
+      "Bat Rider",
+      "Core Hound",
+      "Night Sentinel",
+      "Crimson Raider",
+      "Corpse Catapult",
       "Frostwolf Shaman"
     ],
     "Sylvanas Windrunner": [
@@ -87,15 +119,20 @@
   "gold": 0,
   "accountXp": 0,
   "unitXp": {
-    "Frostwolf Shaman": 8,
-    "Gnoll Brute": 9,
-    "Harpies": 8,
-    "Malfurion Stormrage": 20,
-    "Quilboar": 3,
-    "Witch Doctor": 9
+    "Abomination": 11,
+    "Bat Rider": 12,
+    "Chimaera": 1,
+    "Core Hound": 5,
+    "Corpse Catapult": 1,
+    "Crimson Raider": 4,
+    "Faerie Dragon": 1,
+    "Frostwolf Shaman": 10,
+    "Night Sentinel": 5,
+    "Ragnaros": 1,
+    "Sorceress Glacia": 27
   },
-  "pvp_rating": 1741,
-  "pvp_rank": "Warlord",
-  "avatar": "male.png",
+  "pvp_rating": 1373,
+  "pvp_rank": "Captain",
+  "avatar": "orc.png",
   "guildId": "g-1756713614348685400"
 }

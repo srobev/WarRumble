@@ -1,15 +1,14 @@
-package clientmobile
+package mobile
 
 import (
-	"github.com/hajimehoshi/ebiten/v2"
+	"rumble/client/internal/game"
+
 	"github.com/hajimehoshi/ebiten/v2/mobile"
 )
 
-type emptyGame struct{}
+func init() {
+	// Initialize the actual WarRumble game instead of empty game
+	mobile.SetGame(game.New("android"))
+}
 
-func (emptyGame) Update() error              { return nil }
-func (emptyGame) Draw(*ebiten.Image)         {}
-func (emptyGame) Layout(int, int) (int, int) { return 480, 800 }
-
-func init()  { mobile.SetGame(emptyGame{}) }
 func Dummy() {}

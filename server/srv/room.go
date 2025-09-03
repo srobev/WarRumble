@@ -1,10 +1,10 @@
 package srv
 
 import (
-    "log"
-    "math/rand"
-    "rumble/shared/protocol"
-    "time"
+	"log"
+	"math/rand"
+	"rumble/shared/protocol"
+	"time"
 )
 
 type Room struct {
@@ -40,58 +40,66 @@ func (r *Room) JoinClient(c *client, s *Session) {
 	c.id = s.PlayerID
 	c.name = s.Name
 
-    // Add the player into the game with their saved army (fallback inside if invalid)
-    r.g.AddPlayerWithArmy(c.id, s.Name, s.Army)
-    // Scale player's cards by level (10% per level over base) using UnitXP from session
-    if pl := r.g.players[c.id]; pl != nil {
-        scaleFor := func(name string) float64 {
-            if s == nil { return 1 }
-            xp := s.Profile.UnitXP[name]
-            lvl, _, _ := computeLevel(xp)
-            if lvl < 1 { lvl = 1 }
-            return 1.0 + 0.10*float64(lvl-1)
-        }
-        // Hand
-        for i := range pl.Hand {
-            f := scaleFor(pl.Hand[i].Name)
-            pl.Hand[i].HP = int(float64(pl.Hand[i].HP) * f)
-            pl.Hand[i].DMG = int(float64(pl.Hand[i].DMG) * f)
-        }
-        // Queue
-        for i := range pl.Queue {
-            f := scaleFor(pl.Queue[i].Name)
-            pl.Queue[i].HP = int(float64(pl.Queue[i].HP) * f)
-            pl.Queue[i].DMG = int(float64(pl.Queue[i].DMG) * f)
-        }
-        // Next
-        if pl.Next != nil {
-            f := scaleFor(pl.Next.Name)
-            hp := int(float64(pl.Next.HP) * f)
-            dmg := int(float64(pl.Next.DMG) * f)
-            pl.Next.HP = hp
-            pl.Next.DMG = dmg
-        }
-        // Scale base HP by average army level (rounded .5 up)
-        // Average includes champion + 6 minis from player's saved Army
-        if len(s.Army) == 7 {
-            sum := 0.0
-            for _, nm := range s.Army {
-                xp := s.Profile.UnitXP[nm]
-                lvl, _, _ := computeLevel(xp)
-                if lvl < 1 { lvl = 1 }
-                sum += float64(lvl)
-            }
-            avg := sum / 7.0
-            // round .5 up
-            round := int(avg + 0.5)
-            if round < 1 { round = 1 }
-            f := 1.0 + 0.10*float64(round-1)
-            if pl.Base.MaxHP > 0 {
-                pl.Base.MaxHP = int(float64(pl.Base.MaxHP) * f)
-                pl.Base.HP = pl.Base.MaxHP
-            }
-        }
-    }
+	// Add the player into the game with their saved army (fallback inside if invalid)
+	r.g.AddPlayerWithArmy(c.id, s.Name, s.Army)
+	// Scale player's cards by level (10% per level over base) using UnitXP from session
+	if pl := r.g.players[c.id]; pl != nil {
+		scaleFor := func(name string) float64 {
+			if s == nil {
+				return 1
+			}
+			xp := s.Profile.UnitXP[name]
+			lvl, _, _ := computeLevel(xp)
+			if lvl < 1 {
+				lvl = 1
+			}
+			return 1.0 + 0.10*float64(lvl-1)
+		}
+		// Hand
+		for i := range pl.Hand {
+			f := scaleFor(pl.Hand[i].Name)
+			pl.Hand[i].HP = int(float64(pl.Hand[i].HP) * f)
+			pl.Hand[i].DMG = int(float64(pl.Hand[i].DMG) * f)
+		}
+		// Queue
+		for i := range pl.Queue {
+			f := scaleFor(pl.Queue[i].Name)
+			pl.Queue[i].HP = int(float64(pl.Queue[i].HP) * f)
+			pl.Queue[i].DMG = int(float64(pl.Queue[i].DMG) * f)
+		}
+		// Next
+		if pl.Next != nil {
+			f := scaleFor(pl.Next.Name)
+			hp := int(float64(pl.Next.HP) * f)
+			dmg := int(float64(pl.Next.DMG) * f)
+			pl.Next.HP = hp
+			pl.Next.DMG = dmg
+		}
+		// Scale base HP by average army level (rounded .5 up)
+		// Average includes champion + 6 minis from player's saved Army
+		if len(s.Army) == 7 {
+			sum := 0.0
+			for _, nm := range s.Army {
+				xp := s.Profile.UnitXP[nm]
+				lvl, _, _ := computeLevel(xp)
+				if lvl < 1 {
+					lvl = 1
+				}
+				sum += float64(lvl)
+			}
+			avg := sum / 7.0
+			// round .5 up
+			round := int(avg + 0.5)
+			if round < 1 {
+				round = 1
+			}
+			f := 1.0 + 0.10*float64(round-1)
+			if pl.Base.MaxHP > 0 {
+				pl.Base.MaxHP = int(float64(pl.Base.MaxHP) * f)
+				pl.Base.HP = pl.Base.MaxHP
+			}
+		}
+	}
 	// carry over rating/rank into the game player record
 	if pl := r.g.players[c.id]; pl != nil {
 		pl.Rating = s.Profile.PvPRating
@@ -125,6 +133,9 @@ func (r *Room) Join(c *client) {
 func (r *Room) StartBattle() {
 	log.Printf("ROOM %s StartBattle: players=%d", r.id, len(r.players))
 
+	// Initialize timer
+	r.g.InitializeTimer()
+
 	// Send Init + initial Gold + immediate snapshot
 	for _, p := range r.players {
 		sendJSON(p, "Init", r.g.InitFor(p.id))
@@ -134,6 +145,11 @@ func (r *Room) StartBattle() {
 				PlayerID: pl.ID,
 				Gold:     pl.Gold, // send 4 immediately so UI shows it right away
 			})
+		}
+
+		// Send map definition if available
+		if r.g.mapDef != nil {
+			sendJSON(p, "MapDef", protocol.MapDefMsg{Def: *r.g.mapDef})
 		}
 
 		snap := r.g.FullSnapshot()
@@ -226,12 +242,33 @@ func (r *Room) HandleDeploy(c *client, d protocol.DeployMiniAt) {
 
 // Tick the room ONLY when active (after StartBattle)
 func (r *Room) Tick() {
-    // Do nothing when room is inactive (e.g., after GameOver)
-    if !r.active {
-        return
-    }
-    // detect game over
-    var loser *Player
+	// Do nothing when room is inactive (e.g., after GameOver)
+	if !r.active {
+		return
+	}
+
+	const tickRate = 20.0
+	dt := 1.0 / tickRate
+
+	// Update timer and check for expiration
+	if timerExpired, timerWinnerID := r.g.UpdateTimer(dt); timerExpired {
+		// Timer expired - end game based on timer winner
+		if r.Mode == "pve" && timerWinnerID != -1 {
+			r.awardPveXPServer(timerWinnerID)
+		}
+		for _, c := range r.players {
+			sendJSON(c, "GameOver", protocol.GameOver{WinnerID: timerWinnerID})
+			// Rating only for Open Queue (two humans)
+			if r.Mode == "queue" && r.hub != nil {
+				applyQueueRating(r, timerWinnerID, r.hub)
+			}
+		}
+		r.active = false
+		return
+	}
+
+	// detect game over by base destruction
+	var loser *Player
 	for _, p := range r.g.players {
 		if p.Base.HP <= 0 {
 			loser = p
@@ -247,22 +284,21 @@ func (r *Room) Tick() {
 				break
 			}
 		}
-        // Server-authoritative XP for PvE
-        if r.Mode == "pve" {
-            r.awardPveXPServer(winnerID)
-        }
-        for _, c := range r.players {
-            sendJSON(c, "GameOver", protocol.GameOver{WinnerID: winnerID})
-            // Rating only for Open Queue (two humans)
-            if r.Mode == "queue" && r.hub != nil {
-                applyQueueRating(r, winnerID, r.hub)
-            }
-        }
-        r.active = false
-        return
-    }
-	const tickRate = 20.0
-	dt := 1.0 / tickRate
+		// Server-authoritative XP for PvE
+		if r.Mode == "pve" {
+			r.awardPveXPServer(winnerID)
+		}
+		for _, c := range r.players {
+			sendJSON(c, "GameOver", protocol.GameOver{WinnerID: winnerID})
+			// Rating only for Open Queue (two humans)
+			if r.Mode == "queue" && r.hub != nil {
+				applyQueueRating(r, winnerID, r.hub)
+			}
+		}
+		r.active = false
+		return
+	}
+
 	r.tick++
 
 	// --- Simple AI: slower & capped
@@ -320,55 +356,78 @@ func (r *Room) Tick() {
 
 // awardPveXPServer updates each human player's profile with XP after PvE battle.
 func (r *Room) awardPveXPServer(winnerID int64) {
-    if r.hub == nil { return }
-    for _, c := range r.players {
-        // Skip bot if present
-        if r.aiActive && c.id == r.aiID { continue }
-        r.hub.mu.Lock()
-        s := r.hub.sessions[c]
-        if s == nil { r.hub.mu.Unlock(); continue }
-        if s.Profile.UnitXP == nil { s.Profile.UnitXP = map[string]int{} }
-        rate := 0.02
-        if c.id == winnerID { rate = 0.05 }
-        // Use saved active army and award to champion + random minis
-        army := s.Profile.Army
-        if len(army) == 0 {
-            // nothing to award
-            _ = saveProfile(s.Profile)
-            prof := s.Profile
-            r.hub.mu.Unlock()
-            sendJSON(c, "Profile", prof)
-            continue
-        }
+	if r.hub == nil {
+		return
+	}
+	for _, c := range r.players {
+		// Skip bot if present
+		if r.aiActive && c.id == r.aiID {
+			continue
+		}
+		r.hub.mu.Lock()
+		s := r.hub.sessions[c]
+		if s == nil {
+			r.hub.mu.Unlock()
+			continue
+		}
+		if s.Profile.UnitXP == nil {
+			s.Profile.UnitXP = map[string]int{}
+		}
+		rate := 0.02
+		if c.id == winnerID {
+			rate = 0.05
+		}
+		// Use saved active army and award to champion + random minis
+		army := s.Profile.Army
+		if len(army) == 0 {
+			// nothing to award
+			_ = saveProfile(s.Profile)
+			prof := s.Profile
+			r.hub.mu.Unlock()
+			sendJSON(c, "Profile", prof)
+			continue
+		}
 
-        champ := army[0]
-        minis := make([]string, 0, 6)
-        for i := 1; i < 7 && i < len(army); i++ {
-            if army[i] != "" { minis = append(minis, army[i]) }
-        }
+		champ := army[0]
+		minis := make([]string, 0, 6)
+		for i := 1; i < 7 && i < len(army); i++ {
+			if army[i] != "" {
+				minis = append(minis, army[i])
+			}
+		}
 
-        // Determine how many minis to award alongside champion
-        // Keep it light: 1 mini on loss, 2 minis on win (or fewer if not enough minis)
-        k := 1
-        if c.id == winnerID { k = 2 }
-        if k > len(minis) { k = len(minis) }
+		// Determine how many minis to award alongside champion
+		// Keep it light: 1 mini on loss, 2 minis on win (or fewer if not enough minis)
+		k := 1
+		if c.id == winnerID {
+			k = 2
+		}
+		if k > len(minis) {
+			k = len(minis)
+		}
 
-        // Shuffle minis so selection is random
-        if len(minis) > 1 { rand.Shuffle(len(minis), func(i, j int) { minis[i], minis[j] = minis[j], minis[i] }) }
+		// Shuffle minis so selection is random
+		if len(minis) > 1 {
+			rand.Shuffle(len(minis), func(i, j int) { minis[i], minis[j] = minis[j], minis[i] })
+		}
 
-        // Targets: champion (if present) + first k shuffled minis
-        targets := make([]string, 0, 1+k)
-        if champ != "" { targets = append(targets, champ) }
-        targets = append(targets, minis[:k]...)
+		// Targets: champion (if present) + first k shuffled minis
+		targets := make([]string, 0, 1+k)
+		if champ != "" {
+			targets = append(targets, champ)
+		}
+		targets = append(targets, minis[:k]...)
 
-        for _, name := range targets {
-            cur := s.Profile.UnitXP[name]
-            delta := xpDeltaForRate(cur, rate)
-            if delta > 0 { s.Profile.UnitXP[name] = cur + delta }
-        }
-        _ = saveProfile(s.Profile)
-        prof := s.Profile
-        r.hub.mu.Unlock()
-        sendJSON(c, "Profile", prof)
-    }
+		for _, name := range targets {
+			cur := s.Profile.UnitXP[name]
+			delta := xpDeltaForRate(cur, rate)
+			if delta > 0 {
+				s.Profile.UnitXP[name] = cur + delta
+			}
+		}
+		_ = saveProfile(s.Profile)
+		prof := s.Profile
+		r.hub.mu.Unlock()
+		sendJSON(c, "Profile", prof)
+	}
 }
