@@ -6,6 +6,7 @@ import (
 	"image/color"
 	"log"
 	"math"
+	"math/rand"
 	"rumble/client/internal/netcfg"
 	"rumble/shared/protocol"
 	"strings"
@@ -556,7 +557,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			}
 		}
 
-		// Draw projectiles (behind units) with consistent mirroring
+		// Draw projectiles (ON TOP of bases but behind units) with consistent mirroring
 		g.drawProjectiles(screen, shouldMirror, mirrorY, g.playerID)
 
 		// Draw obstacles
@@ -661,7 +662,13 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			}
 		}
 
-		// Draw particle effects (after units, before UI)
+		// Draw battle UI
+		g.drawBattleBar(screen)
+
+		myCur, myMax, enCur, enMax := g.battleHPs()
+		g.drawBattleTopBars(screen, myCur, myMax, enCur, enMax)
+
+		// Draw particle effects (after UI, before victory/defeat overlay)
 		if g.particleSystem != nil {
 			// Apply mirroring to particle system if needed
 			if shouldMirror {
@@ -671,12 +678,6 @@ func (g *Game) Draw(screen *ebiten.Image) {
 				g.drawParticlesWithCamera(screen, g.cameraX, g.cameraY, g.cameraZoom)
 			}
 		}
-
-		// Draw battle UI
-		g.drawBattleBar(screen)
-
-		myCur, myMax, enCur, enMax := g.battleHPs()
-		g.drawBattleTopBars(screen, myCur, myMax, enCur, enMax)
 	}
 
 	if g.scr == screenBattle && (g.endActive || g.gameOver) {
@@ -779,6 +780,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 				}
 			}
 		}
+
 	}
 }
 
@@ -921,7 +923,35 @@ func (b *battleHPBar) Draw(dst *ebiten.Image) {
 
 func (g *Game) drawProjectiles(screen *ebiten.Image, shouldMirror bool, mirrorY func(float64) float64, playerID int64) {
 
-	// Enhanced projectile rendering with particle effects
+	// Draw actual flying projectiles from the world state
+	if g.world != nil && g.world.Projectiles != nil {
+		for _, proj := range g.world.Projectiles {
+			if !proj.Active {
+				continue
+			}
+
+			// Apply mirroring to projectile coordinates
+			renderX := proj.X
+			renderY := proj.Y
+			renderTX := proj.TX
+			renderTY := proj.TY
+			if shouldMirror {
+				renderY = mirrorY(proj.Y)
+				renderTY = mirrorY(proj.TY)
+			}
+
+			// Apply camera transformations
+			renderX = renderX*g.cameraZoom + g.cameraX
+			renderY = renderY*g.cameraZoom + g.cameraY
+			renderTX = renderTX*g.cameraZoom + g.cameraX
+			renderTY = renderTY*g.cameraZoom + g.cameraY
+
+			// Draw projectile as a single flying bolt at current position
+			g.drawProjectileByType(screen, renderX, renderY, renderTX, renderTY, proj.ProjectileType, g.cameraZoom)
+		}
+	}
+
+	// Legacy projectile rendering for units that are attacking (fallback)
 	for _, u := range g.world.Units {
 		// Only draw projectiles for ranged units that belong to the player
 		if strings.ToLower(u.Class) == "range" && u.OwnerID == playerID {
@@ -929,7 +959,7 @@ func (g *Game) drawProjectiles(screen *ebiten.Image, shouldMirror bool, mirrorY 
 			tx, ty := g.findTargetForUnit(u)
 			dist := math.Hypot(tx-u.X, ty-u.Y)
 
-			// Only draw if in range
+			// Only draw if in range and attacking
 			if dist <= float64(u.Range) && dist > 10 {
 				// Apply mirroring to projectile coordinates
 				renderUX := u.X
@@ -947,30 +977,341 @@ func (g *Game) drawProjectiles(screen *ebiten.Image, shouldMirror bool, mirrorY 
 				renderTX = renderTX*g.cameraZoom + g.cameraX
 				renderTY = renderTY*g.cameraZoom + g.cameraY
 
-				// Create particle trail for projectile
-				if g.particleSystem != nil {
-					g.particleSystem.CreateProjectileTrail(renderUX, renderUY, renderTX, renderTY)
+				// Determine projectile type based on unit lore/name
+				projectileType := g.determineProjectileType(u.Name)
+
+				// Draw projectile based on type (only if no actual projectile exists)
+				if g.world.Projectiles == nil || len(g.world.Projectiles) == 0 {
+					g.drawProjectileByType(screen, renderUX, renderUY, renderTX, renderTY, projectileType, g.cameraZoom)
 				}
-
-				// Draw a simple line projectile (fallback)
-				ebitenutil.DrawLine(screen, renderUX, renderUY, renderTX, renderTY, color.NRGBA{255, 255, 100, 200})
-
-				// Draw a small circle at the projectile tip
-				ebitenutil.DrawCircle(screen, renderTX, renderTY, 3*g.cameraZoom, color.NRGBA{255, 255, 0, 255})
 
 				// Create impact effect when projectile reaches target
 				if dist < 15 && g.particleSystem != nil {
-					impactType := "default"
-					if strings.Contains(strings.ToLower(u.Name), "fire") {
-						impactType = "fire"
-					} else if strings.Contains(strings.ToLower(u.Name), "ice") {
-						impactType = "ice"
-					}
-					g.particleSystem.CreateImpactEffect(renderTX, renderTY, impactType)
+					g.particleSystem.CreateEnhancedImpactEffect(renderTX, renderTY, projectileType)
 				}
 			}
 		}
 	}
+}
+
+// determineProjectileType analyzes unit name to determine elemental projectile type
+func (g *Game) determineProjectileType(unitName string) string {
+	name := strings.ToLower(unitName)
+
+	// Fire-themed projectiles
+	if strings.Contains(name, "blaze") || strings.Contains(name, "fire") ||
+		strings.Contains(name, "magma") || strings.Contains(name, "flame") ||
+		strings.Contains(name, "bloodmage") || strings.Contains(name, "firedrake") {
+		return "fire"
+	}
+
+	// Ice/Frost-themed projectiles
+	if strings.Contains(name, "glacia") || strings.Contains(name, "blizzard") ||
+		strings.Contains(name, "frost") || strings.Contains(name, "ice") ||
+		strings.Contains(name, "arctic") || strings.Contains(name, "winter") {
+		return "frost"
+	}
+
+	// Lightning-themed projectiles
+	if strings.Contains(name, "lightning") || strings.Contains(name, "chain") ||
+		strings.Contains(name, "storm") || strings.Contains(name, "thunder") {
+		return "lightning"
+	}
+
+	// Holy/Light-themed projectiles
+	if strings.Contains(name, "holy") || strings.Contains(name, "light") ||
+		strings.Contains(name, "divine") || strings.Contains(name, "angel") ||
+		strings.Contains(name, "nova") || strings.Contains(name, "radiant") {
+		return "holy"
+	}
+
+	// Dark/Shadow-themed projectiles
+	if strings.Contains(name, "shadow") || strings.Contains(name, "dark") ||
+		strings.Contains(name, "night") || strings.Contains(name, "void") ||
+		strings.Contains(name, "death") || strings.Contains(name, "necro") {
+		return "dark"
+	}
+
+	// Nature-themed projectiles
+	if strings.Contains(name, "spirit") || strings.Contains(name, "nature") ||
+		strings.Contains(name, "earth") || strings.Contains(name, "wind") ||
+		strings.Contains(name, "jungle") || strings.Contains(name, "forest") {
+		return "nature"
+	}
+
+	// Arcane/Magic-themed projectiles
+	if strings.Contains(name, "arcane") || strings.Contains(name, "mana") ||
+		strings.Contains(name, "magic") || strings.Contains(name, "sorcerer") ||
+		strings.Contains(name, "wizard") || strings.Contains(name, "mage") {
+		return "arcane"
+	}
+
+	// Default projectile type
+	return "default"
+}
+
+// drawProjectileByType renders different projectile visuals based on type
+func (g *Game) drawProjectileByType(screen *ebiten.Image, currentX, currentY, targetX, targetY float64, projectileType string, zoom float64) {
+	// Realistic projectile sizes - 15-20% of unit size (unit is ~42px, so projectile ~6-8px)
+	projectileSize := 6 * zoom // Main projectile (15% of unit size)
+	coreSize := 3 * zoom       // Bright core
+	trailSize := 2 * zoom      // Trail particles
+
+	switch projectileType {
+	case "fire":
+		// FIREBALL - Realistic flaming projectile
+		// Outer flame layer (orange-red)
+		ebitenutil.DrawCircle(screen, currentX, currentY, projectileSize, color.NRGBA{255, 80, 0, 220})
+		// Inner flame core (bright orange)
+		ebitenutil.DrawCircle(screen, currentX, currentY, projectileSize*0.7, color.NRGBA{255, 150, 0, 255})
+		// Bright white-hot core
+		ebitenutil.DrawCircle(screen, currentX, currentY, coreSize, color.NRGBA{255, 220, 100, 255})
+
+		// Flaming trail particles
+		for i := 0; i < 8; i++ {
+			trailX := currentX + (rand.Float64()-0.5)*20*zoom
+			trailY := currentY + (rand.Float64()-0.5)*20*zoom
+			ebitenutil.DrawCircle(screen, trailX, trailY, trailSize, color.NRGBA{255, 120, 0, 180})
+		}
+		// Smoke trail
+		for i := 0; i < 3; i++ {
+			smokeX := currentX + (rand.Float64()-0.5)*15*zoom
+			smokeY := currentY + (rand.Float64()-0.5)*15*zoom
+			ebitenutil.DrawCircle(screen, smokeX, smokeY, trailSize*1.5, color.NRGBA{100, 100, 100, 120})
+		}
+
+	case "frost":
+		// FROSTBOLT - Narrow bullet-shaped projectile tapering to a point
+		// Calculate direction vector from current to target
+		dx := targetX - currentX
+		dy := targetY - currentY
+		dist := math.Sqrt(dx*dx + dy*dy)
+		if dist > 0 {
+			dx /= dist
+			dy /= dist
+		}
+
+		// Bullet length and width
+		bulletLength := projectileSize * 2.5 // Elongated shape
+		bulletWidth := projectileSize * 0.6  // Narrow width
+
+		// Draw the main bullet body as a series of connected circles
+		segments := 8
+		for i := 0; i < segments; i++ {
+			progress := float64(i) / float64(segments-1)
+			segmentX := currentX + dx*bulletLength*progress
+			segmentY := currentY + dy*bulletLength*progress
+
+			// Taper the width from back to front
+			taperFactor := 1.0 - progress*0.6 // Narrower at the front
+			segmentSize := bulletWidth * taperFactor
+
+			// Draw segment with gradient color (brighter at front)
+			alpha := 0.8 - progress*0.3
+			blue := 0.78 + progress*0.2
+			ebitenutil.DrawCircle(screen, segmentX, segmentY, segmentSize, color.NRGBA{150, 220, uint8(blue * 255), uint8(alpha * 255)})
+		}
+
+		// Draw tapered point at the front
+		pointX := currentX + dx*bulletLength*0.9
+		pointY := currentY + dy*bulletLength*0.9
+		ebitenutil.DrawCircle(screen, pointX, pointY, bulletWidth*0.2, color.NRGBA{200, 240, 255, 255})
+
+		// Bright core at the center
+		ebitenutil.DrawCircle(screen, currentX, currentY, coreSize, color.NRGBA{220, 250, 255, 255})
+
+		// Ice crystal spikes along the bullet
+		for i := 0; i < 4; i++ {
+			spikePos := float64(i) * 0.25
+			spikeX := currentX + dx*bulletLength*spikePos
+			spikeY := currentY + dy*bulletLength*spikePos
+			spikeAngle := math.Atan2(dy, dx) + math.Pi/2
+			spikeDist := bulletWidth * 1.2
+			spikeEndX := spikeX + math.Cos(spikeAngle)*spikeDist
+			spikeEndY := spikeY + math.Sin(spikeAngle)*spikeDist
+			ebitenutil.DrawLine(screen, spikeX, spikeY, spikeEndX, spikeEndY, color.NRGBA{220, 240, 255, 200})
+		}
+
+		// Frost mist trail behind the bullet
+		for i := 0; i < 3; i++ {
+			trailX := currentX - dx*bulletLength*0.5 + (rand.Float64()-0.5)*12*zoom
+			trailY := currentY - dy*bulletLength*0.5 + (rand.Float64()-0.5)*12*zoom
+			ebitenutil.DrawCircle(screen, trailX, trailY, trailSize, color.NRGBA{180, 220, 255, 150})
+		}
+
+	case "lightning":
+		// LIGHTNING BOLT - Electric energy projectile
+		// Outer electric field (bright yellow)
+		ebitenutil.DrawCircle(screen, currentX, currentY, projectileSize, color.NRGBA{255, 255, 100, 180})
+		// Inner electric core (pure white)
+		ebitenutil.DrawCircle(screen, currentX, currentY, projectileSize*0.5, color.NRGBA{255, 255, 200, 255})
+		// Electric core
+		ebitenutil.DrawCircle(screen, currentX, currentY, coreSize, color.NRGBA{255, 255, 255, 255})
+
+		// Electric arcs branching out
+		for i := 0; i < 5; i++ {
+			arcX := currentX + (rand.Float64()-0.5)*25*zoom
+			arcY := currentY + (rand.Float64()-0.5)*25*zoom
+			ebitenutil.DrawLine(screen, currentX, currentY, arcX, arcY, color.NRGBA{255, 255, 150, 220})
+			// Small electric sparks
+			ebitenutil.DrawCircle(screen, arcX, arcY, trailSize*0.3, color.NRGBA{255, 255, 200, 200})
+		}
+
+	case "holy":
+		// HOLY MISSILE - Divine light projectile
+		// Outer divine aura (golden)
+		ebitenutil.DrawCircle(screen, currentX, currentY, projectileSize, color.NRGBA{255, 215, 0, 200})
+		// Inner holy light (bright gold)
+		ebitenutil.DrawCircle(screen, currentX, currentY, projectileSize*0.7, color.NRGBA{255, 235, 100, 255})
+		// Radiant core
+		ebitenutil.DrawCircle(screen, currentX, currentY, coreSize, color.NRGBA{255, 250, 150, 255})
+
+		// Divine light rays
+		for i := 0; i < 8; i++ {
+			angle := float64(i) * math.Pi / 4
+			rayX := currentX + math.Cos(angle)*projectileSize*1.3
+			rayY := currentY + math.Sin(angle)*projectileSize*1.3
+			ebitenutil.DrawLine(screen, currentX, currentY, rayX, rayY, color.NRGBA{255, 240, 100, 180})
+		}
+		// Holy sparkles
+		for i := 0; i < 6; i++ {
+			sparkleX := currentX + (rand.Float64()-0.5)*22*zoom
+			sparkleY := currentY + (rand.Float64()-0.5)*22*zoom
+			ebitenutil.DrawCircle(screen, sparkleX, sparkleY, trailSize*0.4, color.NRGBA{255, 250, 200, 220})
+		}
+
+	case "dark":
+		// SHADOW BOLT - Dark magical projectile
+		// Outer shadow veil (dark purple)
+		ebitenutil.DrawCircle(screen, currentX, currentY, projectileSize, color.NRGBA{80, 20, 120, 200})
+		// Inner dark energy (purple)
+		ebitenutil.DrawCircle(screen, currentX, currentY, projectileSize*0.6, color.NRGBA{120, 50, 180, 255})
+		// Void core
+		ebitenutil.DrawCircle(screen, currentX, currentY, coreSize, color.NRGBA{150, 100, 200, 255})
+
+		// Shadow tendrils
+		for i := 0; i < 4; i++ {
+			tendrilX := currentX + (rand.Float64()-0.5)*20*zoom
+			tendrilY := currentY + (rand.Float64()-0.5)*20*zoom
+			ebitenutil.DrawLine(screen, currentX, currentY, tendrilX, tendrilY, color.NRGBA{100, 30, 150, 160})
+		}
+		// Dark particles
+		for i := 0; i < 5; i++ {
+			darkX := currentX + (rand.Float64()-0.5)*16*zoom
+			darkY := currentY + (rand.Float64()-0.5)*16*zoom
+			ebitenutil.DrawCircle(screen, darkX, darkY, trailSize, color.NRGBA{80, 20, 120, 140})
+		}
+
+	case "nature":
+		// NATURE'S LIGHTNING BOLT - Green lightning bolt projectile
+		// Calculate direction vector from current to target
+		dx := targetX - currentX
+		dy := targetY - currentY
+		dist := math.Sqrt(dx*dx + dy*dy)
+		if dist > 0 {
+			dx /= dist
+			dy /= dist
+		}
+
+		// Main lightning bolt path
+		boltLength := projectileSize * 3.0
+		segments := 6
+
+		// Draw main lightning bolt with zigzag pattern
+		prevX := currentX
+		prevY := currentY
+
+		for i := 1; i <= segments; i++ {
+			progress := float64(i) / float64(segments)
+			segmentX := currentX + dx*boltLength*progress
+			segmentY := currentY + dy*boltLength*progress
+
+			// Add zigzag to lightning bolt
+			zagOffset := (rand.Float64() - 0.5) * projectileSize * 0.8
+			perpX := -dy * zagOffset
+			perpY := dx * zagOffset
+
+			segmentX += perpX
+			segmentY += perpY
+
+			// Draw lightning segment
+			ebitenutil.DrawLine(screen, prevX, prevY, segmentX, segmentY, color.NRGBA{100, 255, 100, 255})
+
+			// Add branching lightning arcs
+			if i%2 == 0 && rand.Float64() < 0.7 {
+				branchAngle := math.Atan2(dy, dx) + (rand.Float64()-0.5)*math.Pi*0.8
+				branchLength := projectileSize * 1.5
+				branchX := segmentX + math.Cos(branchAngle)*branchLength
+				branchY := segmentY + math.Sin(branchAngle)*branchLength
+				ebitenutil.DrawLine(screen, segmentX, segmentY, branchX, branchY, color.NRGBA{150, 255, 150, 200})
+			}
+
+			prevX = segmentX
+			prevY = segmentY
+		}
+
+		// Bright core at the center
+		ebitenutil.DrawCircle(screen, currentX, currentY, coreSize, color.NRGBA{200, 255, 200, 255})
+
+		// Lightning spark effects along the bolt
+		for i := 0; i < 4; i++ {
+			sparkProgress := rand.Float64()
+			sparkX := currentX + dx*boltLength*sparkProgress
+			sparkY := currentY + dy*boltLength*sparkProgress
+			sparkAngle := math.Atan2(dy, dx) + (rand.Float64()-0.5)*math.Pi
+			sparkDist := projectileSize * 0.5
+			sparkEndX := sparkX + math.Cos(sparkAngle)*sparkDist
+			sparkEndY := sparkY + math.Sin(sparkAngle)*sparkDist
+			ebitenutil.DrawLine(screen, sparkX, sparkY, sparkEndX, sparkEndY, color.NRGBA{180, 255, 180, 220})
+		}
+
+		// Nature energy particles
+		for i := 0; i < 5; i++ {
+			particleX := currentX + (rand.Float64()-0.5)*boltLength*0.8
+			particleY := currentY + (rand.Float64()-0.5)*boltLength*0.8
+			ebitenutil.DrawCircle(screen, particleX, particleY, trailSize*0.6, color.NRGBA{120, 255, 120, 180})
+		}
+
+	case "arcane":
+		// ARCANE MISSILE - Magical energy projectile
+		// Outer magical field (purple)
+		ebitenutil.DrawCircle(screen, currentX, currentY, projectileSize, color.NRGBA{150, 100, 255, 200})
+		// Inner arcane energy (bright purple)
+		ebitenutil.DrawCircle(screen, currentX, currentY, projectileSize*0.7, color.NRGBA{200, 150, 255, 255})
+		// Magical core
+		ebitenutil.DrawCircle(screen, currentX, currentY, coreSize, color.NRGBA{220, 180, 255, 255})
+
+		// Arcane runes/symbols
+		for i := 0; i < 5; i++ {
+			angle := float64(i) * 2 * math.Pi / 5
+			runeX := currentX + math.Cos(angle)*projectileSize*1.2
+			runeY := currentY + math.Sin(angle)*projectileSize*1.2
+			ebitenutil.DrawCircle(screen, runeX, runeY, trailSize*0.5, color.NRGBA{240, 200, 255, 220})
+		}
+		// Magical sparkles
+		for i := 0; i < 6; i++ {
+			sparkleX := currentX + (rand.Float64()-0.5)*20*zoom
+			sparkleY := currentY + (rand.Float64()-0.5)*20*zoom
+			ebitenutil.DrawCircle(screen, sparkleX, sparkleY, trailSize*0.4, color.NRGBA{255, 220, 255, 200})
+		}
+
+	default:
+		// ENERGY BOLT - Generic magical projectile
+		// Outer energy field
+		ebitenutil.DrawCircle(screen, currentX, currentY, projectileSize, color.NRGBA{200, 200, 255, 200})
+		// Inner energy core
+		ebitenutil.DrawCircle(screen, currentX, currentY, projectileSize*0.6, color.NRGBA{220, 220, 255, 255})
+		// Bright core
+		ebitenutil.DrawCircle(screen, currentX, currentY, coreSize, color.NRGBA{255, 255, 255, 255})
+
+		// Energy particles
+		for i := 0; i < 6; i++ {
+			particleX := currentX + (rand.Float64()-0.5)*16*zoom
+			particleY := currentY + (rand.Float64()-0.5)*16*zoom
+			ebitenutil.DrawCircle(screen, particleX, particleY, trailSize, color.NRGBA{220, 240, 255, 180})
+		}
+	}
+
 }
 
 func (g *Game) findTargetForUnit(u *RenderUnit) (float64, float64) {

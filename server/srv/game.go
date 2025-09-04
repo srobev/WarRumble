@@ -71,13 +71,29 @@ type Unit struct {
 	AttackCooldown float64 // Configurable attack cooldown duration
 }
 
+type Projectile struct {
+	ID             int64
+	X, Y           float64 // Current position
+	TX, TY         float64 // Target position
+	VX, VY         float64 // Velocity
+	Speed          float64 // Movement speed
+	Damage         int     // Damage to deal on impact
+	OwnerID        int64   // Who fired this projectile
+	TargetID       int64   // Target unit ID (0 if targeting base)
+	TargetX        float64 // Target X coordinate (for base targeting)
+	TargetY        float64 // Target Y coordinate (for base targeting)
+	Active         bool    // Whether projectile is still active
+	ProjectileType string  // Type for visual effects
+}
+
 type Game struct {
-	minis   []MiniCard
-	units   map[int64]*Unit
-	players map[int64]*Player
-	width   int
-	height  int
-	mapDef  *protocol.MapDef // Current map definition
+	minis       []MiniCard
+	units       map[int64]*Unit
+	projectiles map[int64]*Projectile
+	players     map[int64]*Player
+	width       int
+	height      int
+	mapDef      *protocol.MapDef // Current map definition
 
 	// Timer system
 	timerActive   bool
@@ -93,10 +109,11 @@ type Game struct {
 
 func NewGame() *Game {
 	g := &Game{
-		units:   make(map[int64]*Unit),
-		players: make(map[int64]*Player),
-		width:   protocol.ScreenW,
-		height:  protocol.ScreenH,
+		units:       make(map[int64]*Unit),
+		projectiles: make(map[int64]*Projectile),
+		players:     make(map[int64]*Player),
+		width:       protocol.ScreenW,
+		height:      protocol.ScreenH,
 		// init maps, players, etc.
 	}
 	g.loadMinis()
@@ -399,8 +416,9 @@ func (g *Game) RestartMatch() {
 		p.Base.HP = p.Base.MaxHP
 	}
 
-	// Clear all units
+	// Clear all units and projectiles
 	g.units = make(map[int64]*Unit)
+	g.projectiles = make(map[int64]*Projectile)
 
 	// Reset players' state
 	for _, p := range g.players {
@@ -442,9 +460,13 @@ func (g *Game) Step(dt float64) protocol.StateDelta {
 		return protocol.StateDelta{
 			UnitsUpsert:  []protocol.UnitState{},
 			UnitsRemoved: []int64{},
+			Projectiles:  []protocol.ProjectileState{},
 			Bases:        []protocol.BaseState{},
 		}
 	}
+
+	// Update projectiles
+	g.updateProjectiles(dt)
 
 	// gold
 	for _, p := range g.players {
@@ -553,13 +575,30 @@ func (g *Game) Step(dt float64) protocol.StateDelta {
 		})
 	}
 
+	// Build projectile states for clients
+	projectiles := make([]protocol.ProjectileState, 0, len(g.projectiles))
+	for _, proj := range g.projectiles {
+		projectiles = append(projectiles, protocol.ProjectileState{
+			ID:             proj.ID,
+			X:              proj.X,
+			Y:              proj.Y,
+			TX:             proj.TX,
+			TY:             proj.TY,
+			Damage:         proj.Damage,
+			OwnerID:        proj.OwnerID,
+			TargetID:       proj.TargetID,
+			ProjectileType: proj.ProjectileType,
+			Active:         proj.Active,
+		})
+	}
+
 	bases := make([]protocol.BaseState, 0, len(g.players))
 	for _, p := range g.players {
 		bases = append(bases, protocol.BaseState{
 			OwnerID: p.ID, HP: p.Base.HP, MaxHP: p.Base.MaxHP, X: p.Base.X, Y: p.Base.Y, W: p.Base.W, H: p.Base.H,
 		})
 	}
-	return protocol.StateDelta{UnitsUpsert: upserts, UnitsRemoved: removed, Bases: bases}
+	return protocol.StateDelta{UnitsUpsert: upserts, UnitsRemoved: removed, Projectiles: projectiles, Bases: bases}
 }
 
 func (g *Game) FullSnapshot() protocol.FullSnapshot {
@@ -600,18 +639,22 @@ func (g *Game) findTarget(u *Unit) (float64, float64) {
 }
 
 func (g *Game) damageAt(u *Unit, tx, ty float64, dmg int) {
+	// Determine projectile type based on unit name
+	projectileType := g.determineProjectileType(u.Name)
+
+	// Check if targeting a unit
 	for _, v := range g.units {
 		if v.OwnerID == u.OwnerID || v.HP <= 0 {
 			continue
 		}
 		if hypot(tx, ty, v.X, v.Y) <= 30 {
-			v.HP -= dmg
-			if v.HP < 0 {
-				v.HP = 0
-			}
+			// Create projectile targeting this unit
+			g.createProjectile(u.X, u.Y, v.X, v.Y, dmg, u.OwnerID, v.ID, 0, 0, projectileType)
 			return
 		}
 	}
+
+	// Check if targeting a base
 	for _, p := range g.players {
 		if p.ID == u.OwnerID {
 			continue
@@ -619,11 +662,177 @@ func (g *Game) damageAt(u *Unit, tx, ty float64, dmg int) {
 		bx := float64(p.Base.X + p.Base.W/2)
 		by := float64(p.Base.Y + p.Base.H/2)
 		if hypot(tx, ty, bx, by) <= 40 {
-			p.Base.HP -= dmg
-			if p.Base.HP < 0 {
-				p.Base.HP = 0
-			}
+			// Create projectile targeting this base
+			g.createProjectile(u.X, u.Y, bx, by, dmg, u.OwnerID, 0, bx, by, projectileType)
 			return
+		}
+	}
+}
+
+// determineProjectileType analyzes unit name to determine elemental projectile type
+func (g *Game) determineProjectileType(unitName string) string {
+	name := strings.ToLower(unitName)
+
+	// Fire-themed projectiles
+	if strings.Contains(name, "blaze") || strings.Contains(name, "fire") ||
+		strings.Contains(name, "magma") || strings.Contains(name, "flame") ||
+		strings.Contains(name, "bloodmage") || strings.Contains(name, "firedrake") {
+		return "fire"
+	}
+
+	// Ice/Frost-themed projectiles
+	if strings.Contains(name, "glacia") || strings.Contains(name, "blizzard") ||
+		strings.Contains(name, "frost") || strings.Contains(name, "ice") ||
+		strings.Contains(name, "arctic") || strings.Contains(name, "winter") {
+		return "frost"
+	}
+
+	// Lightning-themed projectiles
+	if strings.Contains(name, "lightning") || strings.Contains(name, "chain") ||
+		strings.Contains(name, "storm") || strings.Contains(name, "thunder") {
+		return "lightning"
+	}
+
+	// Holy/Light-themed projectiles
+	if strings.Contains(name, "holy") || strings.Contains(name, "light") ||
+		strings.Contains(name, "divine") || strings.Contains(name, "angel") ||
+		strings.Contains(name, "nova") || strings.Contains(name, "radiant") {
+		return "holy"
+	}
+
+	// Dark/Shadow-themed projectiles
+	if strings.Contains(name, "shadow") || strings.Contains(name, "dark") ||
+		strings.Contains(name, "night") || strings.Contains(name, "void") ||
+		strings.Contains(name, "death") || strings.Contains(name, "necro") {
+		return "dark"
+	}
+
+	// Nature-themed projectiles
+	if strings.Contains(name, "spirit") || strings.Contains(name, "nature") ||
+		strings.Contains(name, "earth") || strings.Contains(name, "wind") ||
+		strings.Contains(name, "jungle") || strings.Contains(name, "forest") {
+		return "nature"
+	}
+
+	// Arcane/Magic-themed projectiles
+	if strings.Contains(name, "arcane") || strings.Contains(name, "mana") ||
+		strings.Contains(name, "magic") || strings.Contains(name, "sorcerer") ||
+		strings.Contains(name, "wizard") || strings.Contains(name, "mage") {
+		return "arcane"
+	}
+
+	// Default projectile type
+	return "default"
+}
+
+// createProjectile creates a new projectile
+func (g *Game) createProjectile(startX, startY, targetX, targetY float64, damage int, ownerID, targetID int64, targetBaseX, targetBaseY float64, projectileType string) {
+	projectile := &Projectile{
+		ID:             protocol.NewID(),
+		X:              startX,
+		Y:              startY,
+		TX:             targetX,
+		TY:             targetY,
+		Damage:         damage,
+		OwnerID:        ownerID,
+		TargetID:       targetID,
+		TargetX:        targetBaseX,
+		TargetY:        targetBaseY,
+		Active:         true,
+		ProjectileType: projectileType,
+		Speed:          400, // pixels per second
+	}
+
+	// Calculate velocity vector
+	dx := targetX - startX
+	dy := targetY - startY
+	dist := math.Hypot(dx, dy)
+	if dist > 0 {
+		projectile.VX = (dx / dist) * projectile.Speed
+		projectile.VY = (dy / dist) * projectile.Speed
+	}
+
+	g.projectiles[projectile.ID] = projectile
+}
+
+// updateProjectiles updates all active projectiles
+func (g *Game) updateProjectiles(dt float64) {
+	for id, proj := range g.projectiles {
+		if !proj.Active {
+			delete(g.projectiles, id)
+			continue
+		}
+
+		// Move projectile
+		proj.X += proj.VX * dt
+		proj.Y += proj.VY * dt
+
+		// Check if projectile reached its target
+		var targetX, targetY float64
+		if proj.TargetID != 0 {
+			// Targeting a unit
+			if targetUnit, exists := g.units[proj.TargetID]; exists && targetUnit.HP > 0 {
+				targetX, targetY = targetUnit.X, targetUnit.Y
+			} else {
+				// Target unit is dead or gone, deactivate projectile
+				proj.Active = false
+				continue
+			}
+		} else {
+			// Targeting a base
+			targetX, targetY = proj.TargetX, proj.TargetY
+		}
+
+		// Check distance to target
+		dist := math.Hypot(proj.X-targetX, proj.Y-targetY)
+		if dist <= 15 { // Hit threshold
+			// Deal damage
+			g.applyProjectileDamage(proj)
+			proj.Active = false
+		}
+	}
+}
+
+// applyProjectileDamage applies damage from a projectile to its target
+func (g *Game) applyProjectileDamage(proj *Projectile) {
+	if proj.TargetID != 0 {
+		// Damage unit
+		if targetUnit, exists := g.units[proj.TargetID]; exists {
+			targetUnit.HP -= proj.Damage
+			if targetUnit.HP < 0 {
+				targetUnit.HP = 0
+			}
+		}
+	} else {
+		// Damage base
+		for _, p := range g.players {
+			if p.ID != proj.OwnerID {
+				bx := float64(p.Base.X + p.Base.W/2)
+				by := float64(p.Base.Y + p.Base.H/2)
+				if math.Hypot(proj.X-bx, proj.Y-by) <= 50 {
+					originalHP := p.Base.HP
+					p.Base.HP -= proj.Damage
+					if p.Base.HP < 0 {
+						p.Base.HP = 0
+					}
+
+					// Send base damage event
+					if g.broadcastEvent != nil {
+						damageEvent := protocol.BaseDamageEvent{
+							BaseID:       p.ID,
+							BaseX:        bx,
+							BaseY:        by,
+							Damage:       originalHP - p.Base.HP,
+							AttackerID:   0, // Projectile doesn't have attacker unit ID
+							AttackerName: "Projectile",
+							BaseHP:       p.Base.HP,
+							BaseMaxHP:    p.Base.MaxHP,
+						}
+						g.broadcastEvent("BaseDamageEvent", damageEvent)
+					}
+					break
+				}
+			}
 		}
 	}
 }

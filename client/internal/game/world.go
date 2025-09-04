@@ -19,6 +19,17 @@ type RenderUnit struct {
 	Particle           string
 }
 
+type RenderProjectile struct {
+	ID             int64
+	X, Y           float64 // Current position
+	TX, TY         float64 // Target position
+	Damage         int     // Damage to deal
+	OwnerID        int64   // Who fired this projectile
+	TargetID       int64   // Target unit ID (0 if targeting base)
+	ProjectileType string  // Type for visual effects
+	Active         bool    // Whether projectile is still active
+}
+
 type SpawnAnimation struct {
 	UnitID           int64
 	UnitName         string
@@ -37,6 +48,7 @@ type SpawnAnimation struct {
 
 type World struct {
 	Units           map[int64]*RenderUnit
+	Projectiles     map[int64]*RenderProjectile
 	Bases           map[int64]protocol.BaseState
 	lastUpdate      time.Time
 	Obstacles       []protocol.Obstacle // Current map obstacles
@@ -45,7 +57,11 @@ type World struct {
 }
 
 func buildWorldFromSnapshot(s protocol.FullSnapshot, currentMapDef *protocol.MapDef) *World {
-	w := &World{Units: make(map[int64]*RenderUnit), Bases: make(map[int64]protocol.BaseState)}
+	w := &World{
+		Units:       make(map[int64]*RenderUnit),
+		Projectiles: make(map[int64]*RenderProjectile),
+		Bases:       make(map[int64]protocol.BaseState),
+	}
 	for _, u := range s.Units {
 		w.Units[u.ID] = &RenderUnit{
 			ID: u.ID, Name: u.Name,
@@ -91,6 +107,29 @@ func (w *World) ApplyDelta(d protocol.StateDelta) {
 	for _, id := range d.UnitsRemoved {
 		delete(w.Units, id)
 	}
+
+	// Handle projectiles from server
+	if len(d.Projectiles) > 0 {
+		// Clear existing projectiles and replace with server state
+		w.Projectiles = make(map[int64]*RenderProjectile)
+		for _, p := range d.Projectiles {
+			if p.Active {
+				w.Projectiles[p.ID] = &RenderProjectile{
+					ID:             p.ID,
+					X:              p.X,
+					Y:              p.Y,
+					TX:             p.TX,
+					TY:             p.TY,
+					Damage:         p.Damage,
+					OwnerID:        p.OwnerID,
+					TargetID:       p.TargetID,
+					ProjectileType: p.ProjectileType,
+					Active:         p.Active,
+				}
+			}
+		}
+	}
+
 	if len(d.Bases) > 0 {
 		for _, b := range d.Bases {
 			w.Bases[int64(b.OwnerID)] = b

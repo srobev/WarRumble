@@ -276,6 +276,10 @@ func (r *Room) Tick() {
 		if r.Mode == "pve" && timerWinnerID != -1 {
 			r.awardPveXPServer(timerWinnerID)
 		}
+
+		// Send victory/defeat events before GameOver
+		r.sendVictoryDefeatEvents(timerWinnerID)
+
 		for _, c := range r.players {
 			sendJSON(c, "GameOver", protocol.GameOver{WinnerID: timerWinnerID})
 			// Rating only for Open Queue (two humans)
@@ -308,6 +312,10 @@ func (r *Room) Tick() {
 		if r.Mode == "pve" {
 			r.awardPveXPServer(winnerID)
 		}
+
+		// Send victory/defeat events before GameOver
+		r.sendVictoryDefeatEvents(winnerID)
+
 		for _, c := range r.players {
 			sendJSON(c, "GameOver", protocol.GameOver{WinnerID: winnerID})
 			// Rating only for Open Queue (two humans)
@@ -449,5 +457,65 @@ func (r *Room) awardPveXPServer(winnerID int64) {
 		prof := s.Profile
 		r.hub.mu.Unlock()
 		sendJSON(c, "Profile", prof)
+	}
+}
+
+// sendVictoryDefeatEvents sends victory/defeat events to all players based on the winner
+func (r *Room) sendVictoryDefeatEvents(winnerID int64) {
+	// Calculate match duration
+	duration := 0
+	if r.g != nil && r.g.timeLimit > 0 {
+		duration = r.g.timeLimit - int(r.g.timeRemaining)
+		if duration < 0 {
+			duration = 0
+		}
+	}
+
+	// Find winner and loser info
+	var winnerName, loserName string
+	var loserID int64
+	var goldEarned, xpGained int
+
+	for _, p := range r.g.players {
+		if p.ID == winnerID {
+			winnerName = p.Name
+			// Calculate rewards for PvE
+			if r.Mode == "pve" {
+				goldEarned = 10 // Base gold reward
+				xpGained = 50   // Base XP reward
+			}
+		} else {
+			loserID = p.ID
+			loserName = p.Name
+		}
+	}
+
+	// Send victory event to winner
+	victoryEvent := protocol.VictoryEvent{
+		WinnerID:   winnerID,
+		WinnerName: winnerName,
+		MatchType:  r.Mode,
+		Duration:   duration,
+		GoldEarned: goldEarned,
+		XPGained:   xpGained,
+	}
+
+	// Send defeat event to loser
+	defeatEvent := protocol.DefeatEvent{
+		LoserID:    loserID,
+		LoserName:  loserName,
+		WinnerID:   winnerID,
+		WinnerName: winnerName,
+		MatchType:  r.Mode,
+		Duration:   duration,
+	}
+
+	// Broadcast events to all players
+	for _, c := range r.players {
+		if c.id == winnerID {
+			sendJSON(c, "VictoryEvent", victoryEvent)
+		} else {
+			sendJSON(c, "DefeatEvent", defeatEvent)
+		}
 	}
 }

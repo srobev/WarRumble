@@ -120,6 +120,19 @@ type UnitState struct {
 	Particle string  `json:"particle,omitempty"`
 }
 
+type ProjectileState struct {
+	ID             int64   `json:"id"`
+	X              float64 `json:"x"`
+	Y              float64 `json:"y"`
+	TX             float64 `json:"tx"`
+	TY             float64 `json:"ty"`
+	Damage         int     `json:"damage"`
+	OwnerID        int64   `json:"ownerId"`
+	TargetID       int64   `json:"targetId"`
+	ProjectileType string  `json:"projectileType"`
+	Active         bool    `json:"active"`
+}
+
 type BaseState struct {
 	OwnerID int64 `json:"ownerId"`
 	HP      int   `json:"hp"`
@@ -131,11 +144,12 @@ type BaseState struct {
 }
 
 type StateDelta struct {
-	Tick         int64       `json:"tick"`
-	UnitsUpsert  []UnitState `json:"unitsUpsert"`
-	UnitsRemoved []int64     `json:"unitsRemoved"`
-	Bases        []BaseState `json:"bases,omitempty"`
-	Events       []string    `json:"events,omitempty"`
+	Tick         int64             `json:"tick"`
+	UnitsUpsert  []UnitState       `json:"unitsUpsert"`
+	UnitsRemoved []int64           `json:"unitsRemoved"`
+	Projectiles  []ProjectileState `json:"projectiles,omitempty"`
+	Bases        []BaseState       `json:"bases,omitempty"`
+	Events       []string          `json:"events,omitempty"`
 }
 
 type HealingEvent struct {
@@ -168,6 +182,35 @@ type UnitSpawnEvent struct {
 	UnitClass    string  `json:"unitClass"`    // Class of spawning unit (melee, range, etc.)
 	UnitSubclass string  `json:"unitSubclass"` // Subclass of spawning unit (healer, etc.)
 	OwnerID      int64   `json:"ownerId"`      // ID of the player who owns the unit
+}
+
+type VictoryEvent struct {
+	WinnerID   int64  `json:"winnerId"`   // ID of the winning player
+	WinnerName string `json:"winnerName"` // Name of the winning player
+	MatchType  string `json:"matchType"`  // Type of match (pve, pvp, etc.)
+	Duration   int    `json:"duration"`   // Match duration in seconds
+	GoldEarned int    `json:"goldEarned"` // Gold earned from the match
+	XPGained   int    `json:"xpGained"`   // Total XP gained from the match
+}
+
+type DefeatEvent struct {
+	LoserID    int64  `json:"loserId"`    // ID of the losing player
+	LoserName  string `json:"loserName"`  // Name of the losing player
+	WinnerID   int64  `json:"winnerId"`   // ID of the winning player
+	WinnerName string `json:"winnerName"` // Name of the winning player
+	MatchType  string `json:"matchType"`  // Type of match (pve, pvp, etc.)
+	Duration   int    `json:"duration"`   // Match duration in seconds
+}
+
+type BaseDamageEvent struct {
+	BaseID       int64   `json:"baseId"`       // ID of the damaged base
+	BaseX        float64 `json:"baseX"`        // Position of the base
+	BaseY        float64 `json:"baseY"`        // Position of the base
+	Damage       int     `json:"damage"`       // Amount of damage dealt
+	AttackerID   int64   `json:"attackerId"`   // ID of the unit that dealt damage (0 if environmental)
+	AttackerName string  `json:"attackerName"` // Name of the attacking unit
+	BaseHP       int     `json:"baseHp"`       // Current HP after damage
+	BaseMaxHP    int     `json:"baseMaxHp"`    // Maximum HP of the base
 }
 
 type FullSnapshot struct {

@@ -360,6 +360,45 @@ func (g *Game) handle(env Msg) {
 		if g.world != nil {
 			g.world.StartSpawnAnimation(se.UnitID, se.UnitName, se.UnitClass, se.UnitSubclass, se.UnitX, se.UnitY)
 		}
+	case "VictoryEvent":
+		var ve protocol.VictoryEvent
+		json.Unmarshal(env.Data, &ve)
+
+		// Trigger victory celebration effects
+		if g.particleSystem != nil {
+			g.particleSystem.CreateVictoryCelebration()
+		}
+
+		// Set victory state
+		g.victory = true
+		g.gameOver = true
+
+		log.Printf("Victory! Gold earned: %d, XP gained: %d", ve.GoldEarned, ve.XPGained)
+
+	case "DefeatEvent":
+		var de protocol.DefeatEvent
+		json.Unmarshal(env.Data, &de)
+
+		// Trigger defeat effects
+		if g.particleSystem != nil {
+			g.particleSystem.CreateDefeatEffect()
+		}
+
+		// Set defeat state
+		g.victory = false
+		g.gameOver = true
+
+		log.Printf("Defeat! Lost to %s", de.WinnerName)
+	case "BaseDamageEvent":
+		var bde protocol.BaseDamageEvent
+		json.Unmarshal(env.Data, &bde)
+
+		// Trigger base damage effects
+		if g.particleSystem != nil {
+			g.particleSystem.CreateBaseDamageEffect(bde.BaseX, bde.BaseY, bde.Damage, bde.BaseHP, bde.BaseMaxHP)
+		}
+
+		log.Printf("Base damage: %d damage dealt by %s, base HP: %d/%d", bde.Damage, bde.AttackerName, bde.BaseHP, bde.BaseMaxHP)
 	case "MapDef":
 		var md protocol.MapDefMsg
 		json.Unmarshal(env.Data, &md)
