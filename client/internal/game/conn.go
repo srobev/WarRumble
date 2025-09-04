@@ -89,6 +89,11 @@ func (g *Game) resetToLogin() {
 	g.currentArena = ""
 	g.pendingArena = ""
 	g.world = &World{Units: map[int64]*RenderUnit{}, Bases: map[int64]protocol.BaseState{}}
+	// Populate obstacles and lanes if available
+	if g.currentMapDef != nil {
+		g.world.Obstacles = g.currentMapDef.Obstacles
+		g.world.Lanes = g.currentMapDef.Lanes
+	}
 	g.endActive, g.endVictory, g.gameOver, g.victory = false, false, false, false
 
 	g.lobbyRequested = false
@@ -169,6 +174,11 @@ drained:
 	g.nameToMini = nil
 
 	g.world = &World{Units: make(map[int64]*RenderUnit), Bases: make(map[int64]protocol.BaseState)}
+	// Populate obstacles and lanes if available
+	if g.currentMapDef != nil {
+		g.world.Obstacles = g.currentMapDef.Obstacles
+		g.world.Lanes = g.currentMapDef.Lanes
+	}
 	g.endActive, g.endVictory, g.gameOver, g.victory = false, false, false, false
 	g.hand = nil
 	g.next = protocol.MiniCardView{}

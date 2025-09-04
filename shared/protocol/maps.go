@@ -26,6 +26,15 @@ type Lane struct {
 	Dir    int      `json:"dir"` // 1 or -1 (flow direction)
 }
 
+type Obstacle struct {
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	Type   string  `json:"type"`   // obstacle type (e.g., "tree", "rock", "building")
+	Image  string  `json:"image"`  // image path
+	Width  float64 `json:"width"`  // normalized width (0-1)
+	Height float64 `json:"height"` // normalized height (0-1)
+}
+
 // MapDef describes a PVE map layout for gameplay
 type MapDef struct {
 	ID     string `json:"id"`
@@ -38,6 +47,7 @@ type MapDef struct {
 	MeetingStones []PointF     `json:"meetingStones"`
 	GoldMines     []PointF     `json:"goldMines"`
 	Lanes         []Lane       `json:"lanes"`
+	Obstacles     []Obstacle   `json:"obstacles"`
 
 	// Base positions for PvP (configurable per map)
 	PlayerBase PointF `json:"playerBase,omitempty"` // Player base position (normalized 0-1)

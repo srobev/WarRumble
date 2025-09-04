@@ -23,9 +23,11 @@ type World struct {
 	Units      map[int64]*RenderUnit
 	Bases      map[int64]protocol.BaseState
 	lastUpdate time.Time
+	Obstacles  []protocol.Obstacle // Current map obstacles
+	Lanes      []protocol.Lane     // Current map lanes
 }
 
-func buildWorldFromSnapshot(s protocol.FullSnapshot) *World {
+func buildWorldFromSnapshot(s protocol.FullSnapshot, currentMapDef *protocol.MapDef) *World {
 	w := &World{Units: make(map[int64]*RenderUnit), Bases: make(map[int64]protocol.BaseState)}
 	for _, u := range s.Units {
 		w.Units[u.ID] = &RenderUnit{
@@ -40,6 +42,13 @@ func buildWorldFromSnapshot(s protocol.FullSnapshot) *World {
 		w.Bases[int64(b.OwnerID)] = b
 	}
 	w.lastUpdate = time.Now()
+
+	// Populate obstacles and lanes if available
+	if currentMapDef != nil {
+		w.Obstacles = currentMapDef.Obstacles
+		w.Lanes = currentMapDef.Lanes
+	}
+
 	return w
 }
 
@@ -85,4 +94,84 @@ func (w *World) LerpPositions() {
 		u.X = u.PrevX + (u.TargetX-u.PrevX)*alpha
 		u.Y = u.PrevY + (u.TargetY-u.PrevY)*alpha
 	}
+}
+
+// Check if a point collides with any obstacle
+func (w *World) IsPointInObstacle(x, y float64) bool {
+	for _, obstacle := range w.Obstacles {
+		// Convert normalized coordinates to screen coordinates for collision check
+		obsX := obstacle.X * float64(protocol.ScreenW)
+		obsY := obstacle.Y * float64(protocol.ScreenH)
+		obsW := obstacle.Width * float64(protocol.ScreenW)
+		obsH := obstacle.Height * float64(protocol.ScreenH)
+
+		// Simple AABB collision detection
+		if x >= obsX && x <= obsX+obsW && y >= obsY && y <= obsY+obsH {
+			return true
+		}
+	}
+	return false
+}
+
+// Find the closest point on any lane to the given position
+func (w *World) FindClosestLanePoint(x, y float64) (float64, float64) {
+	if len(w.Lanes) == 0 {
+		return x, y // No lanes, return original position
+	}
+
+	var closestX, closestY float64
+	minDist := float64(999999)
+
+	for _, lane := range w.Lanes {
+		for _, point := range lane.Points {
+			// Convert normalized coordinates to screen coordinates
+			px := point.X * float64(protocol.ScreenW)
+			py := point.Y * float64(protocol.ScreenH)
+
+			dist := (px-x)*(px-x) + (py-y)*(py-y)
+			if dist < minDist {
+				minDist = dist
+				closestX, closestY = px, py
+			}
+		}
+	}
+
+	return closestX, closestY
+}
+
+// Find a path along lanes from start to target, avoiding obstacles
+func (w *World) FindLanePath(startX, startY, targetX, targetY float64) (float64, float64) {
+	// First, check if the direct path is clear
+	if !w.IsPointInObstacle(targetX, targetY) {
+		// Check a few points along the path
+		steps := 10
+		for i := 1; i < steps; i++ {
+			t := float64(i) / float64(steps)
+			checkX := startX + (targetX-startX)*t
+			checkY := startY + (targetY-startY)*t
+			if w.IsPointInObstacle(checkX, checkY) {
+				break // Path is blocked, need to find alternative
+			}
+		}
+		// If we get here, path is clear
+		return targetX, targetY
+	}
+
+	// Path is blocked, find closest lane point to target
+	return w.FindClosestLanePoint(targetX, targetY)
+}
+
+// Update unit target position to avoid obstacles using lane pathfinding
+func (w *World) UpdateUnitTargetWithObstacleAvoidance(unitID int64, targetX, targetY float64) {
+	unit := w.Units[unitID]
+	if unit == nil {
+		return
+	}
+
+	// Use lane-based pathfinding to avoid obstacles
+	newTargetX, newTargetY := w.FindLanePath(unit.X, unit.Y, targetX, targetY)
+
+	// Update unit's target position
+	unit.TargetX = newTargetX
+	unit.TargetY = newTargetY
 }

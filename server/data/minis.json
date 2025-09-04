@@ -202,10 +202,10 @@
     "particle": "projectile"
   },
   {
-    "name": "Gnoll Brute",
+    "name": "Rampager",
     "dmg": 160,
     "hp": 670,
-    "portrait": "gnoll-brute.png",
+    "portrait": "rampager.png",
     "class": "melee",
     "role": "mini",
     "cost": 3,
@@ -424,13 +424,13 @@
     "particle": "projectile"
   },
   {
-    "name": "Skeleton Party",
-    "dmg": 0,
-    "hp": 0,
-    "portrait": "skeleton-party.png",
-    "class": "spell",
+    "name": "Bone Revenants",
+    "dmg": 200,
+    "hp": 300,
+    "portrait": "bone_revenants.png",
+    "class": "melee",
     "role": "mini",
-    "cost": 4,
+    "cost": 2,
     "speed": 2
   },
   {

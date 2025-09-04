@@ -26,7 +26,7 @@ import (
 	"embed"
 )
 
-//go:embed assets/ui/* assets/ui/avatars/* assets/minis/* assets/maps/*
+//go:embed assets/ui/* assets/ui/avatars/* assets/minis/* assets/maps/* assets/obstacles/*
 var assetsFS embed.FS
 
 var ornate *ui.OrnateBar
@@ -119,7 +119,7 @@ func buildEmbIndex() {
 	if len(embIndex) != 0 {
 		return
 	}
-	for _, dir := range []string{"assets/ui", "assets/minis", "assets/maps"} {
+	for _, dir := range []string{"assets/ui", "assets/minis", "assets/maps", "assets/obstacles"} {
 		entries, err := assetsFS.ReadDir(dir)
 		if err != nil {
 			continue
@@ -170,6 +170,9 @@ func (a *Assets) ensureInit() {
 	if a.minis == nil {
 		a.minis = make(map[string]*ebiten.Image)
 	}
+	if a.obstacles == nil {
+		a.obstacles = make(map[string]*ebiten.Image)
+	}
 	if a.bg == nil {
 		a.bg = make(map[string]*ebiten.Image)
 	}
@@ -210,6 +213,16 @@ func (g *Game) ensureMiniImageByName(name string) *ebiten.Image {
 	}
 	img := loadImage("assets/minis/" + key)
 	g.assets.minis[key] = img
+	return img
+}
+
+func (g *Game) ensureObstacleImage(obstacleType string) *ebiten.Image {
+	g.assets.ensureInit()
+	if img, ok := g.assets.obstacles[obstacleType]; ok {
+		return img
+	}
+	img := loadImage("assets/obstacles/" + obstacleType + ".png")
+	g.assets.obstacles[obstacleType] = img
 	return img
 }
 

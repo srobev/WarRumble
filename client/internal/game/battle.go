@@ -66,6 +66,12 @@ func (g *Game) updateBattle() {
 					Units: make(map[int64]*RenderUnit),
 					Bases: make(map[int64]protocol.BaseState),
 				}
+
+				// Populate obstacles and lanes if available
+				if g.currentMapDef != nil {
+					g.world.Obstacles = g.currentMapDef.Obstacles
+					g.world.Lanes = g.currentMapDef.Lanes
+				}
 			}
 		}
 		return

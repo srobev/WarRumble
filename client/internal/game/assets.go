@@ -11,6 +11,7 @@ type Assets struct {
 	btn9Hover *ebiten.Image
 
 	minis               map[string]*ebiten.Image // key: portrait filename (or derived)
+	obstacles           map[string]*ebiten.Image // key: obstacle type -> image
 	baseMe              *ebiten.Image
 	baseEnemy           *ebiten.Image
 	baseDead            *ebiten.Image            // optional destroyed variant

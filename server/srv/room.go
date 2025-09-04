@@ -133,6 +133,19 @@ func (r *Room) Join(c *client) {
 func (r *Room) StartBattle() {
 	log.Printf("ROOM %s StartBattle: players=%d", r.id, len(r.players))
 
+	// Load map for friendly duels
+	if r.Mode == "friendly" {
+		duelMaps := []string{"friendly_duel1", "friendly_duel2"}
+		randomIndex := rand.Intn(len(duelMaps))
+		selectedMap := duelMaps[randomIndex]
+		if mapDef, err := loadMapDef(selectedMap); err == nil {
+			r.g.mapDef = &mapDef
+			log.Printf("Loaded friendly duel map: %s", selectedMap)
+		} else {
+			log.Printf("Failed to load friendly duel map %s: %v", selectedMap, err)
+		}
+	}
+
 	// Initialize timer
 	r.g.InitializeTimer()
 

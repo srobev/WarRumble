@@ -1,13 +1,13 @@
 {
-  "playerId": 127701,
+  "playerId": 76950,
   "name": "tester",
   "army": [
     "Aethelion Ragestorm",
     "Crimson Raider",
     "Spirit Binder",
     "Banshee",
-    "Core Hound",
-    "Molten Giant",
+    "Magma Beasts",
+    "Twin Wyrnn",
     "Night Sentinel"
   ],
   "armies": {
@@ -15,8 +15,8 @@
       "Crimson Raider",
       "Spirit Binder",
       "Banshee",
-      "Core Hound",
-      "Molten Giant",
+      "Magma Beasts",
+      "Twin Wyrnn",
       "Night Sentinel"
     ],
     "Bloodmage Thalnos": [
@@ -56,18 +56,20 @@
   "accountXp": 0,
   "unitXp": {
     "Abomination": 714,
-    "Aethelion Ragestorm": 2,
+    "Aethelion Ragestorm": 4,
     "Banshee": 714,
     "Bloodmage Thalnos": 714,
     "Chimaera": 714,
     "Core Hound": 1,
     "Darkspear Troll": 714,
     "Harpies": 714,
+    "Magma Beasts": 1,
     "Molten Giant": 2,
-    "Night Sentinel": 1,
-    "Pyromancer": 714
+    "Night Sentinel": 3,
+    "Pyromancer": 714,
+    "Twin Wyrnn": 1
   },
-  "pvp_rating": 1408,
+  "pvp_rating": 1429,
   "pvp_rank": "Captain",
   "avatar": "drawrf.png",
   "guildId": "g-1756713614348685400"

@@ -1,5 +1,5 @@
 {
-  "playerId": 240173,
+  "playerId": 4302270,
   "name": "silvester",
   "army": [
     "Aethelion Ragestorm",
@@ -160,6 +160,7 @@
   "accountXp": 0,
   "unitXp": {
     "Abomination": 11,
+    "Aethelion Ragestorm": 2,
     "Bat Rider": 12,
     "Blazebinder": 3,
     "Bloodmage Thalor": 1,
@@ -168,16 +169,17 @@
     "Corpse Catapult": 4,
     "Crimson Raider": 6,
     "Faerie Dragon": 1,
+    "Flesh Golem": 1,
     "Frostwolf Shaman": 10,
     "Harpies": 1,
-    "Night Sentinel": 5,
+    "Night Sentinel": 6,
     "Ragnaros": 1,
     "Sir Kaelen Lightbane": 5,
     "Sorceress Glacia": 27,
     "Spirit Binder": 3
   },
-  "pvp_rating": 1373,
+  "pvp_rating": 1352,
   "pvp_rank": "Captain",
-  "avatar": "orc.png",
+  "avatar": "male.png",
   "guildId": "g-1756713614348685400"
 }

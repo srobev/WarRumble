@@ -167,14 +167,57 @@ func (g *Game) drawArenaBG(screen *ebiten.Image) {
 	if g.currentArena == "" {
 		return
 	}
-	bg := g.ensureBgForMap(g.currentArena)
+
+	// Use bg from map definition if available, otherwise fall back to arena ID
+	bgName := g.currentArena
+	if g.currentMapDef != nil && g.currentMapDef.Bg != "" {
+		// Remove .png extension if present
+		if strings.HasSuffix(g.currentMapDef.Bg, ".png") {
+			bgName = strings.TrimSuffix(g.currentMapDef.Bg, ".png")
+		} else {
+			bgName = g.currentMapDef.Bg
+		}
+	}
+
+	bg := g.ensureBgForMap(bgName)
 	if bg == nil {
 		return
 	}
-	offX, offY, dispW, dispH, s := g.mapRenderRect(bg)
 
-	col := g.mapEdgeColor(g.currentArena, bg)
+	var offX, offY, dispW, dispH int
+	var s float64
 
+	if g.scr == screenBattle {
+		// Battle-specific positioning: center in available area between UI elements
+		const topUIHeight = 50 // Approximate height of top UI (HP bars, timer)
+		bottomUIHeight := battleHUDH
+		availableHeight := protocol.ScreenH - topUIHeight - bottomUIHeight
+		availableWidth := protocol.ScreenW
+
+		iw, ih := bg.Bounds().Dx(), bg.Bounds().Dy()
+		if iw == 0 || ih == 0 {
+			offX, offY, dispW, dispH, s = 0, topUIHeight, availableWidth, availableHeight, 1
+		} else {
+			sw := float64(availableWidth) / float64(iw)
+			sh := float64(availableHeight) / float64(ih)
+			if sw < sh {
+				s = sw
+			} else {
+				s = sh
+			}
+			dispW = int(float64(iw) * s)
+			dispH = int(float64(ih) * s)
+			offX = (availableWidth - dispW) / 2
+			offY = topUIHeight + (availableHeight-dispH)/2
+		}
+	} else {
+		// Normal positioning for non-battle screens
+		offX, offY, dispW, dispH, s = g.mapRenderRect(bg)
+	}
+
+	col := g.mapEdgeColor(bgName, bg)
+
+	// Draw letterbox bars
 	if offY > 0 {
 		ebitenutil.DrawRect(screen, 0, 0, float64(protocol.ScreenW), float64(offY), col)
 		ebitenutil.DrawRect(screen, 0, float64(offY+dispH),

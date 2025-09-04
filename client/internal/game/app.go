@@ -543,6 +543,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		// Draw projectiles (behind units) with consistent mirroring
 		g.drawProjectiles(screen, shouldMirror, mirrorY, g.playerID)
 
+		// Draw obstacles
+		g.drawObstacles(screen, shouldMirror, mirrorY)
+
 		// Draw units
 		const unitTargetPX = 42.0
 		for id, u := range g.world.Units {
@@ -1046,4 +1049,51 @@ func (g *Game) isPvPMode() bool {
 	}
 	// PvP has exactly 2 bases (1 player + 1 enemy) AND it's a PvP room
 	return playerBaseCount == 1 && enemyBaseCount == 1 && strings.Contains(g.roomID, "pvp-")
+}
+
+// drawObstacles draws obstacles from the current map definition
+func (g *Game) drawObstacles(screen *ebiten.Image, shouldMirror bool, mirrorY func(float64) float64) {
+	if g.currentMapDef == nil {
+		return
+	}
+
+	for _, obstacle := range g.currentMapDef.Obstacles {
+		// Convert normalized coordinates to screen coordinates
+		x := obstacle.X * float64(protocol.ScreenW)
+		y := obstacle.Y * float64(protocol.ScreenH)
+		w := obstacle.Width * float64(protocol.ScreenW)
+		h := obstacle.Height * float64(protocol.ScreenH)
+
+		// Apply mirroring if needed
+		if shouldMirror {
+			y = mirrorY(y)
+		}
+
+		// Try to load obstacle image
+		if img := g.ensureObstacleImage(obstacle.Type); img != nil {
+			// Scale image to fit the obstacle dimensions
+			iw, ih := img.Bounds().Dx(), img.Bounds().Dy()
+			if iw > 0 && ih > 0 {
+				scaleX := w / float64(iw)
+				scaleY := h / float64(ih)
+				scale := mathMin(scaleX, scaleY)
+
+				op := &ebiten.DrawImageOptions{}
+				op.GeoM.Scale(scale, scale)
+				op.GeoM.Translate(x, y)
+				screen.DrawImage(img, op)
+			}
+		} else {
+			// Fallback: draw a colored rectangle
+			obstacleColor := color.NRGBA{100, 100, 100, 255} // Gray for unknown obstacles
+			if obstacle.Type == "tree" {
+				obstacleColor = color.NRGBA{34, 139, 34, 255} // Green for trees
+			} else if obstacle.Type == "rock" {
+				obstacleColor = color.NRGBA{105, 105, 105, 255} // Dark gray for rocks
+			} else if obstacle.Type == "building" {
+				obstacleColor = color.NRGBA{139, 69, 19, 255} // Brown for buildings
+			}
+			ebitenutil.DrawRect(screen, x, y, w, h, obstacleColor)
+		}
+	}
 }

@@ -197,6 +197,12 @@ func (g *Game) handle(env Msg) {
 			Bases: make(map[int64]protocol.BaseState),
 		}
 
+		// Populate obstacles and lanes if available
+		if g.currentMapDef != nil {
+			g.world.Obstacles = g.currentMapDef.Obstacles
+			g.world.Lanes = g.currentMapDef.Lanes
+		}
+
 		g.enemyAvatar = ""
 		g.enemyTargetThumb = nil
 		g.enemyBossPortrait = ""
@@ -241,7 +247,7 @@ func (g *Game) handle(env Msg) {
 	case "FullSnapshot":
 		var s protocol.FullSnapshot
 		json.Unmarshal(env.Data, &s)
-		g.world = buildWorldFromSnapshot(s)
+		g.world = buildWorldFromSnapshot(s, g.currentMapDef)
 
 	case "Error":
 		var em protocol.ErrorMsg
@@ -325,6 +331,12 @@ func (g *Game) handle(env Msg) {
 		// Set current arena for background loading if this is an arena
 		if md.Def.IsArena {
 			g.currentArena = md.Def.ID
+		}
+
+		// Update world with obstacles and lanes from the map definition
+		if g.world != nil {
+			g.world.Obstacles = md.Def.Obstacles
+			g.world.Lanes = md.Def.Lanes
 		}
 	case "FriendlyCode":
 		var m protocol.FriendlyCode
