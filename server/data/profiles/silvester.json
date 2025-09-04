@@ -1,0 +1,44 @@
+{
+  "playerId": 111713,
+  "name": "silvester",
+  "army": [
+    "Sorceress Glacia",
+    "Jungle Headhunter",
+    "Aerie Guard",
+    "Spirit Binder",
+    "Flesh Golem",
+    "Blazebinder",
+    "Twin Wyrnn"
+  ],
+  "armies": {
+    "Bloodmage Thalor": [
+      "Flesh Golem",
+      "Foulwing Rider",
+      "Twin Wyrnn",
+      "Spirit Binder",
+      "Mana Wyrm",
+      "Corpse Catapult"
+    ],
+    "Sorceress Glacia": [
+      "Jungle Headhunter",
+      "Aerie Guard",
+      "Spirit Binder",
+      "Flesh Golem",
+      "Blazebinder",
+      "Twin Wyrnn"
+    ]
+  },
+  "gold": 0,
+  "accountXp": 0,
+  "unitXp": {
+    "Blazebinder": 3,
+    "Flesh Golem": 2,
+    "Jungle Headhunter": 2,
+    "Sorceress Glacia": 5,
+    "Spirit Binder": 1,
+    "Twin Wyrnn": 2
+  },
+  "pvp_rating": 1200,
+  "pvp_rank": "Knight",
+  "avatar": "default.png"
+}

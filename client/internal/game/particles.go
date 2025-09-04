@@ -83,8 +83,8 @@ func NewParticleEmitter(x, y float64, maxParticles int) *ParticleEmitter {
 		LifeVariance:  0.2,
 		Size:          4,
 		SizeVariance:  1,
-		StartColor:    color.NRGBA{255, 255, 255, 255},
-		EndColor:      color.NRGBA{255, 255, 255, 0},
+		StartColor:    color.NRGBA{200, 220, 255, 255},
+		EndColor:      color.NRGBA{150, 180, 255, 0},
 		Shape:         "circle",
 		EmissionRate:  50,
 		Duration:      -1, // Infinite
@@ -1035,8 +1035,8 @@ func (ps *ParticleSystem) CreateUnitSpawnEffect(x, y float64, unitClass, unitSub
 
 	// Impact effect at spawn location
 	emitter2 := NewParticleEmitter(x, y, 15)
-	emitter2.StartColor = color.NRGBA{255, 255, 255, 200} // Bright white
-	emitter2.EndColor = color.NRGBA{200, 200, 200, 0}     // White to transparent
+	emitter2.StartColor = color.NRGBA{200, 220, 255, 200} // Light blue
+	emitter2.EndColor = color.NRGBA{150, 180, 255, 0}     // Blue to transparent
 	emitter2.Shape = "circle"
 	emitter2.Spread = 2 * math.Pi
 	emitter2.Speed = 80
@@ -1133,8 +1133,8 @@ func (ps *ParticleSystem) CreateUnitSpawnEffect(x, y float64, unitClass, unitSub
 
 	// Add a final "landing" effect that appears briefly at the exact spawn location
 	emitterFinal := NewParticleEmitter(x, y, 8)
-	emitterFinal.StartColor = color.NRGBA{255, 255, 255, 255} // Pure white
-	emitterFinal.EndColor = color.NRGBA{200, 200, 200, 0}     // White to transparent
+	emitterFinal.StartColor = color.NRGBA{200, 220, 255, 255} // Light blue
+	emitterFinal.EndColor = color.NRGBA{150, 180, 255, 0}     // Blue to transparent
 	emitterFinal.Shape = "circle"
 	emitterFinal.Spread = 2 * math.Pi
 	emitterFinal.Speed = 40
@@ -1674,8 +1674,8 @@ func (ps *ParticleSystem) CreateBaseDamageEffect(x, y float64, damage, baseHP, b
 
 	// Main impact effect - shockwave
 	emitter1 := NewParticleEmitter(x, y, int(30*intensity))
-	emitter1.StartColor = color.NRGBA{255, 255, 255, 255} // Bright white
-	emitter1.EndColor = color.NRGBA{255, 200, 100, 0}     // White to orange
+	emitter1.StartColor = color.NRGBA{255, 200, 100, 255} // Bright orange
+	emitter1.EndColor = color.NRGBA{255, 150, 50, 0}      // Orange to transparent
 	emitter1.Shape = "circle"
 	emitter1.Spread = 2 * math.Pi
 	emitter1.Speed = 150 * intensity
@@ -1775,8 +1775,8 @@ func (ps *ParticleSystem) CreateBaseDamageEffect(x, y float64, damage, baseHP, b
 	// Damage number effect - floating damage numbers
 	// This would require text rendering, but we can simulate with particles
 	emitter6 := NewParticleEmitter(x, y-20, int(8*intensity))
-	emitter6.StartColor = color.NRGBA{255, 255, 255, 255} // White
-	emitter6.EndColor = color.NRGBA{255, 255, 255, 0}     // White to transparent
+	emitter6.StartColor = color.NRGBA{255, 200, 100, 255} // Orange
+	emitter6.EndColor = color.NRGBA{255, 150, 50, 0}      // Orange to transparent
 	emitter6.Shape = "circle"
 	emitter6.Spread = math.Pi / 6 // Narrow upward spread
 	emitter6.Speed = 60
@@ -1790,4 +1790,82 @@ func (ps *ParticleSystem) CreateBaseDamageEffect(x, y float64, damage, baseHP, b
 	emitter6.Gravity = -40 // Float upward
 	emitter6.Drag = 0.95
 	ps.AddEmitter(emitter6)
+}
+
+// CreateAoEImpactEffect creates a visual AoE circle effect at the impact location
+func (ps *ParticleSystem) CreateAoEImpactEffect(x, y float64, damage int) {
+	// Create a ring effect that shows the AoE radius (60 pixels)
+	// Use multiple concentric circles that fade out to show the area
+
+	// Outer ring - shows the full AoE radius
+	emitter1 := NewParticleEmitter(x, y, 40)
+	emitter1.StartColor = color.NRGBA{255, 100, 0, 200} // Bright orange
+	emitter1.EndColor = color.NRGBA{255, 50, 0, 0}      // Orange to transparent
+	emitter1.Shape = "circle"
+	emitter1.Spread = 2 * math.Pi
+	emitter1.Speed = 0 // Stationary
+	emitter1.SpeedVariance = 0
+	emitter1.Life = 0.8
+	emitter1.LifeVariance = 0.2
+	emitter1.Size = 60 // 60 pixel radius
+	emitter1.SizeVariance = 0
+	emitter1.EmissionRate = 1
+	emitter1.Duration = 0.8
+	emitter1.Gravity = 0
+	emitter1.Drag = 1.0
+	ps.AddEmitter(emitter1)
+
+	// Middle ring - slightly smaller
+	emitter2 := NewParticleEmitter(x, y, 30)
+	emitter2.StartColor = color.NRGBA{255, 150, 0, 180} // Lighter orange
+	emitter2.EndColor = color.NRGBA{255, 100, 0, 0}     // Orange to transparent
+	emitter2.Shape = "circle"
+	emitter2.Spread = 2 * math.Pi
+	emitter2.Speed = 0
+	emitter2.SpeedVariance = 0
+	emitter2.Life = 0.6
+	emitter2.LifeVariance = 0.1
+	emitter2.Size = 55
+	emitter2.SizeVariance = 0
+	emitter2.EmissionRate = 1
+	emitter2.Duration = 0.6
+	emitter2.Gravity = 0
+	emitter2.Drag = 1.0
+	ps.AddEmitter(emitter2)
+
+	// Inner ring - even smaller
+	emitter3 := NewParticleEmitter(x, y, 20)
+	emitter3.StartColor = color.NRGBA{255, 200, 0, 160} // Yellow-orange
+	emitter3.EndColor = color.NRGBA{255, 150, 0, 0}     // Yellow to transparent
+	emitter3.Shape = "circle"
+	emitter3.Spread = 2 * math.Pi
+	emitter3.Speed = 0
+	emitter3.SpeedVariance = 0
+	emitter3.Life = 0.4
+	emitter3.LifeVariance = 0.1
+	emitter3.Size = 50
+	emitter3.SizeVariance = 0
+	emitter3.EmissionRate = 1
+	emitter3.Duration = 0.4
+	emitter3.Gravity = 0
+	emitter3.Drag = 1.0
+	ps.AddEmitter(emitter3)
+
+	// Add some spark particles around the AoE circle
+	emitter4 := NewParticleEmitter(x, y, 25)
+	emitter4.StartColor = color.NRGBA{255, 150, 0, 255} // Bright orange sparks
+	emitter4.EndColor = color.NRGBA{255, 50, 0, 0}      // Orange to transparent
+	emitter4.Shape = "circle"
+	emitter4.Spread = 2 * math.Pi
+	emitter4.Speed = 80
+	emitter4.SpeedVariance = 20
+	emitter4.Life = 0.5
+	emitter4.LifeVariance = 0.2
+	emitter4.Size = 2
+	emitter4.SizeVariance = 1
+	emitter4.EmissionRate = 50
+	emitter4.Duration = 0.3
+	emitter4.Gravity = 0
+	emitter4.Drag = 0.95
+	ps.AddEmitter(emitter4)
 }

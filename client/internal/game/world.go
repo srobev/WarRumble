@@ -17,6 +17,7 @@ type RenderUnit struct {
 	Class              string
 	Range              int
 	Particle           string
+	AnimationData      *UnitAnimationData // Animation system data
 }
 
 type RenderProjectile struct {
@@ -69,6 +70,7 @@ func buildWorldFromSnapshot(s protocol.FullSnapshot, currentMapDef *protocol.Map
 			PrevX: float64(u.X), PrevY: float64(u.Y),
 			TargetX: float64(u.X), TargetY: float64(u.Y),
 			HP: u.HP, MaxHP: u.MaxHP, OwnerID: u.OwnerID, Class: u.Class, Range: u.Range, Particle: u.Particle,
+			AnimationData: NewUnitAnimationData(), // Initialize animation system
 		}
 	}
 	for _, b := range s.Bases {
@@ -90,7 +92,10 @@ func (w *World) ApplyDelta(d protocol.StateDelta) {
 		ru := w.Units[u.ID]
 		if ru == nil {
 			// New unit: initialize at server position, no interpolation jump
-			ru = &RenderUnit{ID: u.ID, Name: u.Name}
+			ru = &RenderUnit{
+				ID: u.ID, Name: u.Name,
+				AnimationData: NewUnitAnimationData(), // Initialize animation system
+			}
 			ru.X, ru.Y = float64(u.X), float64(u.Y)
 			ru.PrevX, ru.PrevY = ru.X, ru.Y
 			ru.TargetX, ru.TargetY = ru.X, ru.Y

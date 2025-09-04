@@ -796,13 +796,16 @@ func (g *Game) updateProjectiles(dt float64) {
 // applyProjectileDamage applies damage from a projectile to its target
 func (g *Game) applyProjectileDamage(proj *Projectile) {
 	if proj.TargetID != 0 {
-		// Damage unit
+		// Damage primary target unit
 		if targetUnit, exists := g.units[proj.TargetID]; exists {
 			targetUnit.HP -= proj.Damage
 			if targetUnit.HP < 0 {
 				targetUnit.HP = 0
 			}
 		}
+
+		// Apply AoE damage for certain projectile types
+		g.applyAoEDamage(proj)
 	} else {
 		// Damage base
 		for _, p := range g.players {
@@ -831,6 +834,53 @@ func (g *Game) applyProjectileDamage(proj *Projectile) {
 						g.broadcastEvent("BaseDamageEvent", damageEvent)
 					}
 					break
+				}
+			}
+		}
+	}
+}
+
+// applyAoEDamage applies area of effect damage around the projectile impact
+func (g *Game) applyAoEDamage(proj *Projectile) {
+	// Only apply AoE for certain projectile types
+	if proj.ProjectileType != "fire" {
+		return
+	}
+
+	aoeRadius := 60.0                            // 60 pixel radius for AoE
+	aoeDamage := int(float64(proj.Damage) * 0.5) // 50% of primary damage
+
+	// Find all enemy units within AoE radius
+	for _, unit := range g.units {
+		if unit.OwnerID == proj.OwnerID || unit.HP <= 0 {
+			continue
+		}
+
+		// Check if unit is within AoE radius
+		dist := math.Hypot(unit.X-proj.X, unit.Y-proj.Y)
+		if dist <= aoeRadius {
+			// Don't damage the primary target again
+			if unit.ID != proj.TargetID {
+				originalHP := unit.HP
+				unit.HP -= aoeDamage
+				if unit.HP < 0 {
+					unit.HP = 0
+				}
+
+				// Send AoE damage event
+				if g.broadcastEvent != nil {
+					aoeDamageEvent := protocol.AoEDamageEvent{
+						TargetID:     unit.ID,
+						TargetX:      unit.X,
+						TargetY:      unit.Y,
+						Damage:       originalHP - unit.HP,
+						AttackerID:   0, // Projectile doesn't have attacker unit ID
+						AttackerName: "AoE Fire",
+						TargetName:   unit.Name,
+						ImpactX:      proj.X,
+						ImpactY:      proj.Y,
+					}
+					g.broadcastEvent("AoEDamageEvent", aoeDamageEvent)
 				}
 			}
 		}

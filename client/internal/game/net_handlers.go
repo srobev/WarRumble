@@ -399,6 +399,16 @@ func (g *Game) handle(env Msg) {
 		}
 
 		log.Printf("Base damage: %d damage dealt by %s, base HP: %d/%d", bde.Damage, bde.AttackerName, bde.BaseHP, bde.BaseMaxHP)
+	case "AoEDamageEvent":
+		var aoe protocol.AoEDamageEvent
+		json.Unmarshal(env.Data, &aoe)
+
+		// Trigger AoE visual effect - show the damage circle
+		if g.particleSystem != nil {
+			g.particleSystem.CreateAoEImpactEffect(aoe.ImpactX, aoe.ImpactY, aoe.Damage)
+		}
+
+		log.Printf("AoE damage: %d damage to %s at (%.1f, %.1f)", aoe.Damage, aoe.TargetName, aoe.TargetX, aoe.TargetY)
 	case "MapDef":
 		var md protocol.MapDefMsg
 		json.Unmarshal(env.Data, &md)

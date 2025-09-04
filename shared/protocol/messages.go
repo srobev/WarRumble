@@ -213,6 +213,18 @@ type BaseDamageEvent struct {
 	BaseMaxHP    int     `json:"baseMaxHp"`    // Maximum HP of the base
 }
 
+type AoEDamageEvent struct {
+	TargetID     int64   `json:"targetId"`     // ID of the unit that took AoE damage
+	TargetX      float64 `json:"targetX"`      // Position of the target unit
+	TargetY      float64 `json:"targetY"`      // Position of the target unit
+	Damage       int     `json:"damage"`       // Amount of AoE damage dealt
+	AttackerID   int64   `json:"attackerId"`   // ID of the unit that fired the projectile (0 if environmental)
+	AttackerName string  `json:"attackerName"` // Name of the attacking unit/projectile
+	TargetName   string  `json:"targetName"`   // Name of the target unit
+	ImpactX      float64 `json:"impactX"`      // X position where the projectile impacted
+	ImpactY      float64 `json:"impactY"`      // Y position where the projectile impacted
+}
+
 type FullSnapshot struct {
 	Tick  int64       `json:"tick"`
 	Units []UnitState `json:"units"`

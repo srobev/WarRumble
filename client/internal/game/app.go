@@ -239,6 +239,13 @@ afterMessages:
 	if !g.timerPaused {
 		g.world.LerpPositions()
 
+		// Update unit animations
+		for _, unit := range g.world.Units {
+			if unit.AnimationData != nil {
+				unit.AnimationData.UpdateAnimation(unit, 1.0/60.0)
+			}
+		}
+
 		// Update particle system
 		if g.particleSystem != nil {
 			g.particleSystem.Update(1.0 / 60.0) // Assuming 60 FPS
@@ -349,6 +356,53 @@ afterMessages:
 				g.particleSystem.CreateUnitAbilityEffect(healerX, targetY, "heal")
 				// Green particles on healed target
 				g.particleSystem.CreateTargetHealingEffect(targetX, targetY)
+			}
+		}
+
+		// Unit Animation Test Shortcuts
+		if inpututil.IsKeyJustPressed(ebiten.KeyDigit1) {
+			// Trigger hit animation on first unit
+			for _, unit := range g.world.Units {
+				if unit.AnimationData != nil {
+					unit.AnimationData.TriggerHit()
+					break
+				}
+			}
+		}
+		if inpututil.IsKeyJustPressed(ebiten.KeyDigit2) {
+			// Trigger attack animation on first unit
+			for _, unit := range g.world.Units {
+				if unit.AnimationData != nil {
+					unit.AnimationData.TriggerAttack()
+					break
+				}
+			}
+		}
+		if inpututil.IsKeyJustPressed(ebiten.KeyDigit3) {
+			// Trigger death animation on first unit
+			for _, unit := range g.world.Units {
+				if unit.AnimationData != nil {
+					unit.AnimationData.TriggerDeath()
+					break
+				}
+			}
+		}
+		if inpututil.IsKeyJustPressed(ebiten.KeyDigit4) {
+			// Trigger cast animation on first unit
+			for _, unit := range g.world.Units {
+				if unit.AnimationData != nil {
+					unit.AnimationData.TriggerCast()
+					break
+				}
+			}
+		}
+		if inpututil.IsKeyJustPressed(ebiten.KeyDigit5) {
+			// Trigger defend animation on first unit
+			for _, unit := range g.world.Units {
+				if unit.AnimationData != nil {
+					unit.AnimationData.TriggerDefend()
+					break
+				}
 			}
 		}
 	}
@@ -637,28 +691,64 @@ func (g *Game) Draw(screen *ebiten.Image) {
 				op := &ebiten.DrawImageOptions{}
 				iw, ih := img.Bounds().Dx(), img.Bounds().Dy()
 				s := unitTargetPX / float64(maxInt(1, maxInt(iw, ih))) * g.cameraZoom
-				op.GeoM.Scale(s, s)
-				op.GeoM.Translate(renderX-float64(iw)*s/2, renderY-float64(ih)*s/2)
+
+				// Apply animation transforms if available
+				if u.AnimationData != nil {
+					// Apply animation transforms first (center of original image)
+					u.AnimationData.ApplyTransforms(op, float64(iw)/2, float64(ih)/2)
+
+					// Then apply base scaling and positioning
+					op.GeoM.Scale(s, s)
+					op.GeoM.Translate(renderX-float64(iw)*s/2, renderY-float64(ih)*s/2)
+
+					// Glow effects removed to eliminate white dots
+
+					// Movement trail particles removed to eliminate white dots
+				} else {
+					// No animation data, use basic positioning
+					op.GeoM.Scale(s, s)
+					op.GeoM.Translate(renderX-float64(iw)*s/2, renderY-float64(ih)*s/2)
+				}
+
 				screen.DrawImage(img, op)
 			} else {
-				ebitenutil.DrawRect(screen, renderX-6*g.cameraZoom, renderY-6*g.cameraZoom, 12*g.cameraZoom, 12*g.cameraZoom, color.White)
+				// Fallback: draw a subtle gray dot for missing unit images
+				ebitenutil.DrawRect(screen, renderX-3*g.cameraZoom, renderY-3*g.cameraZoom, 6*g.cameraZoom, 6*g.cameraZoom, color.NRGBA{100, 100, 100, 128})
 			}
 
 			if u.MaxHP > 0 {
-				barW := 26.0 * 1.05 // Fixed size, not scaled
-				bx := renderX - barW/2
-				by := renderY - unitTargetPX/2 - 6 // Fixed size, not scaled
-
-				fx := g.hpfxStep(g.hpFxUnits, id, u.HP, nowMs)
-				g.DrawHPBarForOwner(screen, bx, by, barW, 3, u.HP, u.MaxHP, fx.ghostHP, fx.healGhostHP, u.OwnerID == g.playerID) // Fixed size, not scaled
-				// Level badge left of HP bar
-				rx0 := int(bx + 0.5)
-				ry0 := int(by + 0.5)
-				rx1 := int(bx + barW + 0.5)
-				ry1 := int(by + 3 + 0.5) // Fixed size, not scaled
-				barRect := image.Rect(rx0, ry0, rx1, ry1)
 				lvl := g.levelForUnitName(u.Name)
-				g.drawLevelBadge(screen, barRect, lvl)
+				isFullHealth := u.HP >= u.MaxHP
+
+				if isFullHealth {
+					// Full health: Show level badge above unit head (same as damaged units)
+					barW := 26.0 * 1.05 // Fixed size, not scaled
+					bx := renderX - barW/2
+					by := renderY - unitTargetPX/2 - 6 // Fixed size, not scaled
+
+					// Level badge above unit (same style as damaged units)
+					rx0 := int(bx + 0.5)
+					ry0 := int(by + 0.5)
+					rx1 := int(bx + barW + 0.5)
+					ry1 := int(by + 3 + 0.5) // Fixed size, not scaled
+					barRect := image.Rect(rx0, ry0, rx1, ry1)
+					g.drawLevelBadge(screen, barRect, lvl)
+				} else {
+					// Damaged: Show health bar with level badge
+					barW := 26.0 * 1.05 // Fixed size, not scaled
+					bx := renderX - barW/2
+					by := renderY - unitTargetPX/2 - 6 // Fixed size, not scaled
+
+					fx := g.hpfxStep(g.hpFxUnits, id, u.HP, nowMs)
+					g.DrawHPBarForOwner(screen, bx, by, barW, 3, u.HP, u.MaxHP, fx.ghostHP, fx.healGhostHP, u.OwnerID == g.playerID) // Fixed size, not scaled
+					// Level badge left of HP bar
+					rx0 := int(bx + 0.5)
+					ry0 := int(by + 0.5)
+					rx1 := int(bx + barW + 0.5)
+					ry1 := int(by + 3 + 0.5) // Fixed size, not scaled
+					barRect := image.Rect(rx0, ry0, rx1, ry1)
+					g.drawLevelBadge(screen, barRect, lvl)
+				}
 			}
 		}
 
