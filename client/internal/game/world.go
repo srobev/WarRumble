@@ -19,12 +19,29 @@ type RenderUnit struct {
 	Particle           string
 }
 
+type SpawnAnimation struct {
+	UnitID           int64
+	UnitName         string
+	UnitClass        string
+	UnitSubclass     string
+	StartX, StartY   float64   // Starting position (above spawn point)
+	TargetX, TargetY float64   // Final position (spawn point)
+	StartScale       float64   // Starting scale (zoomed in)
+	EndScale         float64   // Ending scale (normal size)
+	CurrentScale     float64   // Current animation scale
+	Progress         float64   // Animation progress (0-1)
+	Duration         float64   // Total animation duration in seconds
+	StartTime        time.Time // When animation started
+	Active           bool      // Whether animation is still running
+}
+
 type World struct {
-	Units      map[int64]*RenderUnit
-	Bases      map[int64]protocol.BaseState
-	lastUpdate time.Time
-	Obstacles  []protocol.Obstacle // Current map obstacles
-	Lanes      []protocol.Lane     // Current map lanes
+	Units           map[int64]*RenderUnit
+	Bases           map[int64]protocol.BaseState
+	lastUpdate      time.Time
+	Obstacles       []protocol.Obstacle // Current map obstacles
+	Lanes           []protocol.Lane     // Current map lanes
+	SpawnAnimations []*SpawnAnimation   // Active spawn animations
 }
 
 func buildWorldFromSnapshot(s protocol.FullSnapshot, currentMapDef *protocol.MapDef) *World {
@@ -174,4 +191,72 @@ func (w *World) UpdateUnitTargetWithObstacleAvoidance(unitID int64, targetX, tar
 	// Update unit's target position
 	unit.TargetX = newTargetX
 	unit.TargetY = newTargetY
+}
+
+// StartSpawnAnimation creates a new spawn animation for a unit
+func (w *World) StartSpawnAnimation(unitID int64, unitName, unitClass, unitSubclass string, spawnX, spawnY float64) {
+	animation := &SpawnAnimation{
+		UnitID:       unitID,
+		UnitName:     unitName,
+		UnitClass:    unitClass,
+		UnitSubclass: unitSubclass,
+		StartX:       spawnX,
+		StartY:       spawnY - 40, // Start 40 pixels above spawn point (half the height)
+		TargetX:      spawnX,
+		TargetY:      spawnY,
+		StartScale:   1.4, // Start 1.4x zoomed in (half the zoom)
+		EndScale:     1.0, // End at normal size
+		CurrentScale: 1.4,
+		Progress:     0.0,
+		Duration:     0.4, // 0.4 second animation (half the duration)
+		StartTime:    time.Now(),
+		Active:       true,
+	}
+
+	w.SpawnAnimations = append(w.SpawnAnimations, animation)
+}
+
+// UpdateSpawnAnimations updates all active spawn animations
+func (w *World) UpdateSpawnAnimations() {
+	currentTime := time.Now()
+
+	// Update all animations and remove completed ones
+	for i := len(w.SpawnAnimations) - 1; i >= 0; i-- {
+		animation := w.SpawnAnimations[i]
+
+		if !animation.Active {
+			// Remove completed animation
+			w.SpawnAnimations = append(w.SpawnAnimations[:i], w.SpawnAnimations[i+1:]...)
+			continue
+		}
+
+		// Calculate progress
+		elapsed := currentTime.Sub(animation.StartTime).Seconds()
+		animation.Progress = elapsed / animation.Duration
+
+		if animation.Progress >= 1.0 {
+			// Animation completed
+			animation.Progress = 1.0
+			animation.Active = false
+			continue
+		}
+
+		// Update current position and scale using easing
+		// Use ease-out cubic for smooth animation
+		t := animation.Progress
+		easedT := 1.0 - (1.0-t)*(1.0-t)*(1.0-t) // Cubic ease-out
+
+		// Interpolate position
+		animation.CurrentScale = animation.StartScale + (animation.EndScale-animation.StartScale)*easedT
+	}
+}
+
+// GetActiveSpawnAnimation returns the active spawn animation for a unit ID, if any
+func (w *World) GetActiveSpawnAnimation(unitID int64) *SpawnAnimation {
+	for _, animation := range w.SpawnAnimations {
+		if animation.UnitID == unitID && animation.Active {
+			return animation
+		}
+	}
+	return nil
 }

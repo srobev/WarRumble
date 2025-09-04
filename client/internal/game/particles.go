@@ -6,6 +6,8 @@ import (
 	"math/rand"
 	"time"
 
+	"strings"
+
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/vector"
 )
@@ -340,6 +342,74 @@ func (e *ParticleEmitter) drawStarMirrored(screen *ebiten.Image, x, y, size, rot
 	}
 }
 
+// DrawWithCamera renders the emitter's particles with camera transformations
+func (e *ParticleEmitter) DrawWithCamera(screen *ebiten.Image, cameraX, cameraY, cameraZoom float64) {
+	for _, particle := range e.Particles {
+		if !particle.Active {
+			continue
+		}
+
+		// Apply camera transformations to particle position
+		screenX := particle.X*cameraZoom + cameraX
+		screenY := particle.Y*cameraZoom + cameraY
+
+		// Interpolate color
+		t := 1.0 - particle.Life
+		r := uint8(float64(e.StartColor.R) + float64(e.EndColor.R-e.StartColor.R)*t)
+		g := uint8(float64(e.StartColor.G) + float64(e.EndColor.G-e.StartColor.G)*t)
+		b := uint8(float64(e.StartColor.B) + float64(e.EndColor.B-e.StartColor.B)*t)
+		a := uint8(float64(e.StartColor.A) + float64(e.EndColor.A-e.StartColor.A)*t)
+		col := color.NRGBA{r, g, b, a}
+
+		// Draw based on shape with camera-transformed coordinates
+		switch particle.Shape {
+		case "circle":
+			vector.DrawFilledCircle(screen, float32(screenX), float32(screenY), float32(particle.Size), col, true)
+		case "square":
+			halfSize := particle.Size
+			vector.DrawFilledRect(screen, float32(screenX-halfSize), float32(screenY-halfSize), float32(particle.Size*2), float32(particle.Size*2), col, true)
+		case "star":
+			e.drawStar(screen, screenX, screenY, particle.Size, particle.Rotation, col)
+		}
+	}
+}
+
+// DrawMirroredWithCamera renders the emitter's particles with Y-axis mirroring and camera transformations
+func (e *ParticleEmitter) DrawMirroredWithCamera(screen *ebiten.Image, mirrorY func(float64) float64, cameraX, cameraY, cameraZoom float64) {
+	for _, particle := range e.Particles {
+		if !particle.Active {
+			continue
+		}
+
+		// Apply mirroring to particle position
+		mirroredX := particle.X
+		mirroredY := mirrorY(particle.Y)
+
+		// Apply camera transformations to mirrored coordinates
+		screenX := mirroredX*cameraZoom + cameraX
+		screenY := mirroredY*cameraZoom + cameraY
+
+		// Interpolate color
+		t := 1.0 - particle.Life
+		r := uint8(float64(e.StartColor.R) + float64(e.EndColor.R-e.StartColor.R)*t)
+		g := uint8(float64(e.StartColor.G) + float64(e.EndColor.G-e.StartColor.G)*t)
+		b := uint8(float64(e.StartColor.B) + float64(e.EndColor.B-e.StartColor.B)*t)
+		a := uint8(float64(e.StartColor.A) + float64(e.EndColor.A-e.StartColor.A)*t)
+		col := color.NRGBA{r, g, b, a}
+
+		// Draw based on shape with mirrored and camera-transformed coordinates
+		switch particle.Shape {
+		case "circle":
+			vector.DrawFilledCircle(screen, float32(screenX), float32(screenY), float32(particle.Size), col, true)
+		case "square":
+			halfSize := particle.Size
+			vector.DrawFilledRect(screen, float32(screenX-halfSize), float32(screenY-halfSize), float32(particle.Size*2), float32(particle.Size*2), col, true)
+		case "star":
+			e.drawStarMirrored(screen, screenX, screenY, particle.Size, particle.Rotation, col, mirrorY)
+		}
+	}
+}
+
 // CreateExplosionEffect creates an explosion effect
 func (ps *ParticleSystem) CreateExplosionEffect(x, y float64, intensity float64) {
 	emitter := NewParticleEmitter(x, y, int(20*intensity))
@@ -460,22 +530,22 @@ func (ps *ParticleSystem) CreateImpactEffect(x, y float64, impactType string) {
 
 // CreateHealingEffect creates a healing effect
 func (ps *ParticleSystem) CreateHealingEffect(x, y float64) {
-	emitter := NewParticleEmitter(x, y, 20)
+	emitter := NewParticleEmitter(x, y, 30)
 
-	emitter.StartColor = color.NRGBA{100, 255, 100, 255} // Bright green
-	emitter.EndColor = color.NRGBA{50, 255, 50, 0}       // Green to transparent
+	emitter.StartColor = color.NRGBA{0, 255, 0, 255} // Pure bright green
+	emitter.EndColor = color.NRGBA{0, 255, 0, 0}     // Green to transparent
 	emitter.Shape = "star"
-	emitter.Spread = math.Pi / 3 // 60 degrees
-	emitter.Speed = 60
-	emitter.SpeedVariance = 15
-	emitter.Life = 1.0
-	emitter.LifeVariance = 0.3
-	emitter.Size = 3
-	emitter.SizeVariance = 1
-	emitter.EmissionRate = 40
-	emitter.Duration = 0.8
-	emitter.Gravity = -80 // Float upward
-	emitter.Drag = 0.96
+	emitter.Spread = math.Pi / 2 // 90 degrees
+	emitter.Speed = 80
+	emitter.SpeedVariance = 20
+	emitter.Life = 1.5
+	emitter.LifeVariance = 0.4
+	emitter.Size = 4
+	emitter.SizeVariance = 1.5
+	emitter.EmissionRate = 60
+	emitter.Duration = 1.2
+	emitter.Gravity = -60 // Float upward
+	emitter.Drag = 0.95
 
 	ps.AddEmitter(emitter)
 }
@@ -527,7 +597,7 @@ func (ps *ParticleSystem) CreateAuraEffect(x, y float64, auraType string) {
 	emitter.Size = 2
 	emitter.SizeVariance = 0.5
 	emitter.EmissionRate = 20
-	emitter.Duration = -1 // Continuous
+	emitter.Duration = 1.5 // Short duration for healing aura
 	emitter.Gravity = 0
 	emitter.Drag = 0.95
 
@@ -812,6 +882,270 @@ func (ps *ParticleSystem) CreateLevelUpEffect(x, y float64) {
 	emitter.Drag = 0.8
 
 	ps.AddEmitter(emitter)
+}
+
+// CreateUnitDeathEffect creates spectacular death effects based on unit type
+func (ps *ParticleSystem) CreateUnitDeathEffect(x, y float64, unitClass, unitSubclass string) {
+	// Create multiple effects for a spectacular death animation
+	class := strings.ToLower(unitClass)
+	subclass := strings.ToLower(unitSubclass)
+
+	// Main explosion effect (all units get this)
+	emitter := NewParticleEmitter(x, y, 25)
+	emitter.StartColor = color.NRGBA{255, 100, 0, 255} // Bright orange
+	emitter.EndColor = color.NRGBA{255, 50, 0, 0}      // Orange to transparent
+	emitter.Shape = "circle"
+	emitter.Spread = 2 * math.Pi
+	emitter.Speed = 120
+	emitter.SpeedVariance = 40
+	emitter.Life = 0.8
+	emitter.LifeVariance = 0.3
+	emitter.Size = 3
+	emitter.SizeVariance = 1
+	emitter.EmissionRate = 150
+	emitter.Duration = 0.3
+	emitter.Gravity = 100
+	emitter.Drag = 0.9
+	ps.AddEmitter(emitter)
+
+	// Secondary debris effect
+	emitter2 := NewParticleEmitter(x, y, 20)
+	emitter2.StartColor = color.NRGBA{150, 150, 150, 200} // Gray
+	emitter2.EndColor = color.NRGBA{50, 50, 50, 0}        // Gray to transparent
+	emitter2.Shape = "circle"
+	emitter2.Spread = 2 * math.Pi
+	emitter2.Speed = 80
+	emitter2.SpeedVariance = 30
+	emitter2.Life = 1.2
+	emitter2.LifeVariance = 0.4
+	emitter2.Size = 2
+	emitter2.SizeVariance = 0.8
+	emitter2.EmissionRate = 80
+	emitter2.Duration = 0.5
+	emitter2.Gravity = 150
+	emitter2.Drag = 0.95
+	ps.AddEmitter(emitter2)
+
+	// Class-specific effects
+	switch class {
+	case "range":
+		// Ranged units get magical energy burst
+		emitter3 := NewParticleEmitter(x, y, 15)
+		emitter3.StartColor = color.NRGBA{100, 200, 255, 220} // Light blue
+		emitter3.EndColor = color.NRGBA{50, 100, 255, 0}      // Blue to transparent
+		emitter3.Shape = "star"
+		emitter3.Spread = 2 * math.Pi
+		emitter3.Speed = 100
+		emitter3.SpeedVariance = 25
+		emitter3.Life = 1.0
+		emitter3.LifeVariance = 0.3
+		emitter3.Size = 3
+		emitter3.SizeVariance = 1
+		emitter3.EmissionRate = 60
+		emitter3.Duration = 0.4
+		emitter3.Gravity = -50
+		emitter3.Drag = 0.9
+		ps.AddEmitter(emitter3)
+
+		// Healers get special healing energy release
+		if subclass == "healer" {
+			emitter4 := NewParticleEmitter(x, y, 18)
+			emitter4.StartColor = color.NRGBA{100, 255, 150, 200} // Bright green
+			emitter4.EndColor = color.NRGBA{50, 255, 100, 0}      // Green to transparent
+			emitter4.Shape = "star"
+			emitter4.Spread = 2 * math.Pi
+			emitter4.Speed = 90
+			emitter4.SpeedVariance = 20
+			emitter4.Life = 1.5
+			emitter4.LifeVariance = 0.4
+			emitter4.Size = 4
+			emitter4.SizeVariance = 1.5
+			emitter4.EmissionRate = 50
+			emitter4.Duration = 0.6
+			emitter4.Gravity = -30
+			emitter4.Drag = 0.88
+			ps.AddEmitter(emitter4)
+		}
+
+	case "melee":
+		// Melee units get metallic debris
+		emitter3 := NewParticleEmitter(x, y, 12)
+		emitter3.StartColor = color.NRGBA{200, 200, 200, 220} // Silver
+		emitter3.EndColor = color.NRGBA{100, 100, 100, 0}     // Gray to transparent
+		emitter3.Shape = "circle"
+		emitter3.Spread = math.Pi // 180 degrees forward
+		emitter3.Speed = 70
+		emitter3.SpeedVariance = 20
+		emitter3.Life = 1.8
+		emitter3.LifeVariance = 0.5
+		emitter3.Size = 2.5
+		emitter3.SizeVariance = 0.8
+		emitter3.EmissionRate = 40
+		emitter3.Duration = 0.7
+		emitter3.Gravity = 120
+		emitter3.Drag = 0.92
+		ps.AddEmitter(emitter3)
+
+	default:
+		// Generic units get smoke effect
+		emitter3 := NewParticleEmitter(x, y, 16)
+		emitter3.StartColor = color.NRGBA{80, 80, 80, 180} // Dark gray
+		emitter3.EndColor = color.NRGBA{30, 30, 30, 0}     // Dark gray to transparent
+		emitter3.Shape = "circle"
+		emitter3.Spread = 2 * math.Pi
+		emitter3.Speed = 60
+		emitter3.SpeedVariance = 15
+		emitter3.Life = 2.0
+		emitter3.LifeVariance = 0.6
+		emitter3.Size = 3
+		emitter3.SizeVariance = 1
+		emitter3.EmissionRate = 35
+		emitter3.Duration = 0.8
+		emitter3.Gravity = -20
+		emitter3.Drag = 0.96
+		ps.AddEmitter(emitter3)
+	}
+}
+
+// CreateUnitSpawnEffect creates spectacular spawn effects that look like units are dropped from the sky
+func (ps *ParticleSystem) CreateUnitSpawnEffect(x, y float64, unitClass, unitSubclass string) {
+	// Create effects that simulate units falling from above
+	class := strings.ToLower(unitClass)
+	subclass := strings.ToLower(unitSubclass)
+
+	// Main drop effect - particles falling from above the spawn point
+	emitter := NewParticleEmitter(x, y-100, 20)          // Start 100 pixels above
+	emitter.StartColor = color.NRGBA{200, 220, 255, 180} // Light blue-white
+	emitter.EndColor = color.NRGBA{150, 180, 255, 0}     // Blue to transparent
+	emitter.Shape = "circle"
+	emitter.Spread = math.Pi / 3 // Narrow downward spread
+	emitter.Speed = 150
+	emitter.SpeedVariance = 30
+	emitter.Life = 1.2
+	emitter.LifeVariance = 0.4
+	emitter.Size = 2
+	emitter.SizeVariance = 0.8
+	emitter.EmissionRate = 80
+	emitter.Duration = 0.6
+	emitter.Gravity = 200 // Heavy gravity to simulate falling
+	emitter.Drag = 0.85
+	ps.AddEmitter(emitter)
+
+	// Impact effect at spawn location
+	emitter2 := NewParticleEmitter(x, y, 15)
+	emitter2.StartColor = color.NRGBA{255, 255, 255, 200} // Bright white
+	emitter2.EndColor = color.NRGBA{200, 200, 200, 0}     // White to transparent
+	emitter2.Shape = "circle"
+	emitter2.Spread = 2 * math.Pi
+	emitter2.Speed = 80
+	emitter2.SpeedVariance = 25
+	emitter2.Life = 0.8
+	emitter2.LifeVariance = 0.3
+	emitter2.Size = 1.5
+	emitter2.SizeVariance = 0.5
+	emitter2.EmissionRate = 100
+	emitter2.Duration = 0.3
+	emitter2.Gravity = 50
+	emitter2.Drag = 0.9
+	ps.AddEmitter(emitter2)
+
+	// Class-specific spawn effects
+	switch class {
+	case "range":
+		// Ranged units get magical summoning circle
+		emitter3 := NewParticleEmitter(x, y, 18)
+		emitter3.StartColor = color.NRGBA{150, 200, 255, 160} // Light blue
+		emitter3.EndColor = color.NRGBA{100, 150, 255, 0}     // Blue to transparent
+		emitter3.Shape = "star"
+		emitter3.Spread = 2 * math.Pi
+		emitter3.Speed = 60
+		emitter3.SpeedVariance = 15
+		emitter3.Life = 1.5
+		emitter3.LifeVariance = 0.4
+		emitter3.Size = 3
+		emitter3.SizeVariance = 1
+		emitter3.EmissionRate = 50
+		emitter3.Duration = 0.8
+		emitter3.Gravity = -20 // Float upward slightly
+		emitter3.Drag = 0.92
+		ps.AddEmitter(emitter3)
+
+		// Healers get special green summoning effect
+		if subclass == "healer" {
+			emitter4 := NewParticleEmitter(x, y, 12)
+			emitter4.StartColor = color.NRGBA{150, 255, 180, 180} // Bright green
+			emitter4.EndColor = color.NRGBA{100, 255, 150, 0}     // Green to transparent
+			emitter4.Shape = "star"
+			emitter4.Spread = 2 * math.Pi
+			emitter4.Speed = 70
+			emitter4.SpeedVariance = 20
+			emitter4.Life = 1.8
+			emitter4.LifeVariance = 0.5
+			emitter4.Size = 4
+			emitter4.SizeVariance = 1.2
+			emitter4.EmissionRate = 40
+			emitter4.Duration = 1.0
+			emitter4.Gravity = -30
+			emitter4.Drag = 0.88
+			ps.AddEmitter(emitter4)
+		}
+
+	case "melee":
+		// Melee units get metallic landing effect
+		emitter3 := NewParticleEmitter(x, y, 16)
+		emitter3.StartColor = color.NRGBA{220, 220, 220, 200} // Silver
+		emitter3.EndColor = color.NRGBA{150, 150, 150, 0}     // Gray to transparent
+		emitter3.Shape = "circle"
+		emitter3.Spread = math.Pi // 180 degrees outward
+		emitter3.Speed = 90
+		emitter3.SpeedVariance = 25
+		emitter3.Life = 1.0
+		emitter3.LifeVariance = 0.3
+		emitter3.Size = 2.5
+		emitter3.SizeVariance = 0.8
+		emitter3.EmissionRate = 60
+		emitter3.Duration = 0.5
+		emitter3.Gravity = 80
+		emitter3.Drag = 0.9
+		ps.AddEmitter(emitter3)
+
+	default:
+		// Generic units get energy burst
+		emitter3 := NewParticleEmitter(x, y, 14)
+		emitter3.StartColor = color.NRGBA{255, 255, 200, 180} // Yellow-white
+		emitter3.EndColor = color.NRGBA{255, 200, 100, 0}     // Yellow to transparent
+		emitter3.Shape = "circle"
+		emitter3.Spread = 2 * math.Pi
+		emitter3.Speed = 100
+		emitter3.SpeedVariance = 30
+		emitter3.Life = 1.2
+		emitter3.LifeVariance = 0.4
+		emitter3.Size = 2
+		emitter3.SizeVariance = 0.7
+		emitter3.EmissionRate = 45
+		emitter3.Duration = 0.7
+		emitter3.Gravity = 0
+		emitter3.Drag = 0.95
+		ps.AddEmitter(emitter3)
+	}
+
+	// Add a final "landing" effect that appears briefly at the exact spawn location
+	emitterFinal := NewParticleEmitter(x, y, 8)
+	emitterFinal.StartColor = color.NRGBA{255, 255, 255, 255} // Pure white
+	emitterFinal.EndColor = color.NRGBA{200, 200, 200, 0}     // White to transparent
+	emitterFinal.Shape = "circle"
+	emitterFinal.Spread = 2 * math.Pi
+	emitterFinal.Speed = 40
+	emitterFinal.SpeedVariance = 10
+	emitterFinal.Life = 0.5
+	emitterFinal.LifeVariance = 0.2
+	emitterFinal.Size = 1
+	emitterFinal.SizeVariance = 0.3
+	emitterFinal.EmissionRate = 60
+	emitterFinal.Duration = 0.2
+	emitterFinal.Gravity = 0
+	emitterFinal.Drag = 0.98
+	ps.AddEmitter(emitterFinal)
 }
 
 func init() {

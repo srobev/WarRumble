@@ -24,7 +24,14 @@ type Room struct {
 }
 
 func NewRoom(id string, h *Hub) *Room {
-	return &Room{id: id, g: NewGame(), hub: h, Mode: "pve"}
+	r := &Room{id: id, g: NewGame(), hub: h, Mode: "pve"}
+	// Set up event broadcasting callback
+	r.g.broadcastEvent = func(eventType string, event interface{}) {
+		for _, c := range r.players {
+			sendJSON(c, eventType, event)
+		}
+	}
+	return r
 }
 
 // ---- Lobby join without starting the battle

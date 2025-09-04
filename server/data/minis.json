@@ -20,10 +20,10 @@
     "speed": 1
   },
   {
-    "name": "Banshee",
+    "name": "Wraith",
     "dmg": 280,
     "hp": 500,
-    "portrait": "banshee.png",
+    "portrait": "wraith.png",
     "class": "melee",
     "role": "mini",
     "cost": 3,
@@ -189,10 +189,10 @@
     "particle": "projectile"
   },
   {
-    "name": "Gargoyle",
+    "name": "Obsidian Bat",
     "dmg": 220,
     "hp": 530,
-    "portrait": "gargoyle.png",
+    "portrait": "obsidian_bat.png",
     "class": "range",
     "subclass": "air-vs-base",
     "role": "mini",
@@ -350,10 +350,10 @@
     "speed": 1
   },
   {
-    "name": "Necromancer",
+    "name": "Reanimator",
     "dmg": 120,
     "hp": 360,
-    "portrait": "necromancer.png",
+    "portrait": "reanimator.png",
     "class": "melee",
     "role": "mini",
     "cost": 3,
@@ -498,12 +498,12 @@
     "speed": 1
   },
   {
-    "name": "Witch Doctor",
+    "name": "Voodoo Hexer",
     "dmg": 170,
     "hp": 320,
     "heal": 100,
     "hps": 100,
-    "portrait": "witch-doctor.png",
+    "portrait": "voodoo_hexer.png",
     "class": "range",
     "subclass": "ranger",
     "role": "mini",

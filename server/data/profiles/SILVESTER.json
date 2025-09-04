@@ -1,5 +1,5 @@
 {
-  "playerId": 4302270,
+  "playerId": 94597,
   "name": "silvester",
   "army": [
     "Aethelion Ragestorm",
@@ -7,7 +7,7 @@
     "Foulwing Rider",
     "Twin Wyrnn",
     "Blazebinder",
-    "Winged Screechers",
+    "Spirit Binder",
     "Night Sentinel"
   ],
   "armies": {
@@ -16,7 +16,7 @@
       "Foulwing Rider",
       "Twin Wyrnn",
       "Blazebinder",
-      "Winged Screechers",
+      "Spirit Binder",
       "Night Sentinel"
     ],
     "Bloodmage Thalnos": [
@@ -160,9 +160,9 @@
   "accountXp": 0,
   "unitXp": {
     "Abomination": 11,
-    "Aethelion Ragestorm": 2,
+    "Aethelion Ragestorm": 9,
     "Bat Rider": 12,
-    "Blazebinder": 3,
+    "Blazebinder": 6,
     "Bloodmage Thalor": 1,
     "Chimaera": 1,
     "Core Hound": 5,
@@ -170,15 +170,17 @@
     "Crimson Raider": 6,
     "Faerie Dragon": 1,
     "Flesh Golem": 1,
+    "Foulwing Rider": 4,
     "Frostwolf Shaman": 10,
     "Harpies": 1,
-    "Night Sentinel": 6,
+    "Night Sentinel": 7,
     "Ragnaros": 1,
     "Sir Kaelen Lightbane": 5,
     "Sorceress Glacia": 27,
-    "Spirit Binder": 3
+    "Spirit Binder": 5,
+    "Twin Wyrnn": 3
   },
-  "pvp_rating": 1352,
+  "pvp_rating": 1334,
   "pvp_rank": "Captain",
   "avatar": "male.png",
   "guildId": "g-1756713614348685400"

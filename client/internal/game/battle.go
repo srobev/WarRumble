@@ -35,7 +35,59 @@ type hpFx struct {
 }
 
 func (g *Game) updateBattle() {
-	// Skip battle updates if game is paused
+	// Handle camera controls for battle map scrolling and zooming (always active)
+	if g.scr == screenBattle {
+		// Zoom disabled - battles maintain fixed 20% zoom level
+
+		// Pan with middle mouse button only (avoid conflict with right-click deployment)
+		if ebiten.IsMouseButtonPressed(ebiten.MouseButtonMiddle) {
+			if !g.cameraDragging {
+				g.cameraDragging = true
+				g.cameraDragStartX, g.cameraDragStartY = ebiten.CursorPosition()
+				g.cameraDragInitialX, g.cameraDragInitialY = g.cameraX, g.cameraY
+			} else {
+				cx, cy := ebiten.CursorPosition()
+				deltaX := cx - g.cameraDragStartX
+				deltaY := cy - g.cameraDragStartY
+				g.cameraX = g.cameraDragInitialX + float64(deltaX)
+				g.cameraY = g.cameraDragInitialY + float64(deltaY)
+			}
+		} else {
+			g.cameraDragging = false
+		}
+
+		// Edge scrolling when zoomed in and no unit selected
+		if g.cameraZoom > 1.0 && g.selectedIdx == -1 && !g.dragActive && !g.cameraDragging {
+			mx, my := ebiten.CursorPosition()
+			const edgeThreshold = 50 // pixels from edge to trigger scrolling
+			const scrollSpeed = 8.0  // pixels per frame
+
+			// Calculate map boundaries (stop scrolling when we would see more than 20% outside)
+			mapWidth := float64(protocol.ScreenW) * g.cameraZoom
+			mapHeight := float64(protocol.ScreenH) * g.cameraZoom
+			maxScrollX := mapWidth * 0.2  // 20% outside left/right borders
+			maxScrollY := mapHeight * 0.2 // 20% outside top/bottom borders
+
+			// Left edge - scroll right to see more left side (stop before exceeding 20%)
+			if mx < edgeThreshold && g.cameraX < maxScrollX {
+				g.cameraX += scrollSpeed
+			}
+			// Right edge - scroll left to see more right side (stop before exceeding 20%)
+			if mx > protocol.ScreenW-edgeThreshold && g.cameraX > -maxScrollX {
+				g.cameraX -= scrollSpeed
+			}
+			// Top edge - scroll down to see more top side (stop before exceeding 20%)
+			if my < edgeThreshold && g.cameraY < maxScrollY {
+				g.cameraY += scrollSpeed
+			}
+			// Bottom edge (accounting for UI) - scroll up to see more bottom side (stop before exceeding 20%)
+			if my > protocol.ScreenH-battleHUDH-edgeThreshold && g.cameraY > -maxScrollY {
+				g.cameraY -= scrollSpeed
+			}
+		}
+	}
+
+	// Skip deployment and other battle updates if game is paused
 	if g.timerPaused {
 		return
 	}
@@ -224,7 +276,8 @@ func (g *Game) drawBattleBar(screen *ebiten.Image) {
 
 		if img := g.ensureMiniImageByName(g.hand[g.dragIdx].Name); img != nil {
 			iw, ih := img.Bounds().Dx(), img.Bounds().Dy()
-			s := 0.5 * mathMin(1, 48.0/float64(maxInt(iw, ih)))
+			// Use same scale as spawn animation start (1.8x) so drag preview matches falling animation
+			s := 1.8 * mathMin(1, 48.0/float64(maxInt(iw, ih)))
 			op := &ebiten.DrawImageOptions{}
 			op.GeoM.Scale(s, s)
 			op.GeoM.Translate(previewX-float64(iw)*s/2, previewY-float64(ih)*s/2)
@@ -245,17 +298,20 @@ func (g *Game) isInDeployZone(x, y float64) bool {
 	// Check if PvP mirroring is active
 	shouldMirror := g.shouldMirrorForPvp()
 
-	// Convert screen coordinates to normalized coordinates (0-1)
-	normX := x / float64(protocol.ScreenW)
-	normY := y / float64(protocol.ScreenH)
+	// Convert screen coordinates to world coordinates (inverse camera transformation)
+	// World coordinates = (screen coordinates - camera offset) / camera zoom
+	worldX := (x - g.cameraX) / g.cameraZoom
+	worldY := (y - g.cameraY) / g.cameraZoom
 
-	// If mirroring is active, we need to check against the mirrored deploy zones
-	// The deploy zones in the map definition are in their original positions,
-	// but when the screen is mirrored, we need to check the mirrored positions
+	// If mirroring is active, apply inverse mirroring to the world coordinates
 	if shouldMirror {
-		// Apply inverse mirroring to the normalized coordinates
-		normY = 1.0 - normY
+		// Apply inverse mirroring to the world coordinates
+		worldY = float64(protocol.ScreenH) - worldY
 	}
+
+	// Convert world coordinates to normalized coordinates (0-1)
+	normX := worldX / float64(protocol.ScreenW)
+	normY := worldY / float64(protocol.ScreenH)
 
 	// Check if point is within any deploy zone
 	for _, zone := range g.currentMapDef.DeployZones {

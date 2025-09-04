@@ -43,18 +43,31 @@ type editor struct {
 	bg       *ebiten.Image
 	def      protocol.MapDef
 	tmpLane  []protocol.PointF
-	tool     int // 0 deploy, 1 stone, 2 mine, 3 lane, 4 obstacle
+	tool     int // 0 deploy, 1 stone, 2 mine, 3 lane, 4 obstacle, 5 decorative
 	name     string
 	status   string
 	savePath string
 
 	// selection & editing
-	selKind   string // ""|"deploy"|"stone"|"mine"|"lane"|"obstacle"
+	selKind   string // ""|"deploy"|"stone"|"mine"|"lane"|"obstacle"|"decorative"
 	selIndex  int
 	selHandle int // for deploy corners: 0=TL,1=TR,2=BR,3=BL, -1=body; for obstacles: 0=TL,1=TR,2=BR,3=BL, -1=body
 	dragging  bool
 	lastMx    int
 	lastMy    int
+
+	// camera system for map scrolling and zooming
+	cameraX          float64
+	cameraY          float64
+	cameraZoom       float64
+	cameraMinZoom    float64
+	cameraMaxZoom    float64
+	cameraDragging   bool
+	cameraDragStartX int
+	cameraDragStartY int
+
+	// extended camera space visualization
+	showExtendedCameraSpace bool
 
 	// bg management
 	showGrid bool
@@ -74,6 +87,13 @@ type editor struct {
 	obstaclesBrowserSel    int
 	obstaclesBrowserScroll int
 	obstaclesCurrentPath   string
+
+	// decorative elements browser
+	showDecorativeBrowser   bool
+	availableDecorative     []string
+	decorativeBrowserSel    int
+	decorativeBrowserScroll int
+	decorativeCurrentPath   string
 
 	// removed name input focus - no longer needed
 
@@ -297,46 +317,144 @@ func (e *editor) Update() error {
 done:
 	mx, my := ebiten.CursorPosition()
 
+	// Handle camera controls for map editor
+	// Zoom with mouse wheel
+	_, wy := ebiten.Wheel()
+	if wy != 0 {
+		oldZoom := e.cameraZoom
+		e.cameraZoom *= (1.0 + wy*0.1)
+		if e.cameraZoom < e.cameraMinZoom {
+			e.cameraZoom = e.cameraMinZoom
+		}
+		if e.cameraZoom > e.cameraMaxZoom {
+			e.cameraZoom = e.cameraMaxZoom
+		}
+		// Adjust camera position to zoom towards mouse cursor
+		if oldZoom != e.cameraZoom {
+			mx, my := ebiten.CursorPosition()
+			zoomFactor := e.cameraZoom / oldZoom
+			e.cameraX = float64(mx) - (float64(mx)-e.cameraX)*zoomFactor
+			e.cameraY = float64(my) - (float64(my)-e.cameraY)*zoomFactor
+		}
+	}
+
+	// Pan with middle mouse button or right mouse button when not over UI
+	if ebiten.IsMouseButtonPressed(ebiten.MouseButtonMiddle) ||
+		(ebiten.IsMouseButtonPressed(ebiten.MouseButtonRight) && !e.cameraDragging) {
+		if !e.cameraDragging {
+			e.cameraDragging = true
+			e.cameraDragStartX, e.cameraDragStartY = ebiten.CursorPosition()
+		} else {
+			cx, cy := ebiten.CursorPosition()
+			e.cameraX += float64(cx - e.cameraDragStartX)
+			e.cameraY += float64(cy - e.cameraDragStartY)
+			e.cameraDragStartX, e.cameraDragStartY = cx, cy
+		}
+	} else {
+		e.cameraDragging = false
+	}
+
 	// Deselect tool when overlays are open to prevent accidental object placement
-	if e.showMapBrowser || e.showAssetsBrowser || e.showObstaclesBrowser {
+	if e.showMapBrowser || e.showAssetsBrowser || e.showObstaclesBrowser || e.showDecorativeBrowser {
 		e.tool = -1 // Deselect any tool
+	}
+
+	// Decorative elements browser interactions
+	if e.showDecorativeBrowser {
+		// simple list on the right
+		vw, vh := ebiten.WindowSize()
+		panelX := vw - 240
+		panelY := 40
+		panelW := 232
+		panelH := vh - panelY - 8
+		rowH := 20
+		maxRows := panelH / rowH
+		// wheel scroll when hovering
+		_, wy := ebiten.Wheel()
+		if wy != 0 {
+			if mx >= panelX && mx < panelX+panelW && my >= panelY && my < panelY+panelH {
+				e.decorativeBrowserScroll -= int(wy)
+				if e.decorativeBrowserScroll < 0 {
+					e.decorativeBrowserScroll = 0
+				}
+				if len(e.availableDecorative) > maxRows {
+					maxStart := len(e.availableDecorative) - maxRows
+					if e.decorativeBrowserScroll > maxStart {
+						e.decorativeBrowserScroll = maxStart
+					}
+				}
+			}
+		}
+		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+			if mx >= panelX && mx < panelX+panelW && my >= panelY && my < panelY+panelH {
+				idx := (my-panelY)/rowH + e.decorativeBrowserScroll
+				if idx >= 0 && idx < len(e.availableDecorative) {
+					item := e.availableDecorative[idx]
+					if item == ".." {
+						// go up
+						parent := filepath.Dir(e.decorativeCurrentPath)
+						e.decorativeCurrentPath = parent
+						e.refreshDecorativeBrowser()
+					} else if strings.HasPrefix(item, "[DIR] ") {
+						// enter directory
+						dirName := strings.TrimPrefix(item, "[DIR] ")
+						newPath := filepath.Join(e.decorativeCurrentPath, dirName)
+						e.decorativeCurrentPath = newPath
+						e.refreshDecorativeBrowser()
+					} else {
+						// load file as decorative element
+						fullPath := filepath.Join(e.decorativeCurrentPath, item)
+						if _, _, err := ebitenutil.NewImageFromFile(fullPath); err == nil {
+							if e.selKind == "decorative" && e.selIndex >= 0 && e.selIndex < len(e.def.DecorativeElements) {
+								// Change image of selected decorative element
+								e.def.DecorativeElements[e.selIndex].Image = filepath.Base(fullPath)
+								e.status = fmt.Sprintf("Decorative element image changed: %s", filepath.Base(fullPath))
+							} else {
+								// Create new decorative element at center of canvas
+								nx, ny := 0.5, 0.5 // center
+								dec := protocol.DecorativeElement{
+									X:      nx - 0.05,
+									Y:      ny - 0.05,
+									Image:  filepath.Base(fullPath),
+									Width:  0.1,
+									Height: 0.1,
+									Layer:  1, // middle layer
+								}
+								e.def.DecorativeElements = append(e.def.DecorativeElements, dec)
+								e.selKind, e.selIndex, e.selHandle = "decorative", len(e.def.DecorativeElements)-1, -1
+								e.status = fmt.Sprintf("Decorative element added: %s", filepath.Base(fullPath))
+							}
+							e.showDecorativeBrowser = false
+						} else {
+							e.status = fmt.Sprintf("Failed to load decorative image: %v", err)
+						}
+					}
+					e.decorativeBrowserSel = idx
+				}
+			}
+		}
 	}
 
 	// Enhanced toolbar click handling (updated for new button positions)
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		// Tool buttons
-		for i := 0; i < 5; i++ {
+		for i := 0; i < 6; i++ {
 			x, y, w, h := 8, 8+i*40, 100, 36
 			if mx >= x && mx < x+w && my >= y && my < y+h {
 				e.tool = i
-				e.status = fmt.Sprintf("Selected: %s", []string{"Deploy Zones", "Meeting Stones", "Gold Mines", "Movement Lanes", "Obstacles"}[i])
+				toolNames := []string{"Deploy Zones", "Meeting Stones", "Gold Mines", "Movement Lanes", "Obstacles", "Decorative"}
+				e.status = fmt.Sprintf("Selected: %s", toolNames[i])
 			}
 		}
 
-		// Quick action buttons
-		for i := 0; i < 4; i++ {
-			x, y, w, h := 120, 8+i*40, 80, 36
-			if mx >= x && mx < x+w && my >= y && my < y+h {
-				switch i {
-				case 0: // Grid
-					e.showGrid = !e.showGrid
-					if e.showGrid {
-						e.status = "Grid overlay enabled"
-					} else {
-						e.status = "Grid overlay disabled"
-					}
-				case 1: // Snap
-					e.showGrid = !e.showGrid // Using grid for snap functionality
-					if e.showGrid {
-						e.status = "Snap-to-grid enabled"
-					} else {
-						e.status = "Snap-to-grid disabled"
-					}
-				case 2: // Undo
-					e.status = "Undo functionality coming soon"
-				case 3: // Redo
-					e.status = "Redo functionality coming soon"
-				}
+		// Handle camera view toggle button click
+		camX, camY, camW, camH := 300, 8, 120, 36
+		if mx >= camX && mx < camX+camW && my >= camY && my < camY+camH {
+			e.showExtendedCameraSpace = !e.showExtendedCameraSpace
+			if e.showExtendedCameraSpace {
+				e.status = "Extended camera space visualization enabled"
+			} else {
+				e.status = "Extended camera space visualization disabled"
 			}
 		}
 	}
@@ -473,6 +591,24 @@ done:
 		}
 		return -1, 0, false
 	}
+	hitDecorative := func(mx, my int) (idx int, handle int, ok bool) {
+		for i, dec := range e.def.DecorativeElements {
+			x, y := toPix(dec.X, dec.Y)
+			w := int(dec.Width * float64(dispW))
+			h := int(dec.Height * float64(dispH))
+			// corners for resizing
+			corners := [][4]int{{x - 4, y - 4, 8, 8}, {x + w - 4, y - 4, 8, 8}, {x + w - 4, y + h - 4, 8, 8}, {x - 4, y + h - 4, 8, 8}}
+			for ci, c := range corners {
+				if mx >= c[0] && mx < c[0]+c[2] && my >= c[1] && my < c[1]+c[3] {
+					return i, ci, true
+				}
+			}
+			if mx >= x && mx < x+w && my >= y && my < y+h {
+				return i, -1, true
+			}
+		}
+		return -1, 0, false
+	}
 	hitPlayerBase := func(mx, my int) bool {
 		if e.def.PlayerBase.X == 0 && e.def.PlayerBase.Y == 0 {
 			return false
@@ -498,7 +634,7 @@ done:
 		e.showHelp = false
 
 		// Check enhanced toolbar buttons
-		for i := 0; i < 5; i++ {
+		for i := 0; i < 6; i++ {
 			x, y, w, h := 8, 8+i*40, 100, 36
 			if mx >= x && mx < x+w && my >= y && my < y+h {
 				tooltips := []string{
@@ -507,6 +643,7 @@ done:
 					"💰 Gold Mines: Click to place gold resource points",
 					"🛤️ Movement Lanes: Click to start drawing unit movement paths",
 					"🌳 Obstacles: Click to place blocking objects on the map",
+					"🎨 Decorative: Click to place decorative elements on the map",
 				}
 				e.helpText = tooltips[i]
 				e.tooltipX = x + w + 10
@@ -676,6 +813,9 @@ done:
 			} else if idx, h, ok := hitObstacle(mx, my); ok {
 				e.selKind, e.selIndex, e.selHandle = "obstacle", idx, h
 				e.dragging, e.lastMx, e.lastMy = true, mx, my
+			} else if idx, h, ok := hitDecorative(mx, my); ok {
+				e.selKind, e.selIndex, e.selHandle = "decorative", idx, h
+				e.dragging, e.lastMx, e.lastMy = true, mx, my
 			} else if hitPlayerBase(mx, my) {
 				e.selKind, e.selIndex, e.selHandle = "playerbase", -1, -1
 				e.dragging = true
@@ -702,6 +842,9 @@ done:
 				case 4:
 					e.def.Obstacles = append(e.def.Obstacles, protocol.Obstacle{X: nx - 0.05, Y: ny - 0.05, Type: "tree", Image: "tree.png", Width: 0.1, Height: 0.1})
 					e.selKind, e.selIndex, e.selHandle = "obstacle", len(e.def.Obstacles)-1, -1
+				case 5:
+					e.def.DecorativeElements = append(e.def.DecorativeElements, protocol.DecorativeElement{X: nx - 0.05, Y: ny - 0.05, Image: "decorative.png", Width: 0.1, Height: 0.1, Layer: 1})
+					e.selKind, e.selIndex, e.selHandle = "decorative", len(e.def.DecorativeElements)-1, -1
 				}
 				e.lastMx, e.lastMy = mx, my
 			}
@@ -893,6 +1036,52 @@ done:
 					p.Y = 1
 				}
 				e.def.EnemyBase = p
+			case "decorative":
+				if e.selIndex >= 0 && e.selIndex < len(e.def.DecorativeElements) {
+					dec := e.def.DecorativeElements[e.selIndex]
+					if e.selHandle == -1 {
+						dec.X += ndx
+						dec.Y += ndy
+					} else {
+						switch e.selHandle {
+						case 0:
+							dec.X += ndx
+							dec.Y += ndy
+							dec.Width -= ndx
+							dec.Height -= ndy
+						case 1:
+							dec.Y += ndy
+							dec.Width += ndx
+							dec.Height -= ndy
+						case 2:
+							dec.Width += ndx
+							dec.Height += ndy
+						case 3:
+							dec.X += ndx
+							dec.Width -= ndx
+							dec.Height += ndy
+						}
+						if dec.Width < 0.02 {
+							dec.Width = 0.02
+						}
+						if dec.Height < 0.02 {
+							dec.Height = 0.02
+						}
+					}
+					if dec.X < 0 {
+						dec.X = 0
+					}
+					if dec.Y < 0 {
+						dec.Y = 0
+					}
+					if dec.X+dec.Width > 1 {
+						dec.X = 1 - dec.Width
+					}
+					if dec.Y+dec.Height > 1 {
+						dec.Y = 1 - dec.Height
+					}
+					e.def.DecorativeElements[e.selIndex] = dec
+				}
 			}
 		}
 	}
@@ -1010,6 +1199,13 @@ done:
 						e.selIndex = -1
 						e.status = "Obstacle deleted"
 					}
+				case "decorative":
+					if e.selIndex >= 0 && e.selIndex < len(e.def.DecorativeElements) {
+						e.def.DecorativeElements = append(e.def.DecorativeElements[:e.selIndex], e.def.DecorativeElements[e.selIndex+1:]...)
+						e.selKind = ""
+						e.selIndex = -1
+						e.status = "Decorative element deleted"
+					}
 				}
 			}
 		}
@@ -1032,11 +1228,11 @@ done:
 		}
 
 		// Number keys for tool selection
-		if k >= ebiten.Key1 && k <= ebiten.Key5 && !e.bgFocus {
+		if k >= ebiten.Key1 && k <= ebiten.Key6 && !e.bgFocus {
 			toolIndex := int(k - ebiten.Key1)
-			if toolIndex >= 0 && toolIndex < 5 {
+			if toolIndex >= 0 && toolIndex < 6 {
 				e.tool = toolIndex
-				toolNames := []string{"Deploy Zones", "Meeting Stones", "Gold Mines", "Movement Lanes", "Obstacles"}
+				toolNames := []string{"Deploy Zones", "Meeting Stones", "Gold Mines", "Movement Lanes", "Obstacles", "Decorative"}
 				e.status = fmt.Sprintf("Selected: %s", toolNames[toolIndex])
 			}
 		}
@@ -1279,6 +1475,32 @@ func (e *editor) refreshObstaclesBrowser() {
 	e.status = fmt.Sprintf("Browsing: %s (%d items)", e.obstaclesCurrentPath, len(items))
 }
 
+func (e *editor) refreshDecorativeBrowser() {
+	var items []string
+	if e.decorativeCurrentPath != "." {
+		items = append(items, "..")
+	}
+	entries, err := os.ReadDir(e.decorativeCurrentPath)
+	if err != nil {
+		e.status = fmt.Sprintf("Error reading directory: %v", err)
+		return
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			items = append(items, "[DIR] "+entry.Name())
+		} else {
+			ext := strings.ToLower(filepath.Ext(entry.Name()))
+			if ext == ".png" || ext == ".jpg" || ext == ".jpeg" {
+				items = append(items, entry.Name())
+			}
+		}
+	}
+	e.availableDecorative = items
+	e.decorativeBrowserScroll = 0
+	e.decorativeBrowserSel = -1
+	e.status = fmt.Sprintf("Browsing: %s (%d items)", e.decorativeCurrentPath, len(items))
+}
+
 func (e *editor) Draw(screen *ebiten.Image) {
 	vw, vh := ebiten.WindowSize()
 
@@ -1378,8 +1600,8 @@ func (e *editor) Draw(screen *ebiten.Image) {
 		offX := (vw - dw) / 2
 		offY := topUIH + (vh-dh)/2
 		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Scale(s, s)
-		op.GeoM.Translate(float64(offX), float64(offY))
+		op.GeoM.Scale(s*e.cameraZoom, s*e.cameraZoom)
+		op.GeoM.Translate(float64(offX)+e.cameraX, float64(offY)+e.cameraY)
 		screen.DrawImage(e.bg, op)
 		// overlays
 		toX := func(nx float64) int { return offX + int(nx*float64(dw)) }
@@ -1482,6 +1704,54 @@ func (e *editor) Draw(screen *ebiten.Image) {
 			}
 
 			if e.selKind == "obstacle" && e.selIndex == i {
+				// border
+				ebitenutil.DrawRect(screen, float64(x), float64(y), float64(w), 1, color.NRGBA{240, 196, 25, 255})
+				ebitenutil.DrawRect(screen, float64(x), float64(y+h-1), float64(w), 1, color.NRGBA{240, 196, 25, 255})
+				ebitenutil.DrawRect(screen, float64(x), float64(y), 1, float64(h), color.NRGBA{240, 196, 25, 255})
+				ebitenutil.DrawRect(screen, float64(x+w-1), float64(y), 1, float64(h), color.NRGBA{240, 196, 25, 255})
+				// handles
+				handles := [][2]int{{x, y}, {x + w, y}, {x + w, y + h}, {x, y + h}}
+				for _, h := range handles {
+					ebitenutil.DrawRect(screen, float64(h[0]-4), float64(h[1]-4), 8, 8, color.NRGBA{240, 196, 25, 255})
+				}
+			}
+		}
+		for i, dec := range e.def.DecorativeElements {
+			x := toX(dec.X)
+			y := toY(dec.Y)
+			w := int(dec.Width * float64(dispW))
+			h := int(dec.Height * float64(dispH))
+
+			// Try to draw the actual decorative image if available
+			drewImage := false
+			if dec.Image != "" {
+				// Try multiple paths for decorative images
+				decorativePaths := []string{
+					filepath.Join("..", "..", "client", "internal", "game", "assets", "decorative", dec.Image), // From mapeditor to client assets
+					filepath.Join("decorative", dec.Image),                                                     // Local decorative directory
+					dec.Image,                                                                                  // Original path
+				}
+
+				for _, decorativePath := range decorativePaths {
+					if img, _, err := ebitenutil.NewImageFromFile(decorativePath); err == nil {
+						op := &ebiten.DrawImageOptions{}
+						scaleX := float64(w) / float64(img.Bounds().Dx())
+						scaleY := float64(h) / float64(img.Bounds().Dy())
+						op.GeoM.Scale(scaleX, scaleY)
+						op.GeoM.Translate(float64(x), float64(y))
+						screen.DrawImage(img, op)
+						drewImage = true
+						break
+					}
+				}
+			}
+
+			// Fallback to rectangle if image couldn't be loaded
+			if !drewImage {
+				ebitenutil.DrawRect(screen, float64(x), float64(y), float64(w), float64(h), color.NRGBA{200, 150, 200, 120})
+			}
+
+			if e.selKind == "decorative" && e.selIndex == i {
 				// border
 				ebitenutil.DrawRect(screen, float64(x), float64(y), float64(w), 1, color.NRGBA{240, 196, 25, 255})
 				ebitenutil.DrawRect(screen, float64(x), float64(y+h-1), float64(w), 1, color.NRGBA{240, 196, 25, 255})
@@ -1616,14 +1886,15 @@ func (e *editor) Draw(screen *ebiten.Image) {
 		}
 	}
 	// Enhanced toolbar with better styling and fixed text positioning
-	toolLabels := []string{"Deploy", "Stones", "Mines", "Lanes", "Obstacles"}
-	toolIcons := []string{"📦", "🏛️", "💰", "🛤️", "🌳"}
+	toolLabels := []string{"Deploy", "Stones", "Mines", "Lanes", "Obstacles", "Decorative"}
+	toolIcons := []string{"📦", "🏛️", "💰", "🛤️", "🌳", "🎨"}
 	toolColors := []color.NRGBA{
 		{0x4a, 0x9e, 0xff, 0xff}, // Blue for deploy
 		{0x9c, 0x7a, 0xff, 0xff}, // Purple for stones
 		{0xff, 0xd7, 0x00, 0xff}, // Gold for mines
 		{0x4a, 0xff, 0x7a, 0xff}, // Green for lanes
 		{0x8b, 0x45, 0x13, 0xff}, // Brown for obstacles
+		{0xff, 0x6b, 0x6b, 0xff}, // Pink for decorative
 	}
 
 	for i, lb := range toolLabels {
@@ -2159,6 +2430,103 @@ func (e *editor) Draw(screen *ebiten.Image) {
 		}
 	}
 
+	// Decorative elements browser panel (draw)
+	if e.showDecorativeBrowser {
+		vw, vh := ebiten.WindowSize()
+		panelX := vw/2 - 200
+		panelY := vh/2 - 150
+		panelW := 400
+		panelH := 300
+		ebitenutil.DrawRect(screen, float64(panelX), float64(panelY), float64(panelW), float64(panelH), color.NRGBA{20, 20, 30, 240})
+		ebitenutil.DrawRect(screen, float64(panelX+2), float64(panelY+2), float64(panelW-4), 24, color.NRGBA{40, 40, 60, 255})
+		text.Draw(screen, "Load Decorative Image", basicfont.Face7x13, panelX+10, panelY+18, color.White)
+
+		// Close button
+		closeX := panelX + panelW - 30
+		closeY := panelY + 2
+		ebitenutil.DrawRect(screen, float64(closeX), float64(closeY), 28, 20, color.NRGBA{100, 60, 60, 255})
+		text.Draw(screen, "X", basicfont.Face7x13, closeX+10, closeY+15, color.White)
+
+		rowH := 20
+		maxRows := (panelH - 60) / rowH
+		start := e.decorativeBrowserScroll
+		for i := 0; i < maxRows && start+i < len(e.availableDecorative); i++ {
+			yy := panelY + 30 + i*rowH
+			if (start+i)%2 == 0 {
+				ebitenutil.DrawRect(screen, float64(panelX+4), float64(yy-12), float64(panelW-8), 18, color.NRGBA{40, 40, 56, 255})
+			}
+			decorativePath := e.availableDecorative[start+i]
+			show := filepath.Base(decorativePath)
+			var acol color.Color = color.White
+			if e.decorativeBrowserSel == start+i {
+				acol = color.NRGBA{240, 196, 25, 255}
+				ebitenutil.DrawRect(screen, float64(panelX+4), float64(yy-12), float64(panelW-8), 18, color.NRGBA{60, 60, 80, 255})
+			}
+			text.Draw(screen, show, basicfont.Face7x13, panelX+8, yy, acol)
+		}
+
+		// Load button
+		loadBtnX := panelX + panelW/2 - 40
+		loadBtnY := panelY + panelH - 30
+		ebitenutil.DrawRect(screen, float64(loadBtnX), float64(loadBtnY), 80, 24, color.NRGBA{60, 90, 120, 255})
+		text.Draw(screen, "Load", basicfont.Face7x13, loadBtnX+25, loadBtnY+16, color.White)
+
+		// Handle decorative browser interactions
+		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+			if mx >= closeX && mx < closeX+28 && my >= closeY && my < closeY+20 {
+				e.showDecorativeBrowser = false
+			} else if mx >= loadBtnX && mx < loadBtnX+80 && my >= loadBtnY && my < loadBtnY+24 {
+				if e.decorativeBrowserSel >= 0 && e.decorativeBrowserSel < len(e.availableDecorative) {
+					item := e.availableDecorative[e.decorativeBrowserSel]
+					if item == ".." {
+						// go up
+						parent := filepath.Dir(e.decorativeCurrentPath)
+						e.decorativeCurrentPath = parent
+						e.refreshDecorativeBrowser()
+					} else if strings.HasPrefix(item, "[DIR] ") {
+						// enter directory
+						dirName := strings.TrimPrefix(item, "[DIR] ")
+						newPath := filepath.Join(e.decorativeCurrentPath, dirName)
+						e.decorativeCurrentPath = newPath
+						e.refreshDecorativeBrowser()
+					} else {
+						// load file as decorative element
+						fullPath := filepath.Join(e.decorativeCurrentPath, item)
+						if _, _, err := ebitenutil.NewImageFromFile(fullPath); err == nil {
+							if e.selKind == "decorative" && e.selIndex >= 0 && e.selIndex < len(e.def.DecorativeElements) {
+								// Change image of selected decorative element
+								e.def.DecorativeElements[e.selIndex].Image = filepath.Base(fullPath)
+								e.status = fmt.Sprintf("Decorative element image changed: %s", filepath.Base(fullPath))
+							} else {
+								// Create new decorative element at center of canvas
+								nx, ny := 0.5, 0.5 // center
+								dec := protocol.DecorativeElement{
+									X:      nx - 0.05,
+									Y:      ny - 0.05,
+									Image:  filepath.Base(fullPath),
+									Width:  0.1,
+									Height: 0.1,
+									Layer:  1, // middle layer
+								}
+								e.def.DecorativeElements = append(e.def.DecorativeElements, dec)
+								e.selKind, e.selIndex, e.selHandle = "decorative", len(e.def.DecorativeElements)-1, -1
+								e.status = fmt.Sprintf("Decorative element added: %s", filepath.Base(fullPath))
+							}
+							e.showDecorativeBrowser = false
+						} else {
+							e.status = fmt.Sprintf("Failed to load decorative image: %v", err)
+						}
+					}
+				}
+			} else if mx >= panelX+4 && mx < panelX+panelW-4 && my >= panelY+30 && my < panelY+panelH-40 {
+				idx := (my-(panelY+30))/rowH + start
+				if idx >= 0 && idx < len(e.availableDecorative) {
+					e.decorativeBrowserSel = idx
+				}
+			}
+		}
+	}
+
 	// Help overlay
 	if e.helpMode {
 		vw, vh := ebiten.WindowSize()
@@ -2279,11 +2647,19 @@ func main() {
 	}
 
 	ed := &editor{
-		showLogin:            tok == "", // Show login if no token
-		assetsCurrentPath:    filepath.Join(projectRoot, "client", "internal", "game", "assets", "maps"),
-		obstaclesCurrentPath: filepath.Join(projectRoot, "client", "internal", "game", "assets", "obstacles"),
-		statusMessages:       []string{},
-		maxStatusMessages:    10,
+		showLogin:             tok == "", // Show login if no token
+		assetsCurrentPath:     filepath.Join(projectRoot, "client", "internal", "game", "assets", "maps"),
+		obstaclesCurrentPath:  filepath.Join(projectRoot, "client", "internal", "game", "assets", "obstacles"),
+		decorativeCurrentPath: filepath.Join(projectRoot, "client", "internal", "game", "assets", "decorative"),
+		statusMessages:        []string{},
+		maxStatusMessages:     10,
+		// Initialize camera for map editor
+		cameraX:        0,
+		cameraY:        0,
+		cameraZoom:     1.0,
+		cameraMinZoom:  0.1,
+		cameraMaxZoom:  2.0,
+		cameraDragging: false,
 	}
 
 	// If we have a token, try to connect immediately

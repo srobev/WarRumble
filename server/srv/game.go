@@ -85,7 +85,10 @@ type Game struct {
 	timeLimit     int     // configured time limit in seconds
 	isPaused      bool
 	matchEnded    bool
-	timerWinnerID int64 // winner when timer expires (-1 for draw)
+	timerWinnerID int64 // winner when timer expires
+
+	// Event broadcasting callback
+	broadcastEvent func(eventType string, event interface{})
 }
 
 func NewGame() *Game {
@@ -460,6 +463,20 @@ func (g *Game) Step(dt float64) protocol.StateDelta {
 
 	for id, u := range g.units {
 		if u.HP <= 0 {
+			// Broadcast unit death event before removing
+			if g.broadcastEvent != nil {
+				deathEvent := protocol.UnitDeathEvent{
+					UnitID:       u.ID,
+					UnitX:        u.X,
+					UnitY:        u.Y,
+					UnitName:     u.Name,
+					UnitClass:    u.Class,
+					UnitSubclass: u.SubClass,
+					KillerID:     0, // TODO: Track which unit dealt the killing blow
+				}
+				g.broadcastEvent("UnitDeathEvent", deathEvent)
+			}
+
 			removed = append(removed, id)
 			delete(g.units, id)
 			continue
@@ -512,10 +529,10 @@ func (g *Game) Step(dt float64) protocol.StateDelta {
 							TargetName: v.Name,
 						}
 
-						// TODO: Broadcast healing event to all connected clients
-						// This would require implementing a messaging system to send the healingEvent
-						// to all clients so they can trigger the particle effects
-						_ = healingEvent // Placeholder for future implementation
+						// Broadcast healing event to all connected clients
+						if g.broadcastEvent != nil {
+							g.broadcastEvent("HealingEvent", healingEvent)
+						}
 
 						v.HP += u.Heal
 						if v.HP > v.MaxHP {
@@ -654,6 +671,20 @@ func (g *Game) HandleDeploy(pid int64, d protocol.DeployMiniAt) {
 		AttackCooldown: attackCooldown,
 	}
 	g.units[u.ID] = u
+
+	// Broadcast unit spawn event for visual effects
+	if g.broadcastEvent != nil {
+		spawnEvent := protocol.UnitSpawnEvent{
+			UnitID:       u.ID,
+			UnitX:        u.X,
+			UnitY:        u.Y,
+			UnitName:     u.Name,
+			UnitClass:    u.Class,
+			UnitSubclass: u.SubClass,
+			OwnerID:      u.OwnerID,
+		}
+		g.broadcastEvent("UnitSpawnEvent", spawnEvent)
+	}
 
 	// rotate handnow i see bases and enemy attacks mine but i still cannot place units
 	played := p.Hand[d.CardIndex]

@@ -63,6 +63,18 @@ func New(args ...string) ebiten.Game {
 	// Initialize new interaction defaults
 	g.slotDragFrom = -1
 
+	// Initialize camera system - start with 20% zoom in
+	g.cameraX = 0
+	g.cameraY = 0
+	g.cameraZoom = 1.2    // Start with 20% zoom in
+	g.cameraMinZoom = 1.2 // Can't zoom out beyond 20% (prevents seeing too much)
+	g.cameraMaxZoom = 1.4 // Allow zooming in up to 300%
+	g.cameraDragging = false
+	g.cameraDragStartX = 0
+	g.cameraDragStartY = 0
+	g.cameraDragInitialX = 0
+	g.cameraDragInitialY = 0
+
 	if !HasToken() {
 
 		apiBase := netcfg.APIBase
@@ -217,9 +229,8 @@ afterMessages:
 		}
 		g.updateHome()
 	case screenBattle:
-		if !g.timerPaused {
-			g.updateBattle()
-		}
+		// Always update battle (for camera controls) but skip deployment when paused
+		g.updateBattle()
 		g.updateTimerInput()
 	}
 
@@ -250,84 +261,88 @@ afterMessages:
 	}
 
 	// Test particle effects with keyboard shortcuts (for development)
-	if g.scr == screenBattle {
+	// Works in battle screen and home screen for testing
+	if g.scr == screenBattle || g.scr == screenHome {
+		// Get mouse position for particle effects
+		mouseX, mouseY := ebiten.CursorPosition()
+
 		if inpututil.IsKeyJustPressed(ebiten.KeyE) {
-			// Create explosion effect at center of screen
+			// Create explosion effect at mouse position
 			if g.particleSystem != nil {
-				g.particleSystem.CreateExplosionEffect(float64(protocol.ScreenW/2), float64(protocol.ScreenH/2), 1.0)
+				g.particleSystem.CreateExplosionEffect(float64(mouseX), float64(mouseY), 1.0)
 			}
 		}
 		if inpututil.IsKeyJustPressed(ebiten.KeyS) {
-			// Create spell effect
+			// Create spell effect at mouse position
 			if g.particleSystem != nil {
-				g.particleSystem.CreateSpellEffect(float64(protocol.ScreenW/2), float64(protocol.ScreenH/2), "fire")
+				g.particleSystem.CreateSpellEffect(float64(mouseX), float64(mouseY), "fire")
 			}
 		}
 		if inpututil.IsKeyJustPressed(ebiten.KeyH) {
-			// Create healing effect
+			// Create healing effect at mouse position
 			if g.particleSystem != nil {
-				g.particleSystem.CreateHealingEffect(float64(protocol.ScreenW/2), float64(protocol.ScreenH/2))
+				g.particleSystem.CreateHealingEffect(float64(mouseX), float64(mouseY))
 			}
 		}
 		if inpututil.IsKeyJustPressed(ebiten.KeyA) {
-			// Create aura effect
+			// Create aura effect at mouse position
 			if g.particleSystem != nil {
-				g.particleSystem.CreateAuraEffect(float64(protocol.ScreenW/2), float64(protocol.ScreenH/2), "buff")
+				g.particleSystem.CreateAuraEffect(float64(mouseX), float64(mouseY), "buff")
 			}
 		}
 
 		// New ability effect shortcuts
 		if inpututil.IsKeyJustPressed(ebiten.KeyQ) {
-			// Healing ability
+			// Healing ability at mouse position
 			if g.particleSystem != nil {
-				g.particleSystem.CreateUnitAbilityEffect(float64(protocol.ScreenW/2), float64(protocol.ScreenH/2), "heal")
+				g.particleSystem.CreateUnitAbilityEffect(float64(mouseX), float64(mouseY), "heal")
 			}
 		}
 		if inpututil.IsKeyJustPressed(ebiten.KeyW) {
-			// Stun ability
+			// Stun ability at mouse position
 			if g.particleSystem != nil {
-				g.particleSystem.CreateUnitAbilityEffect(float64(protocol.ScreenW/2), float64(protocol.ScreenH/2), "stun")
+				g.particleSystem.CreateUnitAbilityEffect(float64(mouseX), float64(mouseY), "stun")
 			}
 		}
 		if inpututil.IsKeyJustPressed(ebiten.KeyR) {
-			// Rage ability
+			// Rage ability at mouse position
 			if g.particleSystem != nil {
-				g.particleSystem.CreateUnitAbilityEffect(float64(protocol.ScreenW/2), float64(protocol.ScreenH/2), "rage")
+				g.particleSystem.CreateUnitAbilityEffect(float64(mouseX), float64(mouseY), "rage")
 			}
 		}
 		if inpututil.IsKeyJustPressed(ebiten.KeyT) {
-			// Teleport ability
+			// Teleport ability at mouse position and offset
 			if g.particleSystem != nil {
-				g.particleSystem.CreateUnitAbilityEffect(float64(protocol.ScreenW/2-50), float64(protocol.ScreenH/2), "teleport")
+				g.particleSystem.CreateUnitAbilityEffect(float64(mouseX-50), float64(mouseY), "teleport")
 				time.Sleep(200 * time.Millisecond) // Small delay for effect
-				g.particleSystem.CreateUnitAbilityEffect(float64(protocol.ScreenW/2+50), float64(protocol.ScreenH/2), "teleport")
+				g.particleSystem.CreateUnitAbilityEffect(float64(mouseX+50), float64(mouseY), "teleport")
 			}
 		}
 		if inpututil.IsKeyJustPressed(ebiten.KeyY) {
-			// Critical hit effect
+			// Critical hit effect at mouse position
 			if g.particleSystem != nil {
-				g.particleSystem.CreateCriticalHitEffect(float64(protocol.ScreenW/2), float64(protocol.ScreenH/2))
+				g.particleSystem.CreateCriticalHitEffect(float64(mouseX), float64(mouseY))
 			}
 		}
 		if inpututil.IsKeyJustPressed(ebiten.KeyU) {
-			// Level up celebration
+			// Level up celebration at mouse position
 			if g.particleSystem != nil {
-				g.particleSystem.CreateLevelUpEffect(float64(protocol.ScreenW/2), float64(protocol.ScreenH/2))
+				g.particleSystem.CreateLevelUpEffect(float64(mouseX), float64(mouseY))
 			}
 		}
 		if inpututil.IsKeyJustPressed(ebiten.KeyI) {
-			// Battle buff effect
+			// Battle buff effect at mouse position
 			if g.particleSystem != nil {
-				g.particleSystem.CreateBattleBuffEffect(float64(protocol.ScreenW/2), float64(protocol.ScreenH/2), "attack")
+				g.particleSystem.CreateBattleBuffEffect(float64(mouseX), float64(mouseY), "attack")
 			}
 		}
 		if inpututil.IsKeyJustPressed(ebiten.KeyP) {
-			// Target healing effect (green particles on healed unit)
+			// Target healing effect at mouse position and offset
 			if g.particleSystem != nil {
-				// Simulate healer at left side healing target at right side
-				healerX := float64(protocol.ScreenW / 4)
-				targetX := float64(3 * protocol.ScreenW / 4)
-				targetY := float64(protocol.ScreenH / 2)
+				// Healing wave from healer (left of mouse)
+				healerX := float64(mouseX - 100)
+				targetX := float64(mouseX + 100)
+				targetY := float64(mouseY)
 
 				// Healing wave from healer
 				g.particleSystem.CreateUnitAbilityEffect(healerX, targetY, "heal")
@@ -477,7 +492,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		// Draw battle arena background first
 		g.drawArenaBG(screen)
 
-		// Draw deploy zones (alpha rectangles)
+		// Draw deploy zones (alpha rectangles) - apply camera transformation
 		g.drawDeployZones(screen, shouldMirror)
 
 		// Helper function to mirror Y coordinate
@@ -503,12 +518,16 @@ func (g *Game) Draw(screen *ebiten.Image) {
 				renderBaseY = int(mirrorY(float64(b.Y)))
 			}
 
-			// Create base with mirrored position for rendering
+			// Apply camera transformations
+			renderBaseX = int(float64(renderBaseX)*g.cameraZoom + g.cameraX)
+			renderBaseY = int(float64(renderBaseY)*g.cameraZoom + g.cameraY)
+
+			// Create base with transformed position for rendering
 			renderBase := protocol.BaseState{
 				X:       renderBaseX,
 				Y:       renderBaseY,
-				W:       b.W,
-				H:       b.H,
+				W:       int(float64(b.W) * g.cameraZoom),
+				H:       int(float64(b.H) * g.cameraZoom),
 				HP:      b.HP,
 				MaxHP:   b.MaxHP,
 				OwnerID: b.OwnerID,
@@ -519,12 +538,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 				fx := g.hpfxStep(g.hpFxBases, id, b.HP, nowMs)
 				isPlayer := (b.OwnerID == g.playerID)
 				x := float64(renderBaseX)
-				y := float64(b.Y - 6)
-				if shouldMirror && b.OwnerID == g.playerID {
-					y = mirrorY(float64(b.Y - 6))
-				}
-				w := float64(b.W)
-				h := 4.0
+				y := float64(renderBaseY - 6) // Fixed size, not scaled
+				w := float64(b.W)             // Fixed size, not scaled
+				h := 4.0                      // Fixed size, not scaled
 				g.DrawHPBarForOwner(screen, x, y, w, h, b.HP, b.MaxHP, fx.ghostHP, fx.healGhostHP, isPlayer)
 				// Base level badge left of bar
 				rx0 := int(x + 0.5)
@@ -546,9 +562,65 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		// Draw obstacles
 		g.drawObstacles(screen, shouldMirror, mirrorY)
 
+		// Update spawn animations
+		if g.world != nil {
+			g.world.UpdateSpawnAnimations()
+		}
+
 		// Draw units
 		const unitTargetPX = 42.0
+
+		// Draw spawn animations (behind units)
+		if g.world != nil {
+			for _, animation := range g.world.SpawnAnimations {
+				if !animation.Active {
+					continue
+				}
+
+				// Calculate current position based on animation progress
+				currentX := animation.StartX + (animation.TargetX-animation.StartX)*animation.Progress
+				currentY := animation.StartY + (animation.TargetY-animation.StartY)*animation.Progress
+
+				// Apply mirroring to animation position
+				renderX := currentX
+				renderY := currentY
+				if shouldMirror {
+					renderY = float64(protocol.ScreenH) - currentY
+				}
+
+				// Apply camera transformations
+				renderX = renderX*g.cameraZoom + g.cameraX
+				renderY = renderY*g.cameraZoom + g.cameraY
+
+				// Get unit image for animation
+				if img := g.ensureMiniImageByName(animation.UnitName); img != nil {
+					op := &ebiten.DrawImageOptions{}
+					iw, ih := img.Bounds().Dx(), img.Bounds().Dy()
+					s := unitTargetPX / float64(maxInt(1, maxInt(iw, ih))) * g.cameraZoom * animation.CurrentScale
+					op.GeoM.Scale(s, s)
+					op.GeoM.Translate(renderX-float64(iw)*s/2, renderY-float64(ih)*s/2)
+					screen.DrawImage(img, op)
+				} else {
+					// Fallback: draw a scaled rectangle
+					size := 12 * g.cameraZoom * animation.CurrentScale
+					ebitenutil.DrawRect(screen, renderX-size/2, renderY-size/2, size, size, color.White)
+				}
+			}
+		}
 		for id, u := range g.world.Units {
+			// Check if this unit has an active spawn animation
+			hasSpawnAnimation := false
+			if g.world != nil {
+				if animation := g.world.GetActiveSpawnAnimation(id); animation != nil {
+					hasSpawnAnimation = true
+				}
+			}
+
+			// Skip drawing actual unit if it has an active spawn animation
+			if hasSpawnAnimation {
+				continue
+			}
+
 			// Apply mirroring to unit position (only player's own units)
 			renderX := u.X
 			renderY := u.Y
@@ -556,29 +628,33 @@ func (g *Game) Draw(screen *ebiten.Image) {
 				renderY = float64(protocol.ScreenH) - u.Y
 			}
 
+			// Apply camera transformations
+			renderX = renderX*g.cameraZoom + g.cameraX
+			renderY = renderY*g.cameraZoom + g.cameraY
+
 			if img := g.ensureMiniImageByName(u.Name); img != nil {
 				op := &ebiten.DrawImageOptions{}
 				iw, ih := img.Bounds().Dx(), img.Bounds().Dy()
-				s := unitTargetPX / float64(maxInt(1, maxInt(iw, ih)))
+				s := unitTargetPX / float64(maxInt(1, maxInt(iw, ih))) * g.cameraZoom
 				op.GeoM.Scale(s, s)
 				op.GeoM.Translate(renderX-float64(iw)*s/2, renderY-float64(ih)*s/2)
 				screen.DrawImage(img, op)
 			} else {
-				ebitenutil.DrawRect(screen, renderX-6, renderY-6, 12, 12, color.White)
+				ebitenutil.DrawRect(screen, renderX-6*g.cameraZoom, renderY-6*g.cameraZoom, 12*g.cameraZoom, 12*g.cameraZoom, color.White)
 			}
 
 			if u.MaxHP > 0 {
-				barW := 26.0 * 1.05
+				barW := 26.0 * 1.05 // Fixed size, not scaled
 				bx := renderX - barW/2
-				by := renderY - unitTargetPX/2 - 6
+				by := renderY - unitTargetPX/2 - 6 // Fixed size, not scaled
 
 				fx := g.hpfxStep(g.hpFxUnits, id, u.HP, nowMs)
-				g.DrawHPBarForOwner(screen, bx, by, barW, 3, u.HP, u.MaxHP, fx.ghostHP, fx.healGhostHP, u.OwnerID == g.playerID)
+				g.DrawHPBarForOwner(screen, bx, by, barW, 3, u.HP, u.MaxHP, fx.ghostHP, fx.healGhostHP, u.OwnerID == g.playerID) // Fixed size, not scaled
 				// Level badge left of HP bar
 				rx0 := int(bx + 0.5)
 				ry0 := int(by + 0.5)
 				rx1 := int(bx + barW + 0.5)
-				ry1 := int(by + 3 + 0.5)
+				ry1 := int(by + 3 + 0.5) // Fixed size, not scaled
 				barRect := image.Rect(rx0, ry0, rx1, ry1)
 				lvl := g.levelForUnitName(u.Name)
 				g.drawLevelBadge(screen, barRect, lvl)
@@ -590,9 +666,9 @@ func (g *Game) Draw(screen *ebiten.Image) {
 			// Apply mirroring to particle system if needed
 			if shouldMirror {
 				// Create a temporary mirrored particle system for rendering
-				g.drawMirroredParticles(screen, mirrorY)
+				g.drawMirroredParticles(screen, mirrorY, g.cameraX, g.cameraY, g.cameraZoom)
 			} else {
-				g.particleSystem.Draw(screen)
+				g.drawParticlesWithCamera(screen, g.cameraX, g.cameraY, g.cameraZoom)
 			}
 		}
 
@@ -865,6 +941,12 @@ func (g *Game) drawProjectiles(screen *ebiten.Image, shouldMirror bool, mirrorY 
 					renderTY = mirrorY(ty)
 				}
 
+				// Apply camera transformations
+				renderUX = renderUX*g.cameraZoom + g.cameraX
+				renderUY = renderUY*g.cameraZoom + g.cameraY
+				renderTX = renderTX*g.cameraZoom + g.cameraX
+				renderTY = renderTY*g.cameraZoom + g.cameraY
+
 				// Create particle trail for projectile
 				if g.particleSystem != nil {
 					g.particleSystem.CreateProjectileTrail(renderUX, renderUY, renderTX, renderTY)
@@ -874,7 +956,7 @@ func (g *Game) drawProjectiles(screen *ebiten.Image, shouldMirror bool, mirrorY 
 				ebitenutil.DrawLine(screen, renderUX, renderUY, renderTX, renderTY, color.NRGBA{255, 255, 100, 200})
 
 				// Draw a small circle at the projectile tip
-				ebitenutil.DrawCircle(screen, renderTX, renderTY, 3, color.NRGBA{255, 255, 0, 255})
+				ebitenutil.DrawCircle(screen, renderTX, renderTY, 3*g.cameraZoom, color.NRGBA{255, 255, 0, 255})
 
 				// Create impact effect when projectile reaches target
 				if dist < 15 && g.particleSystem != nil {
@@ -917,7 +999,7 @@ func (g *Game) findTargetForUnit(u *RenderUnit) (float64, float64) {
 }
 
 // drawMirroredParticles draws particle effects with Y-axis mirroring for PvP
-func (g *Game) drawMirroredParticles(screen *ebiten.Image, mirrorY func(float64) float64) {
+func (g *Game) drawMirroredParticles(screen *ebiten.Image, mirrorY func(float64) float64, cameraX, cameraY, cameraZoom float64) {
 	if g.particleSystem == nil {
 		return
 	}
@@ -927,7 +1009,22 @@ func (g *Game) drawMirroredParticles(screen *ebiten.Image, mirrorY func(float64)
 			continue
 		}
 
-		emitter.DrawMirrored(screen, mirrorY)
+		emitter.DrawMirroredWithCamera(screen, mirrorY, cameraX, cameraY, cameraZoom)
+	}
+}
+
+// drawParticlesWithCamera draws particle effects with camera transformations
+func (g *Game) drawParticlesWithCamera(screen *ebiten.Image, cameraX, cameraY, cameraZoom float64) {
+	if g.particleSystem == nil {
+		return
+	}
+
+	for _, emitter := range g.particleSystem.Emitters {
+		if !emitter.Active {
+			continue
+		}
+
+		emitter.DrawWithCamera(screen, cameraX, cameraY, cameraZoom)
 	}
 }
 
@@ -1018,6 +1115,12 @@ func (g *Game) drawDeployZones(screen *ebiten.Image, shouldMirror bool) {
 			y = float64(protocol.ScreenH) - y - h
 		}
 
+		// Apply camera transformations
+		x = x*g.cameraZoom + g.cameraX
+		y = y*g.cameraZoom + g.cameraY
+		w = w * g.cameraZoom
+		h = h * g.cameraZoom
+
 		// Deploy zone color - only blue for player zones (since enemy zones are hidden in PvP)
 		var deployZoneColor color.NRGBA
 		var borderColor color.NRGBA
@@ -1068,6 +1171,12 @@ func (g *Game) drawObstacles(screen *ebiten.Image, shouldMirror bool, mirrorY fu
 		if shouldMirror {
 			y = mirrorY(y)
 		}
+
+		// Apply camera transformations
+		x = x*g.cameraZoom + g.cameraX
+		y = y*g.cameraZoom + g.cameraY
+		w = w * g.cameraZoom
+		h = h * g.cameraZoom
 
 		// Try to load obstacle image
 		if img := g.ensureObstacleImage(obstacle.Type); img != nil {

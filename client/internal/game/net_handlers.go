@@ -212,6 +212,16 @@ func (g *Game) handle(env Msg) {
 		g.timerPaused = false
 		g.pauseOverlay = false
 
+		// Initialize camera for battle map scrolling and zooming - start with 20% zoom in
+		g.cameraZoom = 1.2    // Start with 20% zoom in
+		g.cameraMinZoom = 1.2 // Can't zoom out beyond 20% (prevents seeing too much)
+		g.cameraMaxZoom = 3.0 // Allow zooming in up to 300%
+		g.cameraDragging = false
+
+		// Flag to center camera on player's base once bases are populated
+		// (bases are populated later via StateDelta/FullSnapshot)
+		g.needsCameraCenter = true
+
 		// Clear particle effects when transitioning to battle
 		if g.particleSystem != nil {
 			g.particleSystem = NewParticleSystem()
@@ -244,10 +254,20 @@ func (g *Game) handle(env Msg) {
 		}
 		g.world.ApplyDelta(d)
 
+		// Center camera on player's base if needed
+		if g.needsCameraCenter && g.scr == screenBattle {
+			g.centerCameraOnPlayerBase()
+		}
+
 	case "FullSnapshot":
 		var s protocol.FullSnapshot
 		json.Unmarshal(env.Data, &s)
 		g.world = buildWorldFromSnapshot(s, g.currentMapDef)
+
+		// Center camera on player's base if needed
+		if g.needsCameraCenter && g.scr == screenBattle {
+			g.centerCameraOnPlayerBase()
+		}
 
 	case "Error":
 		var em protocol.ErrorMsg
@@ -317,12 +337,28 @@ func (g *Game) handle(env Msg) {
 		var he protocol.HealingEvent
 		json.Unmarshal(env.Data, &he)
 
-		// Trigger healing particle effects
+		// Trigger P-style healing particle effects (healer wave + target particles)
 		if g.particleSystem != nil {
-			// Healing wave from healer
+			// Healing wave from healer (like P key effect)
 			g.particleSystem.CreateUnitAbilityEffect(he.HealerX, he.HealerY, "heal")
 			// Green particles on healed target
 			g.particleSystem.CreateTargetHealingEffect(he.TargetX, he.TargetY)
+		}
+	case "UnitDeathEvent":
+		var de protocol.UnitDeathEvent
+		json.Unmarshal(env.Data, &de)
+
+		// Trigger unit death particle effects
+		if g.particleSystem != nil {
+			g.particleSystem.CreateUnitDeathEffect(de.UnitX, de.UnitY, de.UnitClass, de.UnitSubclass)
+		}
+	case "UnitSpawnEvent":
+		var se protocol.UnitSpawnEvent
+		json.Unmarshal(env.Data, &se)
+
+		// Trigger unit spawn animation (zoomed image falling from sky)
+		if g.world != nil {
+			g.world.StartSpawnAnimation(se.UnitID, se.UnitName, se.UnitClass, se.UnitSubclass, se.UnitX, se.UnitY)
 		}
 	case "MapDef":
 		var md protocol.MapDefMsg
@@ -530,4 +566,36 @@ func (g *Game) onStartBattle() { g.send("StartBattle", protocol.StartBattle{}) }
 func (g *Game) onLeaveRoom() {
 	g.send("LeaveRoom", protocol.LeaveRoom{})
 	g.currentArena = ""
+}
+
+// centerCameraOnPlayerBase centers the camera with bottom aligned to map bottom
+func (g *Game) centerCameraOnPlayerBase() {
+	if g.world == nil {
+		return
+	}
+
+	// Find player's base
+	playerBaseX, playerBaseY := 0.0, 0.0
+	found := false
+	for _, b := range g.world.Bases {
+		if b.OwnerID == g.playerID {
+			playerBaseX = float64(b.X + b.W/2) // Center of base
+			playerBaseY = float64(b.Y + b.H/2)
+			found = true
+			break
+		}
+	}
+
+	if found {
+		// Position camera so bottom of screen aligns with map bottom
+		// Keep player's base in view but prioritize showing full map height
+		screenCenterX := float64(protocol.ScreenW) / 2
+		g.cameraX = screenCenterX - playerBaseX*g.cameraZoom
+
+		// Position camera so bottom of screen is at map bottom (assuming map height is available)
+		// For now, position to show more of the map from the bottom
+		g.cameraY = float64(protocol.ScreenH) - playerBaseY*g.cameraZoom - 100 // Small offset from bottom
+
+		g.needsCameraCenter = false // Clear the flag
+	}
 }

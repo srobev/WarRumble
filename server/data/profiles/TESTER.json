@@ -1,14 +1,14 @@
 {
-  "playerId": 76950,
+  "playerId": 1853795,
   "name": "tester",
   "army": [
-    "Aethelion Ragestorm",
-    "Crimson Raider",
-    "Spirit Binder",
-    "Banshee",
-    "Magma Beasts",
+    "Warg Lord",
+    "Flesh Golem",
+    "Foulwing Rider",
     "Twin Wyrnn",
-    "Night Sentinel"
+    "Aerie Guard",
+    "Jungle Headhunter",
+    "Voodoo Hexer"
   ],
   "armies": {
     "Aethelion Ragestorm": [
@@ -50,26 +50,39 @@
       "Bat Rider",
       "Gargoyle",
       "Gryphon Rider"
+    ],
+    "Warg Lord": [
+      "Flesh Golem",
+      "Foulwing Rider",
+      "Twin Wyrnn",
+      "Aerie Guard",
+      "Jungle Headhunter",
+      "Voodoo Hexer"
     ]
   },
   "gold": 0,
   "accountXp": 0,
   "unitXp": {
     "Abomination": 714,
-    "Aethelion Ragestorm": 4,
-    "Banshee": 714,
+    "Aethelion Ragestorm": 11,
+    "Banshee": 790,
     "Bloodmage Thalnos": 714,
     "Chimaera": 714,
     "Core Hound": 1,
+    "Crimson Raider": 2,
     "Darkspear Troll": 714,
+    "Flesh Golem": 1,
+    "Foulwing Rider": 1,
     "Harpies": 714,
-    "Magma Beasts": 1,
+    "Magma Beasts": 2,
     "Molten Giant": 2,
-    "Night Sentinel": 3,
+    "Night Sentinel": 6,
     "Pyromancer": 714,
-    "Twin Wyrnn": 1
+    "Spirit Binder": 1,
+    "Twin Wyrnn": 2,
+    "Warg Lord": 1
   },
-  "pvp_rating": 1429,
+  "pvp_rating": 1447,
   "pvp_rank": "Captain",
   "avatar": "drawrf.png",
   "guildId": "g-1756713614348685400"

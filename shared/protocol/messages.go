@@ -150,6 +150,26 @@ type HealingEvent struct {
 	TargetName string  `json:"targetName"` // Name of target unit
 }
 
+type UnitDeathEvent struct {
+	UnitID       int64   `json:"unitId"`       // ID of the dying unit
+	UnitX        float64 `json:"unitX"`        // Position of dying unit
+	UnitY        float64 `json:"unitY"`        // Position of dying unit
+	UnitName     string  `json:"unitName"`     // Name of dying unit
+	UnitClass    string  `json:"unitClass"`    // Class of dying unit (melee, range, etc.)
+	UnitSubclass string  `json:"unitSubclass"` // Subclass of dying unit (healer, etc.)
+	KillerID     int64   `json:"killerId"`     // ID of the unit that killed this one (0 if base damage)
+}
+
+type UnitSpawnEvent struct {
+	UnitID       int64   `json:"unitId"`       // ID of the spawning unit
+	UnitX        float64 `json:"unitX"`        // Position where unit will spawn
+	UnitY        float64 `json:"unitY"`        // Position where unit will spawn
+	UnitName     string  `json:"unitName"`     // Name of spawning unit
+	UnitClass    string  `json:"unitClass"`    // Class of spawning unit (melee, range, etc.)
+	UnitSubclass string  `json:"unitSubclass"` // Subclass of spawning unit (healer, etc.)
+	OwnerID      int64   `json:"ownerId"`      // ID of the player who owns the unit
+}
+
 type FullSnapshot struct {
 	Tick  int64       `json:"tick"`
 	Units []UnitState `json:"units"`

@@ -215,23 +215,33 @@ func (g *Game) drawArenaBG(screen *ebiten.Image) {
 		offX, offY, dispW, dispH, s = g.mapRenderRect(bg)
 	}
 
-	col := g.mapEdgeColor(bgName, bg)
+	// Use black for areas outside the map
+	col := color.NRGBA{0, 0, 0, 255}
 
-	// Draw letterbox bars
+	// Draw dark gray letterbox bars to cover entire screen outside map
+	// Top bar
 	if offY > 0 {
 		ebitenutil.DrawRect(screen, 0, 0, float64(protocol.ScreenW), float64(offY), col)
-		ebitenutil.DrawRect(screen, 0, float64(offY+dispH),
-			float64(protocol.ScreenW), float64(protocol.ScreenH-(offY+dispH)), col)
 	}
-
+	// Bottom bar
+	bottomBarY := float64(offY + dispH)
+	if bottomBarY < float64(protocol.ScreenH) {
+		ebitenutil.DrawRect(screen, 0, bottomBarY,
+			float64(protocol.ScreenW), float64(protocol.ScreenH)-bottomBarY, col)
+	}
+	// Left bar
 	if offX > 0 {
 		ebitenutil.DrawRect(screen, 0, float64(offY), float64(offX), float64(dispH), col)
-		ebitenutil.DrawRect(screen, float64(offX+dispW), float64(offY),
-			float64(protocol.ScreenW-(offX+dispW)), float64(dispH), col)
+	}
+	// Right bar
+	rightBarX := float64(offX + dispW)
+	if rightBarX < float64(protocol.ScreenW) {
+		ebitenutil.DrawRect(screen, rightBarX, float64(offY),
+			float64(protocol.ScreenW)-rightBarX, float64(dispH), col)
 	}
 
 	op := &ebiten.DrawImageOptions{}
-	op.GeoM.Scale(s, s)
-	op.GeoM.Translate(float64(offX), float64(offY))
+	op.GeoM.Scale(s*g.cameraZoom, s*g.cameraZoom)
+	op.GeoM.Translate(float64(offX)+g.cameraX, float64(offY)+g.cameraY)
 	screen.DrawImage(bg, op)
 }

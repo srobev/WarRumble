@@ -83,9 +83,9 @@ func (ua *UnitAbilities) triggerAbilityEffect(abilityName string, targetX, targe
 
 	switch abilityName {
 	case "heal":
-		// Healing wave from healer + green particles on target
-		particleSystem.CreateUnitAbilityEffect(ua.UnitX, ua.UnitY, "heal")
-		particleSystem.CreateTargetHealingEffect(targetX, targetY)
+		// Green particles on healer and target (same as pressing H key)
+		particleSystem.CreateHealingEffect(ua.UnitX, ua.UnitY)
+		particleSystem.CreateHealingEffect(targetX, targetY)
 	case "stun":
 		particleSystem.CreateUnitAbilityEffect(targetX, targetY, "stun")
 	case "shield":

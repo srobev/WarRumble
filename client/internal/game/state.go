@@ -171,6 +171,20 @@ type Game struct {
 	// Map definition for deploy zones
 	currentMapDef *protocol.MapDef
 
+	// Camera system for battle map scrolling and zooming
+	cameraX            float64
+	cameraY            float64
+	cameraZoom         float64
+	cameraMinZoom      float64
+	cameraMaxZoom      float64
+	cameraDragging     bool
+	cameraDragStartX   int
+	cameraDragStartY   int
+	cameraDragInitialX float64
+	cameraDragInitialY float64
+	// Flag to center camera on player's base once bases are populated
+	needsCameraCenter bool
+
 	// --- PvP UI state ---
 	pvpStatus      string // status line at the top of the PvP tab
 	pvpQueued      bool   // currently in matchmaking queue

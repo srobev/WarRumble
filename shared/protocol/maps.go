@@ -35,6 +35,15 @@ type Obstacle struct {
 	Height float64 `json:"height"` // normalized height (0-1)
 }
 
+type DecorativeElement struct {
+	X      float64 `json:"x"`
+	Y      float64 `json:"y"`
+	Image  string  `json:"image"`  // image path
+	Width  float64 `json:"width"`  // normalized width (0-1)
+	Height float64 `json:"height"` // normalized height (0-1)
+	Layer  int     `json:"layer"`  // rendering layer (0=background, 1=middle, 2=foreground)
+}
+
 // MapDef describes a PVE map layout for gameplay
 type MapDef struct {
 	ID     string `json:"id"`
@@ -43,11 +52,12 @@ type MapDef struct {
 	Height int    `json:"height"`       // background height in pixels (optional)
 	Bg     string `json:"bg,omitempty"` // optional background image path
 
-	DeployZones   []DeployZone `json:"deployZones"`
-	MeetingStones []PointF     `json:"meetingStones"`
-	GoldMines     []PointF     `json:"goldMines"`
-	Lanes         []Lane       `json:"lanes"`
-	Obstacles     []Obstacle   `json:"obstacles"`
+	DeployZones        []DeployZone        `json:"deployZones"`
+	MeetingStones      []PointF            `json:"meetingStones"`
+	GoldMines          []PointF            `json:"goldMines"`
+	Lanes              []Lane              `json:"lanes"`
+	Obstacles          []Obstacle          `json:"obstacles"`
+	DecorativeElements []DecorativeElement `json:"decorativeElements,omitempty"`
 
 	// Base positions for PvP (configurable per map)
 	PlayerBase PointF `json:"playerBase,omitempty"` // Player base position (normalized 0-1)
