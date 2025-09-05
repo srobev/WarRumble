@@ -290,12 +290,15 @@ type Game struct {
 	// Additional hover states for all Army tab elements
 	hoveredSelectedChampionLevel bool // true when hovering selected champion level badge
 	hoveredSelectedChampionCost  bool // true when hovering selected champion cost text
+	hoveredSelectedChampionXP    bool // true when hovering selected champion XP bar
 	hoveredSelectedChampionCard  bool // true when hovering selected champion card for frame effect
 	hoveredMiniSlotLevel         int  // index of hovered equipped mini slot level (-1 if none)
 	hoveredMiniSlotCost          int  // index of hovered equipped mini slot cost (-1 if none)
+	hoveredMiniSlotXP            int  // index of hovered equipped mini slot XP bar (-1 if none)
 	hoveredMiniSlotCard          int  // index of hovered equipped mini slot card for frame effect (-1 if none)
 	hoveredCollectionLevel       int  // index of hovered collection item level (-1 if none)
 	hoveredCollectionCost        int  // index of hovered collection item cost (-1 if none)
+	hoveredCollectionXP          int  // index of hovered collection item XP bar (-1 if none)
 	hoveredCollectionCard        int  // index of hovered collection item card for frame effect (-1 if none)
 	hoveredOverlayLevel          bool // true when hovering mini overlay level badge
 	hoveredOverlayCost           bool // true when hovering mini overlay cost text

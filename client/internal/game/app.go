@@ -607,7 +607,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 				if isPlayer {
 					lvl = g.currentArmyRoundedLevel()
 				}
-				g.drawLevelBadge(screen, barRect, lvl)
+				g.drawLevelBadge(screen, barRect, lvl, isPlayer)
 			}
 		}
 
@@ -732,7 +732,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 					rx1 := int(bx + barW + 0.5)
 					ry1 := int(by + 3 + 0.5) // Fixed size, not scaled
 					barRect := image.Rect(rx0, ry0, rx1, ry1)
-					g.drawLevelBadge(screen, barRect, lvl)
+					g.drawLevelBadge(screen, barRect, lvl, u.OwnerID == g.playerID)
 				} else {
 					// Damaged: Show health bar with level badge
 					barW := 26.0 * 1.05 // Fixed size, not scaled
@@ -747,7 +747,7 @@ func (g *Game) Draw(screen *ebiten.Image) {
 					rx1 := int(bx + barW + 0.5)
 					ry1 := int(by + 3 + 0.5) // Fixed size, not scaled
 					barRect := image.Rect(rx0, ry0, rx1, ry1)
-					g.drawLevelBadge(screen, barRect, lvl)
+					g.drawLevelBadge(screen, barRect, lvl, u.OwnerID == g.playerID)
 				}
 			}
 		}

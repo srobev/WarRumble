@@ -2,19 +2,13 @@ package game
 
 import (
 	"fmt"
-	"image"
 	"image/color"
 	_ "image/jpeg" // (optional) register JPEG decoder
 	_ "image/png"  // register PNG decoder
-	"log"
-	"math"
-	"path"
-	"rumble/client/internal/game/ui"
 	"rumble/shared/protocol"
 	"strings"
 	"time"
 
-	"github.com/atotto/clipboard"
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
@@ -22,1148 +16,9 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/vector"
 
 	"golang.org/x/image/font/basicfont"
-
-	"embed"
 )
 
-//go:embed assets/ui/* assets/ui/avatars/* assets/minis/* assets/maps/* assets/obstacles/*
-var assetsFS embed.FS
-
-var ornate *ui.OrnateBar
-
-// drawSmallLevelBadgeSized draws the level inside level_bar.png (if present) at a given pixel height.
-func drawSmallLevelBadgeSized(dst *ebiten.Image, x, y, level int, size int) {
-	// center for text
-	cx, cy := x+size/2, y+size/2
-	if ornate == nil {
-		// Build ornate bar from embedded assets (no disk dependency)
-		ob := &ui.OrnateBar{}
-		// Try primary names shipped in repo
-		ob.Frame = loadImage("assets/ui/health_bar.png")
-		if ob.Frame == nil {
-			ob.Frame = loadImage("assets/ui/bar_frame.png")
-		}
-		ob.Badge = loadImage("assets/ui/level_bar.png")
-		if ob.Badge == nil {
-			ob.Badge = loadImage("assets/ui/level_badge.png")
-		}
-		// Defaults reasonable for our images; can be tuned via meta later
-		ob.WellOfs = image.Pt(130, 30)
-		ob.WellSize = image.Pt(350, 44)
-		ob.Mode = "fitpad"
-		ob.PadX, ob.PadY = 2, 2
-		ob.BadgeScale = 1.0
-		ornate = ob
-	}
-	if ornate != nil && ornate.Badge != nil {
-		bb := ornate.Badge.Bounds()
-		if bb.Dx() > 0 && bb.Dy() > 0 {
-			s := float64(size) / float64(bb.Dy())
-			op := &ebiten.DrawImageOptions{}
-			op.GeoM.Scale(s, s)
-			op.GeoM.Translate(float64(x), float64(y))
-			dst.DrawImage(ornate.Badge, op)
-		}
-	} else {
-		// fallback: small circle
-		vector.DrawFilledCircle(dst, float32(cx), float32(cy), float32(size)/2, color.NRGBA{240, 196, 25, 255}, true)
-		vector.DrawFilledCircle(dst, float32(cx), float32(cy), float32(size)/2-1.2, color.NRGBA{200, 160, 20, 255}, true)
-	}
-	// level number with outline
-	s := fmt.Sprintf("%d", level)
-	tw := text.BoundString(basicfont.Face7x13, s).Dx()
-	th := text.BoundString(basicfont.Face7x13, s).Dy()
-	tx := cx - tw/2
-	ty := cy + th/2 - 2
-	text.Draw(dst, s, basicfont.Face7x13, tx+1, ty, color.NRGBA{0, 0, 0, 200})
-	text.Draw(dst, s, basicfont.Face7x13, tx-1, ty, color.NRGBA{0, 0, 0, 200})
-	text.Draw(dst, s, basicfont.Face7x13, tx, ty+1, color.NRGBA{0, 0, 0, 200})
-	text.Draw(dst, s, basicfont.Face7x13, tx, ty-1, color.NRGBA{0, 0, 0, 200})
-	text.Draw(dst, s, basicfont.Face7x13, tx, ty, color.NRGBA{250, 250, 250, 255})
-}
-
-// default Army/overlay size
-func drawSmallLevelBadge(dst *ebiten.Image, x, y, level int) {
-	drawSmallLevelBadgeSized(dst, x, y, level, 14)
-}
-
-func drawBaseImg(screen *ebiten.Image, img *ebiten.Image, b protocol.BaseState) {
-	if img == nil {
-
-		ebitenutil.DrawRect(screen, float64(b.X), float64(b.Y), float64(b.W), float64(b.H), color.NRGBA{90, 90, 120, 255})
-		return
-	}
-	iw, ih := img.Bounds().Dx(), img.Bounds().Dy()
-	if iw == 0 || ih == 0 {
-		return
-	}
-
-	sx := float64(b.W) / float64(iw)
-	sy := float64(b.H) / float64(ih)
-	s := math.Min(sx, sy)
-
-	op := &ebiten.DrawImageOptions{}
-	ox := float64(b.X) + (float64(b.W)-float64(iw)*s)/2
-	oy := float64(b.Y) + (float64(b.H)-float64(ih)*s)/2
-	op.GeoM.Scale(s, s)
-	op.GeoM.Translate(ox, oy)
-	// Use linear filtering for smoother scaling on high-resolution displays
-	op.Filter = ebiten.FilterLinear
-	screen.DrawImage(img, op)
-}
-
-// index of real filenames by lowercase name per directory
-var embIndex = map[string]map[string]string{}
-
-func buildEmbIndex() {
-	if len(embIndex) != 0 {
-		return
-	}
-	for _, dir := range []string{"assets/ui", "assets/minis", "assets/maps", "assets/obstacles"} {
-		entries, err := assetsFS.ReadDir(dir)
-		if err != nil {
-			continue
-		}
-		m := make(map[string]string, len(entries))
-		for _, e := range entries {
-			m[strings.ToLower(e.Name())] = e.Name()
-		}
-		embIndex[dir] = m
-	}
-}
-
-func loadImage(p string) *ebiten.Image {
-	buildEmbIndex()
-
-	f, err := assetsFS.Open(p)
-	if err != nil {
-
-		dir, file := path.Split(p)
-		key := strings.ToLower(strings.TrimSuffix(file, ""))
-		if idx, ok := embIndex[strings.TrimRight(dir, "/")]; ok {
-			if real, ok2 := idx[key]; ok2 {
-				f, err = assetsFS.Open(dir + real)
-			}
-		}
-	}
-	if err != nil {
-		log.Println("asset not found in embed:", p)
-		return nil
-	}
-	defer f.Close()
-
-	img, _, err := ebitenutil.NewImageFromReader(f)
-	if err != nil {
-		log.Println("decode image failed:", p, err)
-		return nil
-	}
-	return img
-}
-
-func (a *Assets) ensureInit() {
-	if a.btn9Base == nil {
-		a.btn9Base = loadImage("assets/ui/btn9_slim.png")
-	}
-	if a.btn9Hover == nil {
-		a.btn9Hover = loadImage("assets/ui/btn9_slim_hover.png")
-	}
-	if a.minis == nil {
-		a.minis = make(map[string]*ebiten.Image)
-	}
-	if a.obstacles == nil {
-		a.obstacles = make(map[string]*ebiten.Image)
-	}
-	if a.bg == nil {
-		a.bg = make(map[string]*ebiten.Image)
-	}
-	if a.baseMe == nil {
-		a.baseMe = loadImage("assets/ui/base.png")
-	}
-	if a.baseEnemy == nil {
-		a.baseEnemy = loadImage("assets/ui/base.png")
-	}
-	if a.baseDead == nil {
-		a.baseDead = loadImage("assets/ui/base_destroyed.png")
-	}
-	if a.coinFull == nil {
-		a.coinFull = loadImage("assets/ui/coin.png")
-	}
-	if a.coinEmpty == nil {
-		a.coinEmpty = loadImage("assets/ui/coin_empty.png")
-	}
-	if a.edgeCol == nil {
-		a.edgeCol = make(map[string]color.NRGBA)
-	}
-}
-
-func (g *Game) portraitKeyFor(name string) string {
-
-	if info, ok := g.nameToMini[name]; ok && info.Portrait != "" {
-		return info.Portrait
-	}
-
-	return strings.ToLower(strings.ReplaceAll(name, " ", "_")) + ".png"
-}
-
-func (g *Game) ensureMiniImageByName(name string) *ebiten.Image {
-	g.assets.ensureInit()
-	key := g.portraitKeyFor(name)
-	if img, ok := g.assets.minis[key]; ok {
-		return img
-	}
-	img := loadImage("assets/minis/" + key)
-	g.assets.minis[key] = img
-	return img
-}
-
-func (g *Game) ensureObstacleImage(obstacleType string) *ebiten.Image {
-	g.assets.ensureInit()
-	if img, ok := g.assets.obstacles[obstacleType]; ok {
-		return img
-	}
-	img := loadImage("assets/obstacles/" + obstacleType + ".png")
-	g.assets.obstacles[obstacleType] = img
-	return img
-}
-
-func (g *Game) ensureBgForMap(mapID string) *ebiten.Image {
-	g.assets.ensureInit()
-	if img, ok := g.assets.bg[mapID]; ok {
-		return img
-	}
-
-	base := strings.ToLower(mapID)
-	for _, p := range []string{
-		"assets/maps/" + base + ".png",
-		"assets/maps/" + base + ".jpg",
-	} {
-		if img := loadImage(p); img != nil {
-			g.assets.bg[mapID] = img
-			return img
-		}
-	}
-
-	log.Println("map background not found for mapID:", mapID)
-	g.assets.bg[mapID] = nil
-	return nil
-}
-
 // ---------- Home (Army / Map tabs) ----------
-func (g *Game) updateHome() {
-	mx, my := ebiten.CursorPosition()
-	g.computeTopBarLayout()
-	g.computeBottomBarLayout()
-
-	if g.activeTab == tabArmy && len(g.minisAll) == 0 {
-		g.requestLobbyDataOnce()
-	}
-
-	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-		if g.armyBtn.hit(mx, my) {
-			g.activeTab = tabArmy
-		}
-		if g.mapBtn.hit(mx, my) {
-			g.activeTab = tabMap
-		}
-		if g.settingsBtn.hit(mx, my) {
-			g.activeTab = tabSettings
-		}
-		if g.logoutBtn.hit(mx, my) && g.activeTab == tabSettings {
-			if g.net != nil && !g.net.IsClosed() {
-				g.send("Logout", protocol.Logout{})
-			}
-			ClearToken()
-			ClearUsername()
-			g.resetToLoginNoAutoConnect()
-		}
-		if g.pvpBtn.hit(mx, my) {
-			g.activeTab = tabPvp
-		}
-		if g.socialBtn.hit(mx, my) {
-			g.activeTab = tabSocial
-		}
-	}
-
-	if len(g.minisAll) == 0 {
-		g.send("ListMinis", protocol.ListMinis{})
-	}
-
-	if inpututil.IsKeyJustPressed(ebiten.KeyF) && ebiten.IsKeyPressed(ebiten.KeyAlt) {
-		g.fullscreen = !g.fullscreen
-		ebiten.SetFullscreen(g.fullscreen)
-	}
-
-	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) && my < topBarH {
-		if g.userBtn.hit(mx, my) {
-			log.Println("Account clicked")
-			g.showProfile = true
-			return
-
-		} else if g.goldArea.hit(mx, my) {
-			log.Println("Gold clicked")
-		}
-		return
-	}
-
-	if g.showProfile {
-		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-			mx, my := ebiten.CursorPosition()
-
-			if g.profCloseBtn.hit(mx, my) {
-				g.showProfile = false
-				return
-			}
-
-			if g.profLogoutBtn.hit(mx, my) {
-
-				if g.net != nil && !g.net.IsClosed() {
-					g.send("Logout", protocol.Logout{})
-				}
-
-				ClearToken()
-				ClearUsername()
-				g.resetToLoginNoAutoConnect()
-				return
-			}
-
-			for i, r := range g.avatarRects {
-				if r.hit(mx, my) && i >= 0 && i < len(g.avatars) {
-					choice := g.avatars[i]
-					_ = SaveAvatar(choice)
-					g.avatar = choice
-					g.send("SetAvatar", protocol.SetAvatar{Avatar: choice})
-					break
-				}
-			}
-		}
-
-		return
-	}
-
-	switch g.activeTab {
-	case tabArmy:
-		mx, my := ebiten.CursorPosition()
-
-		// ---- Layout numbers shared with Draw ----
-		const champCardW, champCardH = 100, 116 // small cards in strip
-		const miniCardW, miniCardH = 100, 116
-		const gap = 10
-		const stripH = champCardH + 8
-		const dragThresh = 6 // pixels: below this is a click, above is a drag
-
-		stripX := pad
-		stripY := topBarH + pad
-		stripW := protocol.ScreenW - 2*pad
-		stepPx := champCardW + gap
-		g.champStripArea = rect{x: stripX, y: stripY, w: stripW, h: stripH}
-
-		bigW := 200
-		bigH := miniCardH*2 + gap
-		topY := stripY + stripH + 12
-		leftX := pad
-		rightX := leftX + bigW + 16
-
-		// Overlay input handling
-		if g.miniOverlayOpen {
-			// Compute overlay rects (match draw)
-			wDlg, hDlg := 580, 300
-			slotsBottom := topY + 2*(miniCardH+gap) - gap
-			dlgX := (protocol.ScreenW - wDlg) / 2
-			dlgY := slotsBottom + 28
-			if dlgY+hDlg > protocol.ScreenH-12 {
-				dlgY = (protocol.ScreenH - hDlg) / 2
-			}
-			closeR := rect{x: dlgX + wDlg - 28, y: dlgY + 8, w: 20, h: 20}
-			primaryR := rect{x: dlgX + 16 + (120-110)/2, y: dlgY + 36 + 140 + 10, w: 110, h: 26}
-
-			// XP bar hover detection
-			barX, barY := dlgX+160, dlgY+50+120
-			barW, barH := wDlg-170-24, 30
-			xpBarRect := rect{x: barX, y: barY, w: barW, h: barH}
-			g.xpBarHovered = xpBarRect.hit(mx, my)
-			if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-				// Close
-				if closeR.hit(mx, my) {
-					g.miniOverlayOpen = false
-					g.miniOverlayMode = ""
-					g.slotDragFrom, g.slotDragActive = -1, false
-					g.overlayJustClosed = true
-					return
-				}
-				// Equip from collection
-				if g.miniOverlayFrom == "collection" && primaryR.hit(mx, my) {
-					name := g.miniOverlayName
-					empty := -1
-					for i := 0; i < 6; i++ {
-						if g.selectedOrder[i] == "" {
-							empty = i
-							break
-						}
-					}
-					if empty >= 0 && !g.selectedMinis[name] {
-						g.selectedOrder[empty] = name
-						g.selectedMinis[name] = true
-						g.setChampArmyFromSelected()
-						g.autoSaveCurrentChampionArmy()
-						g.miniOverlayOpen = false
-						g.miniOverlayMode = ""
-						g.overlayJustClosed = true
-						return
-					}
-					g.miniOverlayMode = "switch_target_slot"
-					return
-				}
-				// Target slot
-				if g.miniOverlayMode == "switch_target_slot" {
-					for i := 1; i <= 6; i++ {
-						if g.armySlotRects[i].hit(mx, my) {
-							to := i - 1
-							prev := g.selectedOrder[to]
-							if prev != "" {
-								delete(g.selectedMinis, prev)
-							}
-							g.selectedOrder[to] = g.miniOverlayName
-							g.selectedMinis[g.miniOverlayName] = true
-							g.setChampArmyFromSelected()
-							g.autoSaveCurrentChampionArmy()
-							g.miniOverlayOpen = false
-							g.miniOverlayMode = ""
-							g.overlayJustClosed = true
-							return
-						}
-					}
-					return
-				}
-				return
-			}
-			// Block other interactions while overlay open
-			return
-		}
-		if g.overlayJustClosed {
-			// Clear as soon as the button is no longer pressed
-			if !ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
-				g.overlayJustClosed = false
-			}
-			return
-		}
-
-		cols := maxInt(1, (stripW+gap)/(champCardW+gap))
-		start := clampInt(g.champStripScroll, 0, maxInt(0, len(g.champions)-cols))
-		// center the visible champion strip within stripW
-		visW := cols*champCardW + maxInt(0, cols-1)*gap
-		baseX := stripX + (stripW-visW)/2
-		g.champStripRects = g.champStripRects[:0]
-		for i := 0; i < cols && start+i < len(g.champions); i++ {
-			x := baseX + i*(champCardW+gap)
-			g.champStripRects = append(g.champStripRects, rect{x: x, y: stripY, w: champCardW, h: champCardH})
-		}
-
-		if g.champStripArea.hit(mx, my) && inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-
-			g.champDragStartX = mx
-			g.champDragLastX = mx
-			g.champDragAccum = 0
-
-		}
-
-		if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) && g.champStripArea.hit(mx, my) {
-			dx := mx - g.champDragStartX
-			if !g.champDragActive && (dx >= dragThresh || dx <= -dragThresh) {
-				g.champDragActive = true
-			}
-			if g.champDragActive {
-				maxStart := maxInt(0, len(g.champions)-cols)
-
-				step := mx - g.champDragLastX
-				g.champDragLastX = mx
-				g.champDragAccum += step
-				for g.champDragAccum <= -stepPx && g.champStripScroll < maxStart {
-					g.champStripScroll++
-					g.champDragAccum += stepPx
-				}
-				for g.champDragAccum >= stepPx && g.champStripScroll > 0 {
-					g.champStripScroll--
-					g.champDragAccum -= stepPx
-				}
-			}
-		}
-
-		if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) {
-			if g.champStripArea.hit(mx, my) && !g.champDragActive && (mx-g.champDragStartX <= dragThresh && g.champDragStartX-mx <= dragThresh) {
-				for i, r := range g.champStripRects {
-					if r.hit(mx, my) {
-						ch := g.champions[start+i].Name
-						g.setChampArmyFromSelected()
-						g.loadSelectedForChampion(ch)
-						g.autoSaveCurrentChampionArmy()
-						break
-					}
-				}
-			}
-
-			g.champDragActive = false
-			g.champDragAccum = 0
-		}
-
-		touchIDs := ebiten.AppendTouchIDs(nil)
-		if len(touchIDs) > 0 {
-			tid := touchIDs[0]
-			tx, ty := ebiten.TouchPosition(tid)
-			_ = ty
-			if g.activeTouchID == -1 {
-				if g.champStripArea.hit(tx, stripY+1) {
-					g.activeTouchID = tid
-					g.champDragStartX = tx
-					g.champDragLastX = tx
-					g.champDragAccum = 0
-					g.champDragActive = false
-				}
-			} else if g.activeTouchID == tid {
-				dx := tx - g.champDragStartX
-				if !g.champDragActive && (dx >= dragThresh || dx <= -dragThresh) {
-					g.champDragActive = true
-				}
-				if g.champDragActive {
-					maxStart := maxInt(0, len(g.champions)-cols)
-					step := tx - g.champDragLastX
-					g.champDragLastX = tx
-					g.champDragAccum += step
-					for g.champDragAccum <= -stepPx && g.champStripScroll < maxStart {
-						g.champStripScroll++
-						g.champDragAccum += stepPx
-					}
-					for g.champDragAccum >= stepPx && g.champStripScroll > 0 {
-						g.champStripScroll--
-						g.champDragAccum -= stepPx
-					}
-				}
-			}
-		} else if g.activeTouchID != -1 {
-
-			g.activeTouchID = -1
-			g.champDragActive = false
-			g.champDragAccum = 0
-		}
-
-		// Recompute equipped slot rects every frame to keep geometry in sync with drawing
-		{
-			// Layout numbers shared with draw
-			const champCardW, champCardH = 100, 116
-			const miniCardW, miniCardH = 100, 116
-			const gap = 10
-			const stripH = champCardH + 8
-
-			stripX := pad
-			stripY := topBarH + pad
-			bigW := 200
-			topY := stripY + stripH + 12
-			// center champion + 2x3 slots as a block
-			totalW := bigW + 16 + 3*miniCardW + 2*gap
-			startX := (protocol.ScreenW - totalW) / 2
-			leftX := startX
-			rightX := leftX + bigW + 16
-
-			// champion slot
-			g.armySlotRects[0] = rect{x: leftX, y: topY, w: bigW, h: miniCardH*2 + gap}
-			// 6 mini slots (2x3)
-			k := 1
-			for row := 0; row < 2; row++ {
-				for col := 0; col < 3; col++ {
-					g.armySlotRects[k] = rect{
-						x: rightX + col*(miniCardW+gap),
-						y: topY + row*(miniCardH+gap),
-						w: miniCardW, h: miniCardH,
-					}
-					k++
-				}
-			}
-			_ = stripX // silence unused vars in case
-		}
-
-		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) && !g.champDragActive && !g.miniOverlayOpen {
-
-			g.armySlotRects[0] = rect{x: leftX, y: topY, w: bigW, h: bigH}
-
-			k := 1
-			for row := 0; row < 2; row++ {
-				for col := 0; col < 3; col++ {
-					g.armySlotRects[k] = rect{
-						x: rightX + col*(miniCardW+gap),
-						y: topY + row*(miniCardH+gap),
-						w: miniCardW, h: miniCardH,
-					}
-					k++
-				}
-			}
-			// champion overlay (display only)
-			if g.armySlotRects[0].hit(mx, my) && g.selectedChampion != "" {
-				g.miniOverlayName = g.selectedChampion
-				g.miniOverlayFrom = "champion"
-				g.miniOverlaySlot = -1
-				g.miniOverlayMode = ""
-				g.miniOverlayOpen = true
-				return
-			}
-			for i := 1; i <= 6; i++ {
-				if g.armySlotRects[i].hit(mx, my) {
-					// start potential drag from this slot; overlay will open on release if not dragged
-					g.slotDragFrom = i - 1
-					g.slotDragStartX, g.slotDragStartY = mx, my
-					g.slotDragActive = false
-					return
-				}
-			}
-		}
-
-		// Drag between equipped slots
-		if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) && g.slotDragFrom >= 0 {
-			dx := mx - g.slotDragStartX
-			dy := my - g.slotDragStartY
-			const dragThresh = 6
-			if !g.slotDragActive && (dx >= dragThresh || dx <= -dragThresh || dy >= dragThresh || dy <= -dragThresh) {
-				g.slotDragActive = true
-			}
-		}
-		if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) && g.slotDragFrom >= 0 {
-			from := g.slotDragFrom
-			g.slotDragFrom = -1
-			if g.slotDragActive {
-				// perform swap if released over another slot
-				// Use precomputed rects for accuracy
-				for i := 1; i <= 6; i++ {
-					if g.armySlotRects[i].hit(mx, my) {
-						to := i - 1
-						if to >= 0 && to < 6 && to != from {
-							g.selectedOrder[from], g.selectedOrder[to] = g.selectedOrder[to], g.selectedOrder[from]
-							g.setChampArmyFromSelected()
-							g.autoSaveCurrentChampionArmy()
-						}
-						break
-					}
-				}
-				g.slotDragActive = false
-			} else {
-				// treat as click: open overlay for that slot
-				if from >= 0 && from < 6 {
-					name := g.selectedOrder[from]
-					g.miniOverlayName = name
-					g.miniOverlayFrom = "slot"
-					g.miniOverlaySlot = from
-					g.miniOverlayMode = ""
-					g.miniOverlayOpen = true
-				}
-			}
-		}
-
-		// Right-click on selected mini slots to open XP overlay
-		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) {
-			// Recompute slot rects like above
-			g.armySlotRects[0] = rect{x: leftX, y: topY, w: bigW, h: bigH}
-			k := 1
-			for row := 0; row < 2; row++ {
-				for col := 0; col < 3; col++ {
-					g.armySlotRects[k] = rect{
-						x: rightX + col*(miniCardW+gap),
-						y: topY + row*(miniCardH+gap),
-						w: miniCardW, h: miniCardH,
-					}
-					k++
-				}
-			}
-			order := g.selectedMinisList()
-			for i := 1; i <= 6; i++ {
-				if g.armySlotRects[i].hit(mx, my) {
-					if i-1 < len(order) {
-						g.miniOverlayName = order[i-1]
-						g.miniOverlayOpen = true
-					}
-					break
-				}
-			}
-		}
-
-		// Reset hover states (already declared above)
-		g.hoveredChampionLevel = -1
-		g.hoveredChampionCost = -1
-		g.hoveredChampionCard = -1
-		g.hoveredSelectedChampionLevel = false
-		g.hoveredSelectedChampionCost = false
-		g.hoveredSelectedChampionCard = false
-		g.hoveredMiniSlotLevel = -1
-		g.hoveredMiniSlotCost = -1
-		g.hoveredMiniSlotCard = -1
-		g.hoveredCollectionLevel = -1
-		g.hoveredCollectionCost = -1
-		g.hoveredCollectionCard = -1
-		g.hoveredOverlayLevel = false
-		g.hoveredOverlayCost = false
-
-		// Check hover for champion strip (top selection area)
-		for i, r := range g.champStripRects {
-			if r.hit(mx, my) {
-				idx := start + i
-				if idx >= 0 && idx < len(g.champions) {
-					it := g.champions[idx]
-
-					// Check level badge area (top-left corner)
-					levelBadgeRect := rect{x: r.x + 4, y: r.y + 4, w: 24, h: 24}
-					if levelBadgeRect.hit(mx, my) {
-						g.hoveredChampionLevel = idx
-					}
-
-					// Check cost text area (bottom-right corner - updated position)
-					costS := fmt.Sprintf("%d", it.Cost)
-					cw := text.BoundString(basicfont.Face7x13, costS).Dx()
-					costRect := rect{x: r.x + r.w - 6 - cw, y: r.y + r.h - 16, w: cw, h: 16}
-					if costRect.hit(mx, my) {
-						g.hoveredChampionCost = idx
-					}
-
-					// Set hover for the entire card (for frame effect)
-					g.hoveredChampionCard = idx
-				}
-				break
-			}
-		}
-
-		// Check hover for selected champion card (big one in middle)
-		if g.selectedChampion != "" {
-			chRect := g.armySlotRects[0] // champion slot rect
-			if chRect.hit(mx, my) {
-				// Check level badge area
-				levelBadgeRect := rect{x: chRect.x + 4, y: chRect.y + 4, w: 24, h: 24}
-				if levelBadgeRect.hit(mx, my) {
-					g.hoveredSelectedChampionLevel = true
-				}
-
-				// Check cost text area (bottom area of big card)
-				costRect := rect{x: chRect.x + 8, y: chRect.y + chRect.h - 20, w: chRect.w - 16, h: 16}
-				if costRect.hit(mx, my) {
-					g.hoveredSelectedChampionCost = true
-				}
-
-				// Set hover for the entire champion card (for frame effect)
-				g.hoveredSelectedChampionCard = true
-			}
-		}
-
-		// Check hover for equipped mini slots (2x3 grid)
-		for i := 1; i <= 6; i++ {
-			slotRect := g.armySlotRects[i]
-			if slotRect.hit(mx, my) && i-1 < len(g.selectedOrder) && g.selectedOrder[i-1] != "" {
-				name := g.selectedOrder[i-1]
-
-				// Check level badge area (top-left)
-				levelBadgeRect := rect{x: slotRect.x + 4, y: slotRect.y + 4, w: 24, h: 24}
-				if levelBadgeRect.hit(mx, my) {
-					g.hoveredMiniSlotLevel = i - 1
-				}
-
-				// Check cost text area (bottom-right)
-				if info, ok := g.nameToMini[name]; ok {
-					costS := fmt.Sprintf("%d", info.Cost)
-					cw := text.BoundString(basicfont.Face7x13, costS).Dx()
-					costRect := rect{x: slotRect.x + slotRect.w - cw - 8, y: slotRect.y + slotRect.h - 16, w: cw, h: 16}
-					if costRect.hit(mx, my) {
-						g.hoveredMiniSlotCost = i - 1
-					}
-				}
-
-				// Set hover for the entire mini slot card (for frame effect)
-				g.hoveredMiniSlotCard = i - 1
-			}
-		}
-
-		gridTop := topY + bigH + 16
-		gridLeft := pad
-		gridRight := protocol.ScreenW - pad
-		gridW := gridRight - gridLeft
-		gridH := protocol.ScreenH - menuBarH - pad - gridTop
-		visRows := maxInt(1, (gridH+gap)/(miniCardH+gap))
-		cols2 := maxInt(1, (gridW+gap)/(miniCardW+gap))
-		g.collArea = rect{x: gridLeft, y: gridTop, w: gridW, h: gridH}
-		totalRows := (len(g.minisOnly) + cols2 - 1) / cols2
-		maxRowsStart := maxInt(0, totalRows-visRows)
-		stepPy := miniCardH + gap
-
-		if g.collArea.hit(mx, my) && inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-			g.collDragStartY = my
-			g.collDragLastY = my
-			g.collDragAccum = 0
-			g.collDragActive = false
-		}
-
-		if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) && g.collArea.hit(mx, my) {
-			dy0 := my - g.collDragStartY
-			if !g.collDragActive && (dy0 >= dragThresh || dy0 <= -dragThresh) {
-				g.collDragActive = true
-			}
-			if g.collDragActive {
-				dy := my - g.collDragLastY
-				g.collDragLastY = my
-				g.collDragAccum += dy
-				for g.collDragAccum <= -stepPy && g.collScroll < maxRowsStart {
-					g.collScroll++
-					g.collDragAccum += stepPy
-				}
-				for g.collDragAccum >= stepPy && g.collScroll > 0 {
-					g.collScroll--
-					g.collDragAccum -= stepPy
-				}
-			}
-		}
-
-		items := g.minisOnly
-		start2 := g.collScroll * cols2
-		g.collRects = g.collRects[:0]
-		maxItems := visRows * cols2
-		for i := 0; i < maxItems && start2+i < len(items); i++ {
-			c := i % cols2
-			rw := i / cols2
-			x := gridLeft + c*(miniCardW+gap)
-			y := gridTop + rw*(miniCardH+gap)
-			g.collRects = append(g.collRects, rect{x: x, y: y, w: miniCardW, h: miniCardH})
-		}
-
-		// Check hover for collection grid items - reset hover states first
-		g.hoveredCollectionLevel = -1
-		g.hoveredCollectionCost = -1
-
-		// Build current visible items list to match drawing order
-		avail := make([]protocol.MiniInfo, 0, len(g.minisOnly))
-		for _, mi := range g.minisOnly {
-			if !g.selectedMinis[mi.Name] {
-				avail = append(avail, mi)
-			}
-		}
-
-		// Check each visible grid rectangle
-		for i, r := range g.collRects {
-			if r.hit(mx, my) {
-				idx := start2 + i
-				if idx >= 0 && idx < len(avail) {
-					it := avail[idx]
-
-					// Check level badge area (top-left) - matches draw position exactly: r.x+4, r.y+4
-					levelBadgeRect := rect{x: r.x + 4, y: r.y + 4, w: 24, h: 24}
-					if levelBadgeRect.hit(mx, my) {
-						g.hoveredCollectionLevel = idx
-					}
-
-					// Check cost text area (bottom-right) - matches draw position exactly: r.x+r.w-8-cw, r.y+r.h-16
-					costS := fmt.Sprintf("%d", it.Cost)
-					cw := text.BoundString(basicfont.Face7x13, costS).Dx()
-					costRect := rect{x: r.x + r.w - cw - 8, y: r.y + r.h - 16, w: cw, h: 16}
-					if costRect.hit(mx, my) {
-						g.hoveredCollectionCost = idx
-					}
-
-					// Set hover for the entire collection card (for frame effect)
-					g.hoveredCollectionCard = idx
-				}
-				break
-			}
-		}
-
-		// Check hover for mini overlay (when open)
-		if g.miniOverlayOpen {
-			// Position calculations matching the draw function
-			w, h := 580, 300
-			x := (protocol.ScreenW - w) / 2
-			stripY := topBarH + pad
-			stripH := 116 + 8
-			topY := stripY + stripH + 12
-			slotsBottom := topY + 2*(miniCardH+gap) - gap
-			y := slotsBottom + 28
-			if y+h > protocol.ScreenH-12 {
-				y = (protocol.ScreenH - h) / 2
-			}
-
-			// Check level badge area in overlay - matches draw position exactly (px+0, py+0)
-			// where px = x + 16, py = y + 36
-			levelBadgeRect := rect{x: x + 16, y: y + 36, w: 24, h: 24}
-			if levelBadgeRect.hit(mx, my) {
-				g.hoveredOverlayLevel = true
-			}
-
-			// Check cost text area in overlay (right side stats) - matches draw position
-			costRect := rect{x: x + 170, y: y + 50, w: 100, h: 16}
-			if costRect.hit(mx, my) {
-				g.hoveredOverlayCost = true
-			}
-		}
-
-		if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) && !g.miniOverlayOpen && g.collArea.hit(mx, my) && !g.collDragActive &&
-			(my-g.collDragStartY <= dragThresh && g.collDragStartY-my <= dragThresh) {
-			for i, r := range g.collRects {
-				if r.hit(mx, my) {
-					idx := start2 + i
-					if idx >= 0 && idx < len(avail) {
-						g.miniOverlayName = avail[idx].Name
-						g.miniOverlayFrom = "collection"
-						g.miniOverlaySlot = -1
-						g.miniOverlayMode = ""
-						g.miniOverlayOpen = true
-					}
-					break
-				}
-			}
-		}
-
-		if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) {
-			g.collDragActive = false
-			g.collDragAccum = 0
-		}
-
-		tids := ebiten.AppendTouchIDs(nil)
-		if len(tids) > 0 {
-			tid := tids[0]
-			tx, ty := ebiten.TouchPosition(tid)
-			if g.collTouchID == -1 {
-				if g.collArea.hit(tx, ty) {
-					g.collTouchID = tid
-					g.collDragStartY = ty
-					g.collDragLastY = ty
-					g.collDragAccum = 0
-					g.collDragActive = false
-				}
-			} else if g.collTouchID == tid {
-				dy0 := ty - g.collDragStartY
-				if !g.collDragActive && (dy0 >= dragThresh || dy0 <= -dragThresh) {
-					g.collDragActive = true
-				}
-				if g.collDragActive {
-					dy := ty - g.collDragLastY
-					g.collDragLastY = ty
-					g.collDragAccum += dy
-					for g.collDragAccum <= -stepPy && g.collScroll < maxRowsStart {
-						g.collScroll++
-						g.collDragAccum += stepPy
-					}
-					for g.collDragAccum >= stepPy && g.collScroll > 0 {
-						g.collScroll--
-						g.collDragAccum -= stepPy
-					}
-				}
-			}
-		} else if g.collTouchID != -1 {
-
-			g.collTouchID = -1
-			g.collDragActive = false
-			g.collDragAccum = 0
-		}
-
-		if _, wY := ebiten.Wheel(); wY != 0 {
-			if g.champStripArea.hit(mx, my) {
-				g.champStripScroll -= int(wY)
-				maxStart := maxInt(0, len(g.champions)-cols)
-				g.champStripScroll = clampInt(g.champStripScroll, 0, maxStart)
-			} else if g.collArea.hit(mx, my) {
-				g.collScroll -= int(wY)
-				if g.collScroll < 0 {
-					g.collScroll = 0
-				}
-				totalRows := (len(g.minisOnly) + cols2 - 1) / cols2
-				maxRowsStart := maxInt(0, totalRows-visRows)
-				if g.collScroll > maxRowsStart {
-					g.collScroll = maxRowsStart
-				}
-			}
-		}
-	case tabMap:
-		g.ensureMapHotspots()
-
-		mx, my = ebiten.CursorPosition()
-		disp := g.displayMapID()
-		bg := g.ensureBgForMap(disp)
-		offX, offY, dispW, dispH, _ := g.mapRenderRect(bg)
-
-		g.hoveredHS = -1
-		hsList := g.mapHotspots[disp]
-		if hsList == nil {
-			hsList = g.mapHotspots[defaultMapID]
-		}
-		for i, hs := range hsList {
-			cx := offX + int(hs.X*float64(dispW))
-			cy := offY + int(hs.Y*float64(dispH))
-			dx, dy := mx-cx, my-cy
-			if dx*dx+dy*dy <= hs.Rpx*hs.Rpx {
-				g.hoveredHS = i
-				break
-			}
-		}
-
-		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-			if g.hoveredHS >= 0 {
-				g.selectedHS = g.hoveredHS
-
-				hs := hsList[g.selectedHS]
-				arenaID := hs.TargetMapID
-				if arenaID == "" {
-					arenaID = g.arenaForHotspot(disp, hs.ID)
-				}
-
-				g.onMapClicked(arenaID)
-			}
-
-			if g.selectedHS >= 0 && g.selectedHS < len(hsList) {
-				hs := hsList[g.selectedHS]
-				cx := offX + int(hs.X*float64(dispW))
-				cy := offY + int(hs.Y*float64(dispH))
-				g.startBtn = rect{x: cx + 22, y: cy - 16, w: 90, h: 28}
-				if g.startBtn.hit(mx, my) {
-					g.onStartBattle()
-				}
-			}
-		}
-
-		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) &&
-			mx >= offX && mx < offX+dispW && my >= offY && my < offY+dispH {
-			nx := (float64(mx - offX)) / float64(dispW)
-			ny := (float64(my - offY)) / float64(dispH)
-			log.Printf("map '%s' pick: X: %.4f, Y: %.4f", disp, nx, ny)
-		}
-	case tabPvp:
-
-		queueBtn, leaveBtn, createBtn, cancelBtn, joinInput, joinBtn := g.pvpLayout()
-		mx, my := ebiten.CursorPosition()
-
-		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-			// Handle button clicks based on current state (matching the drawing logic)
-			if !g.pvpQueued && queueBtn.hit(mx, my) {
-				// Queue PvP button clicked
-				g.pvpQueued = true
-				g.pvpStatus = "Queueing for PvP…"
-				g.send("JoinPvpQueue", struct{}{})
-			} else if g.pvpQueued && leaveBtn.hit(mx, my) {
-				// Leave Queue button clicked
-				g.pvpQueued = false
-				g.pvpStatus = "Left queue."
-				g.send("LeavePvpQueue", struct{}{})
-			} else if !g.pvpHosting && createBtn.hit(mx, my) {
-				// Create Friendly Code button clicked
-				g.pvpHosting = true
-				g.pvpCode = ""
-				g.pvpStatus = "Requesting friendly code…"
-				g.send("FriendlyCreate", protocol.FriendlyCreate{})
-			} else if g.pvpHosting && cancelBtn.hit(mx, my) {
-				// Cancel Friendly button clicked
-				g.pvpHosting = false
-				g.pvpStatus = "Cancelled friendly host."
-				g.pvpCode = ""
-				g.send("FriendlyCancel", protocol.FriendlyCancel{})
-			} else if joinInput.hit(mx, my) {
-				// Input field clicked
-				g.pvpInputActive = true
-			} else if g.pvpCodeArea.hit(mx, my) && g.pvpHosting && g.pvpCode != "" {
-				// Code area clicked (copy to clipboard)
-				if err := clipboard.WriteAll(g.pvpCode); err != nil {
-					g.pvpStatus = "Couldn't copy (install xclip/xsel on Linux)."
-					log.Println("clipboard copy failed:", err)
-				} else {
-					g.pvpStatus = "Code copied to clipboard."
-				}
-			} else if joinBtn.hit(mx, my) {
-				// Join button clicked
-				code := strings.ToUpper(strings.TrimSpace(g.pvpCodeInput))
-				if code == "" {
-					g.pvpStatus = "Enter a code first."
-				} else {
-					g.pvpStatus = "Joining room " + code + "…"
-					g.send("FriendlyJoin", protocol.FriendlyJoin{Code: code})
-				}
-				g.pvpInputActive = false
-			} else {
-				// Clicked elsewhere - deactivate input
-				g.pvpInputActive = false
-			}
-		}
-
-		if g.pvpInputActive {
-			// Handle paste functionality (Ctrl+V / Cmd+V)
-			if (ebiten.IsKeyPressed(ebiten.KeyControl) || ebiten.IsKeyPressed(ebiten.KeyMeta)) && inpututil.IsKeyJustPressed(ebiten.KeyV) {
-				if pastedText, err := clipboard.ReadAll(); err == nil {
-					// Filter pasted text to only allow uppercase letters and numbers
-					filtered := ""
-					for _, r := range strings.ToUpper(pastedText) {
-						if (r >= 'A' && r <= 'Z') || (r >= '0' && r <= '9') {
-							filtered += string(r)
-						}
-					}
-					// Add filtered text up to the 8 character limit
-					for _, r := range filtered {
-						if len(g.pvpCodeInput) >= 8 {
-							break
-						}
-						g.pvpCodeInput += string(r)
-					}
-				}
-			} else {
-				// Handle individual key presses
-				for _, k := range inpututil.AppendJustPressedKeys(nil) {
-					switch k {
-					case ebiten.KeyBackspace:
-						if len(g.pvpCodeInput) > 0 {
-							g.pvpCodeInput = g.pvpCodeInput[:len(g.pvpCodeInput)-1]
-						}
-					case ebiten.KeyEnter:
-						code := strings.ToUpper(strings.TrimSpace(g.pvpCodeInput))
-						if code == "" {
-							g.pvpStatus = "Enter a code first."
-						} else {
-							g.pvpStatus = "Joining room " + code + "…"
-							g.send("FriendlyJoin", protocol.FriendlyJoin{Code: code})
-						}
-						g.pvpInputActive = false
-
-					default:
-
-						if k >= ebiten.KeyA && k <= ebiten.KeyZ {
-							if len(g.pvpCodeInput) < 8 {
-								g.pvpCodeInput += string('A' + (k - ebiten.KeyA))
-							}
-							continue
-						}
-
-						if k >= ebiten.Key0 && k <= ebiten.Key9 {
-							if len(g.pvpCodeInput) < 8 {
-								g.pvpCodeInput += string('0' + (k - ebiten.Key0))
-							}
-							continue
-						}
-
-						if k >= ebiten.KeyKP0 && k <= ebiten.KeyKP9 {
-							if len(g.pvpCodeInput) < 8 {
-								g.pvpCodeInput += string('0' + (k - ebiten.KeyKP0))
-							}
-							continue
-						}
-					}
-				}
-			}
-		}
-
-		if time.Since(g.lbLastReq) > 10*time.Second {
-			g.send("GetLeaderboard", protocol.GetLeaderboard{})
-			g.lbLastReq = time.Now()
-		}
-
-	case tabSocial:
-		g.updateSocial()
-	case tabSettings:
-		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-			if g.fsOnBtn.hit(mx, my) {
-				ebiten.SetFullscreen(true)
-				g.fullscreen = true
-			}
-			if g.fsOffBtn.hit(mx, my) {
-				ebiten.SetFullscreen(false)
-				g.fullscreen = false
-			}
-
-		}
-	}
-}
 
 func (g *Game) drawHomeContent(screen *ebiten.Image) {
 	switch g.activeTab {
@@ -1192,16 +47,29 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 
 			it := g.champions[start+i]
 
-			// Use FantasyUI themed card
+			// Use FantasyUI themed card (remove cost display)
 			if g.fantasyUI != nil {
 				isSelected := g.selectedChampion == it.Name
 				isHovered := g.hoveredChampionCard >= 0 && g.hoveredChampionCard == start+i
 
 				g.fantasyUI.DrawEnhancedUnitCard(screen, r.x, r.y, r.w, r.h,
-					it.Name, strings.Title(it.Class), 1, it.Cost, nil, isSelected, isHovered)
+					it.Name, strings.Title(it.Class), 1, 0, nil, isSelected, isHovered)
 			} else {
 				// Fallback to basic styling
 				ebitenutil.DrawRect(screen, float64(r.x), float64(r.y), float64(r.w), float64(r.h), color.NRGBA{0x2b, 0x2b, 0x3e, 0xff})
+			}
+
+			// Cost display in top-right for champion strip
+			if it.Cost > 0 {
+				costStr := fmt.Sprintf("%d", it.Cost)
+				costW := len(costStr) * 7
+				costX := r.x + r.w - costW - 8
+				costY := r.y + 8
+
+				// Cost badge with gold theme
+				vector.DrawFilledRect(screen, float32(costX-4), float32(costY-2), float32(costW+8), 14, color.NRGBA{255, 215, 0, 255}, true)
+				vector.StrokeRect(screen, float32(costX-4), float32(costY-2), float32(costW+8), 14, 1, color.NRGBA{200, 160, 20, 255}, true)
+				text.Draw(screen, costStr, basicfont.Face7x13, costX, costY+10, color.NRGBA{64, 64, 64, 255})
 			}
 
 			if img := g.ensureMiniImageByName(it.Name); img != nil {
@@ -1215,7 +83,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				screen.DrawImage(img, op)
 			}
 
-			// Level top-left (keep existing level badge)
+			// Level bottom-left (moved from top-left)
 			lvl := 1
 			if g.unitXP != nil {
 				if xp, ok := g.unitXP[it.Name]; ok {
@@ -1225,7 +93,17 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 					}
 				}
 			}
-			drawSmallLevelBadgeSized(screen, r.x+4, r.y+4, lvl, 24)
+			levelBadgeX := r.x + 8
+			levelBadgeY := r.y + r.h - 20
+
+			// Level badge with purple theme (same size as gold cost badges)
+			if lvl > 0 {
+				levelStr := fmt.Sprintf("%d", lvl)
+				levelW := len(levelStr) * 7
+				vector.DrawFilledRect(screen, float32(levelBadgeX-4), float32(levelBadgeY-2), float32(levelW+8), 14, color.NRGBA{138, 43, 226, 200}, true)
+				vector.StrokeRect(screen, float32(levelBadgeX-4), float32(levelBadgeY-2), float32(levelW+8), 14, 1, color.NRGBA{100, 20, 150, 255}, true)
+				text.Draw(screen, levelStr, basicfont.Face7x13, levelBadgeX, levelBadgeY+10, color.NRGBA{255, 255, 255, 255})
+			}
 
 			// Selection indicator with theme color
 			if g.selectedChampion == it.Name {
@@ -1259,7 +137,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 			// Use FantasyUI themed card for selected champion
 			if g.fantasyUI != nil {
 				g.fantasyUI.DrawEnhancedUnitCard(screen, chRect.x, chRect.y, chRect.w, chRect.h,
-					g.selectedChampion, "Champion", 1, championCost, nil, true, g.hoveredSelectedChampionCard)
+					g.selectedChampion, "Champion", 1, 0, nil, true, g.hoveredSelectedChampionCard)
 			} else {
 				ebitenutil.DrawRect(screen, float64(chRect.x), float64(chRect.y), float64(chRect.w), float64(chRect.h), color.NRGBA{0x2b, 0x2b, 0x3e, 0xff})
 			}
@@ -1275,17 +153,67 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				screen.DrawImage(img, op)
 			}
 
-			// Level top-left of champion card
+			// Cost display in top-right
+			if championCost > 0 {
+				costStr := fmt.Sprintf("%d", championCost)
+				costW := len(costStr) * 7
+				costX := chRect.x + chRect.w - costW - 8
+				costY := chRect.y + 8
+
+				// Cost badge with gold theme
+				vector.DrawFilledRect(screen, float32(costX-4), float32(costY-2), float32(costW+8), 14, color.NRGBA{255, 215, 0, 255}, true)
+				vector.StrokeRect(screen, float32(costX-4), float32(costY-2), float32(costW+8), 14, 1, color.NRGBA{200, 160, 20, 255}, true)
+				text.Draw(screen, costStr, basicfont.Face7x13, costX, costY+10, color.NRGBA{64, 64, 64, 255})
+			}
+
+			// Level and XP bar at bottom-left
 			lvl := 1
+			xp := 0
 			if g.unitXP != nil {
-				if xp, ok := g.unitXP[g.selectedChampion]; ok {
-					l, _, _ := computeLevel(xp)
-					if l > 0 {
+				if xpVal, ok := g.unitXP[g.selectedChampion]; ok {
+					xp = xpVal
+					if l, _, _ := computeLevel(xp); l > 0 {
 						lvl = l
 					}
 				}
 			}
-			drawSmallLevelBadgeSized(screen, chRect.x+4, chRect.y+4, lvl, 24)
+
+			// Level badge bottom-left
+			levelBadgeX := chRect.x + 8
+			levelBadgeY := chRect.y + chRect.h - 20
+
+			// Level badge with purple theme (same size as gold cost badges)
+			if lvl > 0 {
+				levelStr := fmt.Sprintf("%d", lvl)
+				levelW := len(levelStr) * 7
+				vector.DrawFilledRect(screen, float32(levelBadgeX-4), float32(levelBadgeY-2), float32(levelW+8), 14, color.NRGBA{138, 43, 226, 200}, true)
+				vector.StrokeRect(screen, float32(levelBadgeX-4), float32(levelBadgeY-2), float32(levelW+8), 14, 1, color.NRGBA{100, 20, 150, 255}, true)
+				text.Draw(screen, levelStr, basicfont.Face7x13, levelBadgeX, levelBadgeY+10, color.NRGBA{255, 255, 255, 255})
+			}
+
+			// XP bar next to level badge (centered vertically with level badge)
+			xpBarX := levelBadgeX + 28
+			xpBarY := levelBadgeY + 3 // Center with level badge (level badge is 14px, so +3 centers the 8px bar)
+			xpBarW := chRect.w - 48   // Leave space for level badge and margins
+			xpBarH := 8
+
+			// XP bar background
+			vector.DrawFilledRect(screen, float32(xpBarX), float32(xpBarY), float32(xpBarW), float32(xpBarH), color.NRGBA{32, 34, 48, 200}, true)
+
+			// XP bar fill (purple, same as unit profile overlay)
+			if xp > 0 {
+				_, cur, next := computeLevel(xp)
+				if next > 0 {
+					frac := float64(cur) / float64(next)
+					fillW := int(float64(xpBarW) * frac)
+					if fillW > 0 {
+						vector.DrawFilledRect(screen, float32(xpBarX), float32(xpBarY), float32(fillW), float32(xpBarH), color.NRGBA{138, 43, 226, 200}, true)
+					}
+				}
+			}
+
+			// XP bar border
+			vector.StrokeRect(screen, float32(xpBarX), float32(xpBarY), float32(xpBarW), float32(xpBarH), 1, color.NRGBA{100, 90, 0, 255}, true)
 		} else {
 			// Empty champion slot with themed styling
 			if g.fantasyUI != nil {
@@ -1322,7 +250,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 						isHovered := g.hoveredMiniSlotCard >= 0 && g.hoveredMiniSlotCard == k
 
 						g.fantasyUI.DrawEnhancedUnitCard(screen, r.x, r.y, r.w, r.h,
-							name, "Mini", 1, miniCost, nil, false, isHovered)
+							name, "Mini", 1, 0, nil, false, isHovered)
 					} else {
 						ebitenutil.DrawRect(screen, float64(r.x), float64(r.y), float64(r.w), float64(r.h), color.NRGBA{0x26, 0x26, 0x35, 0xff})
 					}
@@ -1338,17 +266,67 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 						screen.DrawImage(img, op)
 					}
 
-					// Level top-left for equipped minis
+					// Cost display in top-right for equipped minis
+					if miniCost > 0 {
+						costStr := fmt.Sprintf("%d", miniCost)
+						costW := len(costStr) * 7
+						costX := r.x + r.w - costW - 8
+						costY := r.y + 8
+
+						// Cost badge with gold theme
+						vector.DrawFilledRect(screen, float32(costX-4), float32(costY-2), float32(costW+8), 14, color.NRGBA{255, 215, 0, 255}, true)
+						vector.StrokeRect(screen, float32(costX-4), float32(costY-2), float32(costW+8), 14, 1, color.NRGBA{200, 160, 20, 255}, true)
+						text.Draw(screen, costStr, basicfont.Face7x13, costX, costY+10, color.NRGBA{64, 64, 64, 255})
+					}
+
+					// Level and XP bar at bottom-left
 					lvl := 1
+					xp := 0
 					if g.unitXP != nil {
-						if xp, ok := g.unitXP[name]; ok {
-							l, _, _ := computeLevel(xp)
-							if l > 0 {
+						if xpVal, ok := g.unitXP[name]; ok {
+							xp = xpVal
+							if l, _, _ := computeLevel(xp); l > 0 {
 								lvl = l
 							}
 						}
 					}
-					drawSmallLevelBadgeSized(screen, r.x+4, r.y+4, lvl, 24)
+
+					// Level badge bottom-left
+					levelBadgeX := r.x + 8
+					levelBadgeY := r.y + r.h - 20
+
+					// Level badge with purple theme (same size as gold cost badges)
+					if lvl > 0 {
+						levelStr := fmt.Sprintf("%d", lvl)
+						levelW := len(levelStr) * 7
+						vector.DrawFilledRect(screen, float32(levelBadgeX-4), float32(levelBadgeY-2), float32(levelW+8), 14, color.NRGBA{138, 43, 226, 200}, true)
+						vector.StrokeRect(screen, float32(levelBadgeX-4), float32(levelBadgeY-2), float32(levelW+8), 14, 1, color.NRGBA{100, 20, 150, 255}, true)
+						text.Draw(screen, levelStr, basicfont.Face7x13, levelBadgeX, levelBadgeY+10, color.NRGBA{255, 255, 255, 255})
+					}
+
+					// XP bar next to level badge (centered vertically with level badge)
+					xpBarX := levelBadgeX + 28
+					xpBarY := levelBadgeY + 3 // Center with level badge (level badge is 14px, so +3 centers the 8px bar)
+					xpBarW := r.w - 48        // Leave space for level badge and margins
+					xpBarH := 8
+
+					// XP bar background
+					vector.DrawFilledRect(screen, float32(xpBarX), float32(xpBarY), float32(xpBarW), float32(xpBarH), color.NRGBA{32, 34, 48, 200}, true)
+
+					// XP bar fill (purple, same as unit profile overlay)
+					if xp > 0 {
+						_, cur, next := computeLevel(xp)
+						if next > 0 {
+							frac := float64(cur) / float64(next)
+							fillW := int(float64(xpBarW) * frac)
+							if fillW > 0 {
+								vector.DrawFilledRect(screen, float32(xpBarX), float32(xpBarY), float32(fillW), float32(xpBarH), color.NRGBA{138, 43, 226, 200}, true)
+							}
+						}
+					}
+
+					// XP bar border
+					vector.StrokeRect(screen, float32(xpBarX), float32(xpBarY), float32(xpBarW), float32(xpBarH), 1, color.NRGBA{100, 90, 0, 255}, true)
 				} else {
 					// Empty mini slot with themed styling
 					if g.fantasyUI != nil {
@@ -1409,7 +387,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				isHovered := g.hoveredCollectionCard >= 0 && g.hoveredCollectionCard == start2+i
 
 				g.fantasyUI.DrawEnhancedUnitCard(screen, r.x, r.y, r.w, r.h,
-					it.Name, strings.Title(it.Class), 1, it.Cost, nil, isSelected, isHovered)
+					it.Name, strings.Title(it.Class), 1, 0, nil, isSelected, isHovered)
 			} else {
 				// Fallback to basic styling
 				ebitenutil.DrawRect(screen, float64(r.x), float64(r.y), float64(r.w), float64(r.h), color.NRGBA{0x2b, 0x2b, 0x3e, 0xff})
@@ -1426,7 +404,20 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				screen.DrawImage(img, op)
 			}
 
-			// Level top-left for collection items
+			// Cost display in top-right for collection items
+			if it.Cost > 0 {
+				costStr := fmt.Sprintf("%d", it.Cost)
+				costW := len(costStr) * 7
+				costX := r.x + r.w - costW - 8
+				costY := r.y + 8
+
+				// Cost badge with gold theme
+				vector.DrawFilledRect(screen, float32(costX-4), float32(costY-2), float32(costW+8), 14, color.NRGBA{255, 215, 0, 255}, true)
+				vector.StrokeRect(screen, float32(costX-4), float32(costY-2), float32(costW+8), 14, 1, color.NRGBA{200, 160, 20, 255}, true)
+				text.Draw(screen, costStr, basicfont.Face7x13, costX, costY+10, color.NRGBA{64, 64, 64, 255})
+			}
+
+			// Level badge at bottom-left for collection items
 			lvl := 1
 			if g.unitXP != nil {
 				if xp, ok := g.unitXP[it.Name]; ok {
@@ -1436,7 +427,49 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 					}
 				}
 			}
-			drawSmallLevelBadgeSized(screen, r.x+4, r.y+4, lvl, 24)
+			levelBadgeX := r.x + 8
+			levelBadgeY := r.y + r.h - 20
+
+			// Level badge with purple theme (same size as gold cost badges)
+			if lvl > 0 {
+				levelStr := fmt.Sprintf("%d", lvl)
+				levelW := len(levelStr) * 7
+				vector.DrawFilledRect(screen, float32(levelBadgeX-4), float32(levelBadgeY-2), float32(levelW+8), 14, color.NRGBA{138, 43, 226, 200}, true)
+				vector.StrokeRect(screen, float32(levelBadgeX-4), float32(levelBadgeY-2), float32(levelW+8), 14, 1, color.NRGBA{100, 20, 150, 255}, true)
+				text.Draw(screen, levelStr, basicfont.Face7x13, levelBadgeX, levelBadgeY+10, color.NRGBA{255, 255, 255, 255})
+			}
+
+			// XP bar at bottom-center (adjusted for level badge)
+			xp := 0
+			if g.unitXP != nil {
+				if xpVal, ok := g.unitXP[it.Name]; ok {
+					xp = xpVal
+				}
+			}
+
+			// XP bar centered at bottom, accounting for level badge
+			xpBarW := r.w - 48 // Leave space for level badge on left
+			xpBarH := 8
+			xpBarX := r.x + 36       // Start after level badge
+			xpBarY := r.y + r.h - 15 // Center with level badge (level badge is 14px, so +3 centers the 8px bar)
+
+			// XP bar background
+			vector.DrawFilledRect(screen, float32(xpBarX), float32(xpBarY), float32(xpBarW), float32(xpBarH), color.NRGBA{32, 34, 48, 200}, true)
+
+			// XP bar fill (purple, same as unit profile overlay)
+			if xp > 0 {
+				_, cur, next := computeLevel(xp)
+				if next > 0 {
+					frac := float64(cur) / float64(next)
+					fillW := int(float64(xpBarW) * frac)
+					if fillW > 0 {
+						vector.DrawFilledRect(screen, float32(xpBarX), float32(xpBarY), float32(fillW), float32(xpBarH), color.NRGBA{138, 43, 226, 200}, true)
+					}
+				}
+			}
+
+			// XP bar border
+			vector.StrokeRect(screen, float32(xpBarX), float32(xpBarY), float32(xpBarW), float32(xpBarH), 1, color.NRGBA{100, 90, 0, 255}, true)
 
 			// Selection indicator with theme color
 			if g.selectedMinis[it.Name] {
@@ -1450,11 +483,93 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 
 		// Draw hover tooltips for champion cards
 		mx, my := ebiten.CursorPosition()
-		if g.hoveredChampionLevel >= 0 && g.hoveredChampionLevel < len(g.champions) {
-			it := g.champions[g.hoveredChampionLevel]
+
+		// Draw tooltips for champion strip (top section)
+		for i, r := range g.champStripRects {
+			if r.hit(mx, my) {
+				idx := start + i
+				if idx >= 0 && idx < len(g.champions) {
+					it := g.champions[idx]
+
+					// Level tooltip
+					levelBadgeRect := rect{x: r.x + 8, y: r.y + r.h - 20, w: 20, h: 20}
+					if levelBadgeRect.hit(mx, my) {
+						lvl := 1
+						if g.unitXP != nil {
+							if xp, ok := g.unitXP[it.Name]; ok {
+								l, _, _ := computeLevel(xp)
+								if l > 0 {
+									lvl = l
+								}
+							}
+						}
+
+						tooltipText := fmt.Sprintf("Level %d", lvl)
+						tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
+						th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
+
+						// Position tooltip above the level badge
+						tooltipX := mx - tw/2
+						tooltipY := my - th - 8
+
+						// Keep tooltip on screen
+						if tooltipX < 4 {
+							tooltipX = 4
+						}
+						if tooltipX+tw+8 > protocol.ScreenW {
+							tooltipX = protocol.ScreenW - tw - 8
+						}
+						if tooltipY < 4 {
+							tooltipY = my + 16
+						}
+
+						// Draw tooltip background
+						ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
+
+						// Draw tooltip text
+						text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.White)
+					}
+
+					// Cost tooltip
+					costS := fmt.Sprintf("%d", it.Cost)
+					cw := text.BoundString(basicfont.Face7x13, costS).Dx()
+					costRect := rect{x: r.x + r.w - cw - 8, y: r.y + 8, w: cw, h: 14}
+					if costRect.hit(mx, my) {
+						tooltipText := fmt.Sprintf("Deploy cost %d", it.Cost)
+						tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
+						th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
+
+						// Position tooltip above the cost text
+						tooltipX := mx - tw/2
+						tooltipY := my - th - 8
+
+						// Keep tooltip on screen
+						if tooltipX < 4 {
+							tooltipX = 4
+						}
+						if tooltipX+tw+8 > protocol.ScreenW {
+							tooltipX = protocol.ScreenW - tw - 8
+						}
+						if tooltipY < 4 {
+							tooltipY = my + 16
+						}
+
+						// Draw tooltip background
+						ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
+
+						// Draw tooltip text
+						text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.NRGBA{255, 215, 0, 255}) // Gold color for cost
+					}
+				}
+				break
+			}
+		}
+
+		// Draw tooltips for selected champion
+		if g.hoveredSelectedChampionLevel && g.selectedChampion != "" {
 			lvl := 1
 			if g.unitXP != nil {
-				if xp, ok := g.unitXP[it.Name]; ok {
+				if xp, ok := g.unitXP[g.selectedChampion]; ok {
 					l, _, _ := computeLevel(xp)
 					if l > 0 {
 						lvl = l
@@ -1488,52 +603,21 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 			text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.White)
 		}
 
-		if g.hoveredChampionCost >= 0 && g.hoveredChampionCost < len(g.champions) {
-			it := g.champions[g.hoveredChampionCost]
-
-			tooltipText := fmt.Sprintf("Deploy cost %d", it.Cost)
-			tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
-			th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
-
-			// Position tooltip above the cost text
-			tooltipX := mx - tw/2
-			tooltipY := my - th - 8
-
-			// Keep tooltip on screen
-			if tooltipX < 4 {
-				tooltipX = 4
-			}
-			if tooltipX+tw+8 > protocol.ScreenW {
-				tooltipX = protocol.ScreenW - tw - 8
-			}
-			if tooltipY < 4 {
-				tooltipY = my + 16
-			}
-
-			// Draw tooltip background
-			ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
-
-			// Draw tooltip text
-			text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.NRGBA{255, 215, 0, 255}) // Gold color for cost
-		}
-
-		// Draw tooltips for selected champion
-		if g.hoveredSelectedChampionLevel && g.selectedChampion != "" {
-			lvl := 1
+		// Draw XP bar tooltips for selected champion
+		if g.hoveredSelectedChampionXP && g.selectedChampion != "" {
+			xp := 0
 			if g.unitXP != nil {
-				if xp, ok := g.unitXP[g.selectedChampion]; ok {
-					l, _, _ := computeLevel(xp)
-					if l > 0 {
-						lvl = l
-					}
+				if xpVal, ok := g.unitXP[g.selectedChampion]; ok {
+					xp = xpVal
 				}
 			}
+			_, cur, next := computeLevel(xp)
 
-			tooltipText := fmt.Sprintf("Level %d", lvl)
+			tooltipText := fmt.Sprintf("%d/%d", cur, next)
 			tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
 			th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
 
-			// Position tooltip above the level badge
+			// Position tooltip above the XP bar
 			tooltipX := mx - tw/2
 			tooltipY := my - th - 8
 
@@ -1623,6 +707,43 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 			text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.White)
 		}
 
+		// Draw XP bar tooltips for equipped mini slots
+		if g.hoveredMiniSlotXP >= 0 && g.hoveredMiniSlotXP < len(g.selectedOrder) && g.selectedOrder[g.hoveredMiniSlotXP] != "" {
+			name := g.selectedOrder[g.hoveredMiniSlotXP]
+			xp := 0
+			if g.unitXP != nil {
+				if xpVal, ok := g.unitXP[name]; ok {
+					xp = xpVal
+				}
+			}
+			_, cur, next := computeLevel(xp)
+
+			tooltipText := fmt.Sprintf("%d/%d", cur, next)
+			tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
+			th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
+
+			// Position tooltip above the XP bar
+			tooltipX := mx - tw/2
+			tooltipY := my - th - 8
+
+			// Keep tooltip on screen
+			if tooltipX < 4 {
+				tooltipX = 4
+			}
+			if tooltipX+tw+8 > protocol.ScreenW {
+				tooltipX = protocol.ScreenW - tw - 8
+			}
+			if tooltipY < 4 {
+				tooltipY = my + 16
+			}
+
+			// Draw tooltip background
+			ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
+
+			// Draw tooltip text
+			text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.White)
+		}
+
 		if g.hoveredMiniSlotCost >= 0 && g.hoveredMiniSlotCost < len(g.selectedOrder) && g.selectedOrder[g.hoveredMiniSlotCost] != "" {
 			name := g.selectedOrder[g.hoveredMiniSlotCost]
 			if info, ok := g.nameToMini[name]; ok {
@@ -1651,74 +772,6 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				// Draw tooltip text
 				text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.NRGBA{255, 215, 0, 255}) // Gold color for cost
 			}
-		}
-
-		// Draw tooltips for collection grid items
-		if g.hoveredCollectionLevel >= 0 && g.hoveredCollectionLevel < len(avail) {
-			it := avail[g.hoveredCollectionLevel]
-			lvl := 1
-			if g.unitXP != nil {
-				if xp, ok := g.unitXP[it.Name]; ok {
-					l, _, _ := computeLevel(xp)
-					if l > 0 {
-						lvl = l
-					}
-				}
-			}
-
-			tooltipText := fmt.Sprintf("Level %d", lvl)
-			tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
-			th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
-
-			// Position tooltip above the level badge
-			tooltipX := mx - tw/2
-			tooltipY := my - th - 8
-
-			// Keep tooltip on screen
-			if tooltipX < 4 {
-				tooltipX = 4
-			}
-			if tooltipX+tw+8 > protocol.ScreenW {
-				tooltipX = protocol.ScreenW - tw - 8
-			}
-			if tooltipY < 4 {
-				tooltipY = my + 16
-			}
-
-			// Draw tooltip background
-			ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
-
-			// Draw tooltip text
-			text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.White)
-		}
-
-		if g.hoveredCollectionCost >= 0 && g.hoveredCollectionCost < len(avail) {
-			it := avail[g.hoveredCollectionCost]
-
-			tooltipText := fmt.Sprintf("Deploy cost %d", it.Cost)
-			tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
-			th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
-
-			// Position tooltip above the cost text
-			tooltipX := mx - tw/2
-			tooltipY := my - th - 8
-
-			// Keep tooltip on screen
-			if tooltipX < 4 {
-				tooltipX = 4
-			}
-			if tooltipX+tw+8 > protocol.ScreenW {
-				tooltipX = protocol.ScreenW - tw - 8
-			}
-			if tooltipY < 4 {
-				tooltipY = my + 16
-			}
-
-			// Draw tooltip background
-			ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
-
-			// Draw tooltip text
-			text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.NRGBA{255, 215, 0, 255}) // Gold color for cost
 		}
 
 		// Draw tooltips for mini overlay
@@ -1788,6 +841,43 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 			}
 		}
 
+		// Draw tooltips for collection XP bars
+		if g.hoveredCollectionXP >= 0 && g.hoveredCollectionXP < len(avail) {
+			it := avail[g.hoveredCollectionXP]
+			xp := 0
+			if g.unitXP != nil {
+				if xpVal, ok := g.unitXP[it.Name]; ok {
+					xp = xpVal
+				}
+			}
+			_, cur, next := computeLevel(xp)
+
+			tooltipText := fmt.Sprintf("%d/%d", cur, next)
+			tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
+			th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
+
+			// Position tooltip above the XP bar
+			tooltipX := mx - tw/2
+			tooltipY := my - th - 8
+
+			// Keep tooltip on screen
+			if tooltipX < 4 {
+				tooltipX = 4
+			}
+			if tooltipX+tw+8 > protocol.ScreenW {
+				tooltipX = protocol.ScreenW - tw - 8
+			}
+			if tooltipY < 4 {
+				tooltipY = my + 16
+			}
+
+			// Draw tooltip background
+			ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
+
+			// Draw tooltip text
+			text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.White)
+		}
+
 		if g.armyMsg != "" {
 			text.Draw(screen, g.armyMsg, basicfont.Face7x13, pad, protocol.ScreenH-menuBarH-24, color.White)
 		}
@@ -1836,7 +926,15 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 						}
 					}
 				}
-				drawSmallLevelBadgeSized(screen, px+0, py+0, lvl, 24)
+
+				// Level badge with purple theme (same size as gold cost badges)
+				if lvl > 0 {
+					levelStr := fmt.Sprintf("%d", lvl)
+					levelW := len(levelStr) * 7
+					vector.DrawFilledRect(screen, float32(px+0-4), float32(py+0-2), float32(levelW+8), 14, color.NRGBA{138, 43, 226, 200}, true)
+					vector.StrokeRect(screen, float32(px+0-4), float32(py+0-2), float32(levelW+8), 14, 1, color.NRGBA{100, 20, 150, 255}, true)
+					text.Draw(screen, levelStr, basicfont.Face7x13, px+0, py+0+10, color.NRGBA{255, 255, 255, 255})
+				}
 			}
 			// Unit name as title
 			text.Draw(screen, g.miniOverlayName, basicfont.Face7x13, x+170, y+24, color.NRGBA{255, 215, 0, 255}) // Gold color for title

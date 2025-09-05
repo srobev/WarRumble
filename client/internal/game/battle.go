@@ -466,7 +466,7 @@ func (g *Game) drawHPBar(screen *ebiten.Image, x, y, w, h float64, cur, max, gho
 
 // drawLevelBadge renders a round ornate badge (if available) or a fallback circle with the unit's level
 // to the left of the provided bar rectangle. The badge is sized to be readable even for tiny bars.
-func (g *Game) drawLevelBadge(screen *ebiten.Image, barRect image.Rectangle, level int) {
+func (g *Game) drawLevelBadge(screen *ebiten.Image, barRect image.Rectangle, level int, isPlayer bool) {
 	// target badge size: at least 18px, or 6x bar height (can be tuned via BadgeScale meta)
 	bh := barRect.Dy()
 	mult := 6.0
@@ -494,9 +494,19 @@ func (g *Game) drawLevelBadge(screen *ebiten.Image, barRect image.Rectangle, lev
 			screen.DrawImage(ornate.Badge, op)
 		}
 	} else {
-		// fallback: simple gold circle with dark border
-		vector.DrawFilledCircle(screen, float32(cx), float32(cy), float32(size)/2, color.NRGBA{240, 196, 25, 255}, true)
-		vector.DrawFilledCircle(screen, float32(cx), float32(cy), float32(size)/2-1.5, color.NRGBA{200, 160, 20, 255}, true)
+		// fallback: colored circle based on ownership with dark border
+		var badgeColor, borderColor color.NRGBA
+		if isPlayer {
+			// Player units: blue badge
+			badgeColor = color.NRGBA{70, 130, 255, 255}
+			borderColor = color.NRGBA{30, 80, 200, 255}
+		} else {
+			// Enemy units: red badge
+			badgeColor = color.NRGBA{220, 70, 70, 255}
+			borderColor = color.NRGBA{180, 30, 30, 255}
+		}
+		vector.DrawFilledCircle(screen, float32(cx), float32(cy), float32(size)/2, badgeColor, true)
+		vector.DrawFilledCircle(screen, float32(cx), float32(cy), float32(size)/2-1.5, borderColor, true)
 	}
 	// draw level text centered (dark text with light outline for readability)
 	lvlS := fmt.Sprintf("%d", level)

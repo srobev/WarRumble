@@ -326,7 +326,7 @@
     "role": "mini",
     "cost": 3,
     "speed": 1,
-    "range": 200,
+    "range": 280,
     "particle": "projectile"
   },
   {

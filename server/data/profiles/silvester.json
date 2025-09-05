@@ -1,5 +1,5 @@
 {
-  "playerId": 111713,
+  "playerId": 21913323,
   "name": "silvester",
   "army": [
     "Sorceress Glacia",
@@ -31,14 +31,16 @@
   "gold": 0,
   "accountXp": 0,
   "unitXp": {
+    "Aerie Guard": 1,
     "Blazebinder": 3,
     "Flesh Golem": 2,
     "Jungle Headhunter": 2,
-    "Sorceress Glacia": 5,
+    "Sorceress Glacia": 6,
     "Spirit Binder": 1,
-    "Twin Wyrnn": 2
+    "Twin Wyrnn": 3
   },
-  "pvp_rating": 1200,
+  "pvp_rating": 1276,
   "pvp_rank": "Knight",
-  "avatar": "default.png"
+  "avatar": "default.png",
+  "guildId": "g-1756713614348685400"
 }
