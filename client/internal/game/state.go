@@ -182,6 +182,12 @@ type Game struct {
 	cameraDragStartY   int
 	cameraDragInitialX float64
 	cameraDragInitialY float64
+	// Left mouse drag for scrolling (only when no mini selected)
+	cameraLeftDragging     bool
+	cameraLeftDragStartX   int
+	cameraLeftDragStartY   int
+	cameraLeftDragInitialX float64
+	cameraLeftDragInitialY float64
 	// Flag to center camera on player's base once bases are populated
 	needsCameraCenter bool
 

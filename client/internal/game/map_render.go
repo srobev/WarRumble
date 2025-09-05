@@ -198,17 +198,27 @@ func (g *Game) drawArenaBG(screen *ebiten.Image) {
 		if iw == 0 || ih == 0 {
 			offX, offY, dispW, dispH, s = 0, topUIHeight, availableWidth, availableHeight, 1
 		} else {
-			sw := float64(availableWidth) / float64(iw)
-			sh := float64(availableHeight) / float64(ih)
-			if sw < sh {
-				s = sw
+			// Use saved background scaling and position from map definition if available
+			if g.currentMapDef != nil && g.currentMapDef.BgScale > 0 {
+				s = g.currentMapDef.BgScale
+				dispW = int(float64(iw) * s)
+				dispH = int(float64(ih) * s)
+				offX = (availableWidth-dispW)/2 + int(g.currentMapDef.BgOffsetX)
+				offY = topUIHeight + (availableHeight-dispH)/2 + int(g.currentMapDef.BgOffsetY)
 			} else {
-				s = sh
+				// Fallback to automatic scaling
+				sw := float64(availableWidth) / float64(iw)
+				sh := float64(availableHeight) / float64(ih)
+				if sw < sh {
+					s = sw
+				} else {
+					s = sh
+				}
+				dispW = int(float64(iw) * s)
+				dispH = int(float64(ih) * s)
+				offX = (availableWidth - dispW) / 2
+				offY = topUIHeight + (availableHeight-dispH)/2
 			}
-			dispW = int(float64(iw) * s)
-			dispH = int(float64(ih) * s)
-			offX = (availableWidth - dispW) / 2
-			offY = topUIHeight + (availableHeight-dispH)/2
 		}
 	} else {
 		// Normal positioning for non-battle screens

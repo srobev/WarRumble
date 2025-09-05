@@ -52,6 +52,11 @@ type MapDef struct {
 	Height int    `json:"height"`       // background height in pixels (optional)
 	Bg     string `json:"bg,omitempty"` // optional background image path
 
+	// Background positioning and scaling
+	BgScale   float64 `json:"bgScale,omitempty"`   // background scale factor
+	BgOffsetX float64 `json:"bgOffsetX,omitempty"` // background X offset
+	BgOffsetY float64 `json:"bgOffsetY,omitempty"` // background Y offset
+
 	DeployZones        []DeployZone        `json:"deployZones"`
 	MeetingStones      []PointF            `json:"meetingStones"`
 	GoldMines          []PointF            `json:"goldMines"`

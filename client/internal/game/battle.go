@@ -49,15 +49,74 @@ func (g *Game) updateBattle() {
 				cx, cy := ebiten.CursorPosition()
 				deltaX := cx - g.cameraDragStartX
 				deltaY := cy - g.cameraDragStartY
-				g.cameraX = g.cameraDragInitialX + float64(deltaX)
-				g.cameraY = g.cameraDragInitialY + float64(deltaY)
+				newCameraX := g.cameraDragInitialX + float64(deltaX)
+				newCameraY := g.cameraDragInitialY + float64(deltaY)
+
+				// Apply same 20% boundary limits as edge scrolling
+				mapWidth := float64(protocol.ScreenW) * g.cameraZoom
+				mapHeight := float64(protocol.ScreenH) * g.cameraZoom
+				maxScrollX := mapWidth * 0.2  // 20% outside left/right borders
+				maxScrollY := mapHeight * 0.2 // 20% outside top/bottom borders
+
+				// Clamp camera position within boundaries
+				if newCameraX > maxScrollX {
+					newCameraX = maxScrollX
+				} else if newCameraX < -maxScrollX {
+					newCameraX = -maxScrollX
+				}
+				if newCameraY > maxScrollY {
+					newCameraY = maxScrollY
+				} else if newCameraY < -maxScrollY {
+					newCameraY = -maxScrollY
+				}
+
+				g.cameraX = newCameraX
+				g.cameraY = newCameraY
 			}
 		} else {
 			g.cameraDragging = false
 		}
 
+		// Pan with left mouse button when no mini selected (drag to scroll)
+		if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) && g.selectedIdx == -1 && !g.dragActive {
+			if !g.cameraLeftDragging {
+				g.cameraLeftDragging = true
+				g.cameraLeftDragStartX, g.cameraLeftDragStartY = ebiten.CursorPosition()
+				g.cameraLeftDragInitialX, g.cameraLeftDragInitialY = g.cameraX, g.cameraY
+			} else {
+				cx, cy := ebiten.CursorPosition()
+				deltaX := cx - g.cameraLeftDragStartX
+				deltaY := cy - g.cameraLeftDragStartY
+				newCameraX := g.cameraLeftDragInitialX + float64(deltaX)
+				newCameraY := g.cameraLeftDragInitialY + float64(deltaY)
+
+				// Apply same 20% boundary limits as edge scrolling
+				mapWidth := float64(protocol.ScreenW) * g.cameraZoom
+				mapHeight := float64(protocol.ScreenH) * g.cameraZoom
+				maxScrollX := mapWidth * 0.2  // 20% outside left/right borders
+				maxScrollY := mapHeight * 0.2 // 20% outside top/bottom borders
+
+				// Clamp camera position within boundaries
+				if newCameraX > maxScrollX {
+					newCameraX = maxScrollX
+				} else if newCameraX < -maxScrollX {
+					newCameraX = -maxScrollX
+				}
+				if newCameraY > maxScrollY {
+					newCameraY = maxScrollY
+				} else if newCameraY < -maxScrollY {
+					newCameraY = -maxScrollY
+				}
+
+				g.cameraX = newCameraX
+				g.cameraY = newCameraY
+			}
+		} else {
+			g.cameraLeftDragging = false
+		}
+
 		// Edge scrolling when zoomed in and no unit selected
-		if g.cameraZoom > 1.0 && g.selectedIdx == -1 && !g.dragActive && !g.cameraDragging {
+		if g.cameraZoom > 1.0 && g.selectedIdx == -1 && !g.dragActive && !g.cameraDragging && !g.cameraLeftDragging {
 			mx, my := ebiten.CursorPosition()
 			const edgeThreshold = 50 // pixels from edge to trigger scrolling
 			const scrollSpeed = 8.0  // pixels per frame

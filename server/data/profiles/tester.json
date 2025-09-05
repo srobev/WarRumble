@@ -1,7 +1,25 @@
 {
-  "playerId": 21955962,
+  "playerId": 115553,
   "name": "tester",
-  "army": null,
+  "army": [
+    "Bloodmage Thalor",
+    "Flesh Golem",
+    "Foulwing Rider",
+    "Twin Wyrnn",
+    "Spirit Binder",
+    "Jungle Headhunter",
+    "Reanimator"
+  ],
+  "armies": {
+    "Bloodmage Thalor": [
+      "Flesh Golem",
+      "Foulwing Rider",
+      "Twin Wyrnn",
+      "Spirit Binder",
+      "Jungle Headhunter",
+      "Reanimator"
+    ]
+  },
   "gold": 0,
   "accountXp": 0,
   "pvp_rating": 1124,
