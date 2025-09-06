@@ -1052,6 +1052,13 @@ func (c *client) reader(h *Hub) {
 				c.room.HandleDeploy(c, m)
 			}
 
+		case "CastSpell":
+			var m protocol.CastSpell
+			_ = json.Unmarshal(env.Data, &m)
+			if c.room != nil {
+				c.room.HandleSpellCast(c, m)
+			}
+
 		case "Ready":
 			if c.room != nil {
 				c.room.MarkReady(c)

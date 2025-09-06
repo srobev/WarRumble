@@ -26,3 +26,11 @@ type Logout struct{}
 // Request another user's profile by name (server reads persisted file)
 type GetUserProfile struct{ Name string }
 type UserProfile struct{ Profile Profile }
+
+// Spell casting messages
+type CastSpell struct {
+	SpellName string  `json:"spellName"`
+	X         float64 `json:"x"`
+	Y         float64 `json:"y"`
+	ClientTs  int64   `json:"clientTs"`
+}

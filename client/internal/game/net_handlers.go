@@ -151,7 +151,7 @@ func (g *Game) handle(env Msg) {
 			g.nameToMini[it.Name] = it
 			if strings.EqualFold(it.Role, "champion") || strings.EqualFold(it.Class, "champion") {
 				g.champions = append(g.champions, it)
-			} else if strings.EqualFold(it.Role, "mini") && !strings.EqualFold(it.Class, "spell") {
+			} else if strings.EqualFold(it.Role, "mini") {
 				g.minisOnly = append(g.minisOnly, it)
 			}
 		}

@@ -1,14 +1,14 @@
 {
-  "playerId": 21913323,
+  "playerId": 72485,
   "name": "silvester",
   "army": [
     "Sorceress Glacia",
-    "Jungle Headhunter",
-    "Aerie Guard",
-    "Spirit Binder",
-    "Flesh Golem",
-    "Blazebinder",
-    "Twin Wyrnn"
+    "Blizzard",
+    "Magma Goliath",
+    "Chain Lightning",
+    "Arcane Blast",
+    "Execute",
+    "Holy Nova"
   ],
   "armies": {
     "Bloodmage Thalor": [
@@ -20,27 +20,34 @@
       "Corpse Catapult"
     ],
     "Sorceress Glacia": [
-      "Jungle Headhunter",
-      "Aerie Guard",
-      "Spirit Binder",
-      "Flesh Golem",
-      "Blazebinder",
-      "Twin Wyrnn"
+      "Blizzard",
+      "Magma Goliath",
+      "Chain Lightning",
+      "Arcane Blast",
+      "Execute",
+      "Holy Nova"
     ]
   },
   "gold": 0,
   "accountXp": 0,
   "unitXp": {
     "Aerie Guard": 1,
+    "Arcane Blast": 9,
     "Blazebinder": 3,
+    "Blizzard": 4,
+    "Chain Lightning": 4,
+    "Execute": 6,
     "Flesh Golem": 2,
+    "Holy Nova": 9,
     "Jungle Headhunter": 2,
-    "Sorceress Glacia": 6,
+    "Magma Goliath": 11,
+    "Polymorph": 4,
+    "Sorceress Glacia": 32,
     "Spirit Binder": 1,
     "Twin Wyrnn": 3
   },
   "pvp_rating": 1276,
   "pvp_rank": "Knight",
-  "avatar": "default.png",
+  "avatar": "male.png",
   "guildId": "g-1756713614348685400"
 }

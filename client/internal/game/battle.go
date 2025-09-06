@@ -6,9 +6,8 @@ import (
 	"image/color"
 	"math"
 	"rumble/shared/protocol"
-	"time"
-
 	"strings"
+	"time"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -35,6 +34,9 @@ type hpFx struct {
 }
 
 func (g *Game) updateBattle() {
+	// Update base shooting logic
+	g.updateBaseShooting()
+
 	// Handle camera controls for battle map scrolling and zooming (always active)
 	if g.scr == screenBattle {
 		// Zoom disabled - battles maintain fixed 20% zoom level
@@ -52,11 +54,35 @@ func (g *Game) updateBattle() {
 				newCameraX := g.cameraDragInitialX + float64(deltaX)
 				newCameraY := g.cameraDragInitialY + float64(deltaY)
 
-				// Apply same 20% boundary limits as edge scrolling
+				// Use frame boundaries from map definition for camera limits
 				mapWidth := float64(protocol.ScreenW) * g.cameraZoom
 				mapHeight := float64(protocol.ScreenH) * g.cameraZoom
-				maxScrollX := mapWidth * 0.2  // 20% outside left/right borders
-				maxScrollY := mapHeight * 0.2 // 20% outside top/bottom borders
+
+				// Default to 20% if no frame boundaries are defined
+				maxScrollX := mapWidth * 0.2
+				maxScrollY := mapHeight * 0.2
+
+				// Use saved frame boundaries if available
+				if g.currentMapDef != nil && g.currentMapDef.FrameWidth > 0 && g.currentMapDef.FrameHeight > 0 {
+					// Calculate frame boundaries in screen coordinates
+					frameCenterX := g.currentMapDef.FrameX * float64(protocol.ScreenW) * g.cameraZoom
+					frameCenterY := g.currentMapDef.FrameY * float64(protocol.ScreenH) * g.cameraZoom
+					frameWidth := g.currentMapDef.FrameWidth * float64(protocol.ScreenW) * g.cameraZoom
+					frameHeight := g.currentMapDef.FrameHeight * float64(protocol.ScreenH) * g.cameraZoom
+
+					// Calculate how much the camera can scroll while keeping the frame visible
+					// The camera can move so that the frame edge reaches the screen edge
+					maxScrollX = frameCenterX - frameWidth/2 + float64(protocol.ScreenW)/2
+					maxScrollY = frameCenterY - frameHeight/2 + float64(protocol.ScreenH)/2
+
+					// Ensure we don't exceed the original map boundaries
+					if maxScrollX > mapWidth*0.2 {
+						maxScrollX = mapWidth * 0.2
+					}
+					if maxScrollY > mapHeight*0.2 {
+						maxScrollY = mapHeight * 0.2
+					}
+				}
 
 				// Clamp camera position within boundaries
 				if newCameraX > maxScrollX {
@@ -90,11 +116,35 @@ func (g *Game) updateBattle() {
 				newCameraX := g.cameraLeftDragInitialX + float64(deltaX)
 				newCameraY := g.cameraLeftDragInitialY + float64(deltaY)
 
-				// Apply same 20% boundary limits as edge scrolling
+				// Use frame boundaries from map definition for camera limits
 				mapWidth := float64(protocol.ScreenW) * g.cameraZoom
 				mapHeight := float64(protocol.ScreenH) * g.cameraZoom
-				maxScrollX := mapWidth * 0.2  // 20% outside left/right borders
-				maxScrollY := mapHeight * 0.2 // 20% outside top/bottom borders
+
+				// Default to 20% if no frame boundaries are defined
+				maxScrollX := mapWidth * 0.2
+				maxScrollY := mapHeight * 0.2
+
+				// Use saved frame boundaries if available
+				if g.currentMapDef != nil && g.currentMapDef.FrameWidth > 0 && g.currentMapDef.FrameHeight > 0 {
+					// Calculate frame boundaries in screen coordinates
+					frameCenterX := g.currentMapDef.FrameX * float64(protocol.ScreenW) * g.cameraZoom
+					frameCenterY := g.currentMapDef.FrameY * float64(protocol.ScreenH) * g.cameraZoom
+					frameWidth := g.currentMapDef.FrameWidth * float64(protocol.ScreenW) * g.cameraZoom
+					frameHeight := g.currentMapDef.FrameHeight * float64(protocol.ScreenH) * g.cameraZoom
+
+					// Calculate how much the camera can scroll while keeping the frame visible
+					// The camera can move so that the frame edge reaches the screen edge
+					maxScrollX = frameCenterX - frameWidth/2 + float64(protocol.ScreenW)/2
+					maxScrollY = frameCenterY - frameHeight/2 + float64(protocol.ScreenH)/2
+
+					// Ensure we don't exceed the original map boundaries
+					if maxScrollX > mapWidth*0.2 {
+						maxScrollX = mapWidth * 0.2
+					}
+					if maxScrollY > mapHeight*0.2 {
+						maxScrollY = mapHeight * 0.2
+					}
+				}
 
 				// Clamp camera position within boundaries
 				if newCameraX > maxScrollX {
@@ -115,35 +165,6 @@ func (g *Game) updateBattle() {
 			g.cameraLeftDragging = false
 		}
 
-		// Edge scrolling when zoomed in and no unit selected
-		if g.cameraZoom > 1.0 && g.selectedIdx == -1 && !g.dragActive && !g.cameraDragging && !g.cameraLeftDragging {
-			mx, my := ebiten.CursorPosition()
-			const edgeThreshold = 50 // pixels from edge to trigger scrolling
-			const scrollSpeed = 8.0  // pixels per frame
-
-			// Calculate map boundaries (stop scrolling when we would see more than 20% outside)
-			mapWidth := float64(protocol.ScreenW) * g.cameraZoom
-			mapHeight := float64(protocol.ScreenH) * g.cameraZoom
-			maxScrollX := mapWidth * 0.2  // 20% outside left/right borders
-			maxScrollY := mapHeight * 0.2 // 20% outside top/bottom borders
-
-			// Left edge - scroll right to see more left side (stop before exceeding 20%)
-			if mx < edgeThreshold && g.cameraX < maxScrollX {
-				g.cameraX += scrollSpeed
-			}
-			// Right edge - scroll left to see more right side (stop before exceeding 20%)
-			if mx > protocol.ScreenW-edgeThreshold && g.cameraX > -maxScrollX {
-				g.cameraX -= scrollSpeed
-			}
-			// Top edge - scroll down to see more top side (stop before exceeding 20%)
-			if my < edgeThreshold && g.cameraY < maxScrollY {
-				g.cameraY += scrollSpeed
-			}
-			// Bottom edge (accounting for UI) - scroll up to see more bottom side (stop before exceeding 20%)
-			if my > protocol.ScreenH-battleHUDH-edgeThreshold && g.cameraY > -maxScrollY {
-				g.cameraY -= scrollSpeed
-			}
-		}
 	}
 
 	// Skip deployment and other battle updates if game is paused
@@ -213,7 +234,17 @@ func (g *Game) updateBattle() {
 
 		// If clicking outside hand area and a card is selected, deploy it
 		if my < handTop && g.selectedIdx >= 0 && g.selectedIdx < len(g.hand) {
-			// Check if deployment is within a valid deploy zone
+			selectedCard := g.hand[g.selectedIdx]
+
+			// Check if this is a spell card
+			if g.isSpellCard(selectedCard.Name) {
+				// Handle spell casting - no deploy zone restriction for spells
+				g.castSpell(selectedCard.Name, deployX, deployY)
+				g.selectedIdx = -1
+				return
+			}
+
+			// Regular unit deployment - check deploy zone
 			if g.isInDeployZone(deployX, deployY) {
 				g.send("DeployMiniAt", protocol.DeployMiniAt{
 					CardIndex: g.selectedIdx,
@@ -235,18 +266,27 @@ func (g *Game) updateBattle() {
 
 	if g.dragActive && inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) {
 		if my < handTop && g.dragIdx >= 0 && g.dragIdx < len(g.hand) {
-			// Check if deployment is within a valid deploy zone
-			if g.isInDeployZone(deployX, deployY) {
-				g.send("DeployMiniAt", protocol.DeployMiniAt{
-					CardIndex: g.dragIdx,
-					X:         deployX,
-					Y:         deployY,
-					ClientTs:  time.Now().UnixMilli(),
-				})
-				// Successfully deployed, deselect the unit
+			draggedCard := g.hand[g.dragIdx]
+
+			// Check if this is a spell card
+			if g.isSpellCard(draggedCard.Name) {
+				// Handle spell casting - no deploy zone restriction for spells
+				g.castSpell(draggedCard.Name, deployX, deployY)
 				g.selectedIdx = -1
+			} else {
+				// Regular unit deployment - check deploy zone
+				if g.isInDeployZone(deployX, deployY) {
+					g.send("DeployMiniAt", protocol.DeployMiniAt{
+						CardIndex: g.dragIdx,
+						X:         deployX,
+						Y:         deployY,
+						ClientTs:  time.Now().UnixMilli(),
+					})
+					// Successfully deployed, deselect the unit
+					g.selectedIdx = -1
+				}
+				// If deployment failed (invalid zone), still deselect the unit
 			}
-			// If deployment failed (invalid zone), still deselect the unit
 		}
 		g.dragActive = false
 		g.dragIdx = -1
@@ -333,7 +373,39 @@ func (g *Game) drawBattleBar(screen *ebiten.Image) {
 		// Drag preview should show at EXACT mouse position (no mirroring)
 		previewX, previewY := float64(mx), float64(my)
 
-		if img := g.ensureMiniImageByName(g.hand[g.dragIdx].Name); img != nil {
+		draggedCard := g.hand[g.dragIdx]
+
+		// Special handling for Blizzard spell - show AoE oval border only
+		if g.isSpellCard(draggedCard.Name) && strings.ToLower(draggedCard.Name) == "blizzard" {
+			// Draw blizzard AoE oval border only (no fill)
+			radius := 120.0
+			centerX := previewX
+			centerY := previewY
+
+			// Draw border outline only
+			for angle := 0.0; angle < 2*math.Pi; angle += 0.03 {
+				borderX := centerX + math.Cos(angle)*radius
+				borderY := centerY + math.Sin(angle)*radius
+				vector.DrawFilledCircle(screen, float32(borderX), float32(borderY), 2, color.NRGBA{135, 206, 235, 255}, true)
+			}
+		}
+
+		// Special handling for Holy Nova spell - show yellow AoE circle
+		if g.isSpellCard(draggedCard.Name) && strings.ToLower(draggedCard.Name) == "holy nova" {
+			// Draw Holy Nova AoE yellow circle border only (no fill)
+			radius := 120.0
+			centerX := previewX
+			centerY := previewY
+
+			// Draw border outline only in yellow
+			for angle := 0.0; angle < 2*math.Pi; angle += 0.03 {
+				borderX := centerX + math.Cos(angle)*radius
+				borderY := centerY + math.Sin(angle)*radius
+				vector.DrawFilledCircle(screen, float32(borderX), float32(borderY), 2, color.NRGBA{255, 255, 0, 255}, true)
+			}
+		}
+
+		if img := g.ensureMiniImageByName(draggedCard.Name); img != nil {
 			iw, ih := img.Bounds().Dx(), img.Bounds().Dy()
 			// Use same scale as spawn animation start (1.8x) so drag preview matches falling animation
 			s := 1.8 * mathMin(1, 48.0/float64(maxInt(iw, ih)))
@@ -896,4 +968,161 @@ func (g *Game) drawBattleTopBars(screen *ebiten.Image, myCur, myMax, enCur, enMa
 		ebitenutil.DrawRect(screen, float64(surrenderBtnX), float64(surrenderBtnY), 200, 40, color.NRGBA{110, 70, 70, 255})
 		text.Draw(screen, "SURRENDER", basicfont.Face7x13, surrenderBtnX+60, surrenderBtnY+25, color.NRGBA{239, 229, 182, 255})
 	}
+}
+
+// isSpellCard checks if a card is a spell based on the unit data
+func (g *Game) isSpellCard(cardName string) bool {
+	if miniInfo, exists := g.nameToMini[cardName]; exists {
+		return strings.EqualFold(miniInfo.Class, "spell")
+	}
+	return false
+}
+
+// castSpell handles spell casting logic
+func (g *Game) castSpell(spellName string, targetX, targetY float64) {
+	// Get spell information
+	miniInfo, exists := g.nameToMini[spellName]
+	if !exists {
+		return
+	}
+
+	// Send spell cast message to server
+	g.send("CastSpell", protocol.CastSpell{
+		SpellName: spellName,
+		X:         targetX,
+		Y:         targetY,
+		ClientTs:  time.Now().UnixMilli(),
+	})
+
+	// Trigger local visual effects immediately for responsiveness
+	if g.particleSystem != nil {
+		// Convert screen coordinates to world coordinates for effects
+		worldX := (targetX - g.cameraX) / g.cameraZoom
+		worldY := (targetY - g.cameraY) / g.cameraZoom
+
+		// Create spell cast effect based on spell type
+		switch strings.ToLower(miniInfo.Name) {
+		case "arcane blast":
+			g.particleSystem.CreateSpellCastEffect(worldX, worldY, "arcane_blast")
+		case "blizzard":
+			g.particleSystem.CreateSpellCastEffect(worldX, worldY, "blizzard")
+		case "chain lightning":
+			g.particleSystem.CreateSpellCastEffect(worldX, worldY, "chain_lightning")
+		case "holy nova":
+			g.particleSystem.CreateSpellCastEffect(worldX, worldY, "holy_nova")
+		case "execute":
+			g.particleSystem.CreateSpellCastEffect(worldX, worldY, "execute")
+		case "living bomb":
+			g.particleSystem.CreateSpellCastEffect(worldX, worldY, "living_bomb")
+		case "earth and moon":
+			g.particleSystem.CreateSpellCastEffect(worldX, worldY, "earth_and_moon")
+		case "polymorph":
+			g.particleSystem.CreateSpellCastEffect(worldX, worldY, "polymorph")
+		case "smoke bomb":
+			g.particleSystem.CreateSpellCastEffect(worldX, worldY, "smoke_bomb")
+		case "whelp eggs":
+			g.particleSystem.CreateSpellCastEffect(worldX, worldY, "whelp_eggs")
+		}
+	}
+}
+
+// updateBaseShooting handles base arrow shooting at enemy targets
+func (g *Game) updateBaseShooting() {
+	currentTime := time.Now().UnixMilli()
+
+	for baseID, base := range g.world.Bases {
+
+		// Check cooldown (2 seconds between shots)
+		lastShot, exists := g.baseLastShot[baseID]
+		if exists && currentTime-lastShot < 2000 {
+			continue
+		}
+
+		// Find closest enemy target within range 200
+		var closestTarget *RenderUnit
+		var closestDist float64 = 201 // Just over 200 to find targets within range
+
+		baseCenterX := float64(base.X + base.W/2)
+		baseCenterY := float64(base.Y + base.H/2)
+
+		// Check enemy units
+		for _, unit := range g.world.Units {
+			if unit.OwnerID == base.OwnerID || unit.HP <= 0 {
+				continue
+			}
+
+			dist := math.Hypot(unit.X-baseCenterX, unit.Y-baseCenterY)
+			if dist < closestDist && dist <= 200 {
+				closestDist = dist
+				closestTarget = unit
+			}
+		}
+
+		// If no enemy units in range, check enemy bases
+		if closestTarget == nil {
+			for _, enemyBase := range g.world.Bases {
+				if enemyBase.OwnerID == g.playerID {
+					continue
+				}
+
+				enemyCenterX := float64(enemyBase.X + enemyBase.W/2)
+				enemyCenterY := float64(enemyBase.Y + enemyBase.H/2)
+				dist := math.Hypot(enemyCenterX-baseCenterX, enemyCenterY-baseCenterY)
+				if dist <= 200 {
+					// Create a dummy target for the enemy base
+					closestTarget = &RenderUnit{
+						ID:   -enemyBase.OwnerID, // Use negative base owner ID as fake unit ID
+						X:    enemyCenterX,
+						Y:    enemyCenterY,
+						HP:   enemyBase.HP,
+						Name: "Enemy Base",
+					}
+					break
+				}
+			}
+		}
+
+		// If we found a target, shoot an arrow
+		if closestTarget != nil {
+			g.shootArrowFromBase(baseID, base, closestTarget)
+			g.baseLastShot[baseID] = currentTime
+		}
+	}
+}
+
+// shootArrowFromBase creates and shoots an arrow projectile from a base to a target
+func (g *Game) shootArrowFromBase(baseID int64, base protocol.BaseState, target *RenderUnit) {
+	baseCenterX := float64(base.X + base.W/2)
+	baseCenterY := float64(base.Y + base.H/2)
+
+	// Create projectile
+	projectileID := baseID*1000 + time.Now().UnixMilli()%1000 // Simple ID generation
+
+	// Calculate damage as 10% of target's remaining health
+	damage := int(float64(target.HP) * 0.1)
+	if damage < 1 {
+		damage = 1 // Minimum 1 damage
+	}
+
+	projectile := &RenderProjectile{
+		ID:             projectileID,
+		X:              baseCenterX,
+		Y:              baseCenterY,
+		TX:             target.X,
+		TY:             target.Y,
+		Damage:         damage,
+		OwnerID:        base.OwnerID,
+		TargetID:       target.ID,
+		ProjectileType: "arrow",
+		Active:         true,
+	}
+
+	// Add to world projectiles
+	if g.world.Projectiles == nil {
+		g.world.Projectiles = make(map[int64]*RenderProjectile)
+	}
+	g.world.Projectiles[projectileID] = projectile
+
+	// Send to server (if needed for synchronization)
+	// For now, we'll handle this locally since it's a client-side feature
 }

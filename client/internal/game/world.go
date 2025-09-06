@@ -1,6 +1,7 @@
 package game
 
 import (
+	"math"
 	"time"
 
 	"rumble/shared/protocol"
@@ -152,8 +153,54 @@ func (w *World) LerpPositions() {
 		alpha = 1
 	}
 	for _, u := range w.Units {
-		u.X = u.PrevX + (u.TargetX-u.PrevX)*alpha
-		u.Y = u.PrevY + (u.TargetY-u.PrevY)*alpha
+		// Calculate new position
+		newX := u.PrevX + (u.TargetX-u.PrevX)*alpha
+		newY := u.PrevY + (u.TargetY-u.PrevY)*alpha
+
+		// Apply collision avoidance (only for units vs bases)
+		newX, newY = w.applyBaseCollisionAvoidance(u.ID, newX, newY)
+
+		u.X = newX
+		u.Y = newY
+	}
+
+	// Update projectile positions
+	w.updateProjectiles()
+}
+
+// updateProjectiles moves projectiles toward their targets and handles collisions
+func (w *World) updateProjectiles() {
+	const projectileSpeed = 400.0 // pixels per second
+
+	for id, projectile := range w.Projectiles {
+		if !projectile.Active {
+			continue
+		}
+
+		// Calculate direction to target
+		dx := projectile.TX - projectile.X
+		dy := projectile.TY - projectile.Y
+		dist := math.Sqrt(dx*dx + dy*dy)
+
+		if dist < 5 { // Close enough to target
+			// Projectile hit target - server will handle damage via delta updates
+			// Client only handles visual effects, not HP modifications
+
+			// Remove projectile
+			delete(w.Projectiles, id)
+			continue
+		}
+
+		// Move projectile toward target
+		if dist > 0 {
+			// Normalize direction
+			dx /= dist
+			dy /= dist
+
+			// Move projectile
+			projectile.X += dx * projectileSpeed * 0.016 // Approximate 60 FPS
+			projectile.Y += dy * projectileSpeed * 0.016
+		}
 	}
 }
 
@@ -303,4 +350,37 @@ func (w *World) GetActiveSpawnAnimation(unitID int64) *SpawnAnimation {
 		}
 	}
 	return nil
+}
+
+// applyBaseCollisionAvoidance prevents units from overlapping with bases (no unit-to-unit collision)
+func (w *World) applyBaseCollisionAvoidance(unitID int64, newX, newY float64) (float64, float64) {
+	unit := w.Units[unitID]
+	if unit == nil {
+		return newX, newY
+	}
+
+	const unitRadius = 21.0 // Half of unit size (42px / 2)
+	const baseBuffer = 25.0 // Extra buffer around bases
+
+	// Check collision with bases only (no unit-to-unit collision)
+	for _, base := range w.Bases {
+		baseCenterX := float64(base.X + base.W/2)
+		baseCenterY := float64(base.Y + base.H/2)
+		baseRadius := math.Sqrt(float64(base.W*base.W+base.H*base.H)) / 2
+
+		dx := newX - baseCenterX
+		dy := newY - baseCenterY
+		dist := math.Sqrt(dx*dx + dy*dy)
+		minDist := unitRadius + baseRadius + baseBuffer
+
+		if dist < minDist && dist > 0 {
+			// Unit is too close to base, push it away
+			pushX := dx / dist * (minDist - dist)
+			pushY := dy / dist * (minDist - dist)
+			newX += pushX
+			newY += pushY
+		}
+	}
+
+	return newX, newY
 }

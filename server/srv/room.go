@@ -260,6 +260,63 @@ func (r *Room) HandleDeploy(c *client, d protocol.DeployMiniAt) {
 	}
 }
 
+// Spell cast intent from a client -> mutate game, then unicast Hand/Gold updates
+func (r *Room) HandleSpellCast(c *client, s protocol.CastSpell) {
+	pl := r.g.players[c.id]
+	if pl == nil {
+		log.Printf("SPELL CAST ignored: no player for client id=%d", c.id)
+		return
+	}
+
+	// Find the spell card in hand
+	spellIndex := -1
+	for i, card := range pl.Hand {
+		if card.Name == s.SpellName {
+			spellIndex = i
+			break
+		}
+	}
+
+	if spellIndex == -1 {
+		log.Printf("SPELL CAST ignored: spell %s not found in hand for player id=%d", s.SpellName, c.id)
+		return
+	}
+
+	if pl.Gold < pl.Hand[spellIndex].Cost {
+		log.Printf("SPELL CAST ignored: not enough gold have=%d need=%d id=%d", pl.Gold, pl.Hand[spellIndex].Cost, c.id)
+		return
+	}
+
+	// gold before
+	before := 0
+	if pl := r.g.players[c.id]; pl != nil {
+		before = pl.Gold
+	}
+
+	// Handle spell casting in the game
+	r.g.HandleSpellCast(c.id, s)
+
+	// Unicast updated hand & gold
+	if pl := r.g.players[c.id]; pl != nil {
+		hu := protocol.HandUpdate{Hand: make([]protocol.MiniCardView, len(pl.Hand))}
+		for i, card := range pl.Hand {
+			hu.Hand[i] = protocol.MiniCardView{
+				Name: card.Name, Portrait: card.Portrait, Cost: card.Cost, Class: card.Class,
+			}
+		}
+		if pl.Next != nil {
+			hu.Next = protocol.MiniCardView{
+				Name: pl.Next.Name, Portrait: pl.Next.Portrait, Cost: pl.Next.Cost, Class: pl.Next.Class,
+			}
+		}
+		sendJSON(c, "HandUpdate", hu)
+
+		if pl.Gold != before {
+			sendJSON(c, "GoldUpdate", protocol.GoldUpdate{PlayerID: pl.ID, Gold: pl.Gold})
+		}
+	}
+}
+
 // Tick the room ONLY when active (after StartBattle)
 func (r *Room) Tick() {
 	// Do nothing when room is inactive (e.g., after GameOver)

@@ -225,6 +225,13 @@ type AoEDamageEvent struct {
 	ImpactY      float64 `json:"impactY"`      // Y position where the projectile impacted
 }
 
+type SpellCastEvent struct {
+	SpellName string  `json:"spellName"` // Name of the spell being cast
+	CasterID  int64   `json:"casterId"`  // ID of the player casting the spell
+	TargetX   float64 `json:"targetX"`   // X position where spell was cast
+	TargetY   float64 `json:"targetY"`   // Y position where spell was cast
+}
+
 type FullSnapshot struct {
 	Tick  int64       `json:"tick"`
 	Units []UnitState `json:"units"`

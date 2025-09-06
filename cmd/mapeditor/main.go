@@ -1,23 +1,16 @@
 package main
 
 import (
-	"crypto/sha1"
-	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
 	"image/color"
 	"log"
 	"math"
-	"net/http"
-	neturl "net/url"
 	"os"
 	"path/filepath"
-	"regexp"
-	"strings"
-	"time"
-
 	"rumble/shared/protocol"
+	"strings"
 
 	"github.com/gorilla/websocket"
 	"github.com/hajimehoshi/ebiten/v2"
@@ -26,194 +19,6 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/text"
 	"golang.org/x/image/font/basicfont"
 )
-
-type wsMsg struct {
-	Type string          `json:"type"`
-	Data json.RawMessage `json:"data"`
-}
-
-type editor struct {
-	// connection
-	ws   *websocket.Conn
-	inCh chan wsMsg
-
-	// state
-	bgPath   string
-	bg       *ebiten.Image
-	def      protocol.MapDef
-	tmpLane  []protocol.PointF
-	tool     int // 0 deploy, 1 stone, 2 mine, 3 lane, 4 obstacle, 5 decorative
-	name     string
-	status   string
-	savePath string
-
-	// selection & editing
-	selKind   string // ""|"deploy"|"stone"|"mine"|"lane"|"obstacle"|"decorative"
-	selIndex  int
-	selHandle int // for deploy corners: 0=TL,1=TR,2=BR,3=BL, -1=body; for obstacles: 0=TL,1=TR,2=BR,3=BL, -1=body
-	dragging  bool
-	lastMx    int
-	lastMy    int
-
-	// camera system for map scrolling and zooming
-	cameraX          float64
-	cameraY          float64
-	cameraZoom       float64
-	cameraMinZoom    float64
-	cameraMaxZoom    float64
-	cameraDragging   bool
-	cameraDragStartX int
-	cameraDragStartY int
-
-	// extended camera space visualization
-	showExtendedCameraSpace bool
-
-	// bg management
-	showGrid  bool
-	bgInput   string
-	bgFocus   bool
-	nameFocus bool
-
-	// assets browser
-	showAssetsBrowser   bool
-	availableAssets     []string
-	assetsBrowserSel    int
-	assetsBrowserScroll int
-	assetsCurrentPath   string
-
-	// obstacles browser
-	showObstaclesBrowser   bool
-	availableObstacles     []string
-	obstaclesBrowserSel    int
-	obstaclesBrowserScroll int
-	obstaclesCurrentPath   string
-
-	// decorative elements browser
-	showDecorativeBrowser   bool
-	availableDecorative     []string
-	decorativeBrowserSel    int
-	decorativeBrowserScroll int
-	decorativeCurrentPath   string
-
-	// removed name input focus - no longer needed
-
-	// login UI
-	showLogin   bool
-	loginUser   string
-	loginPass   string
-	loginFocus  int // 0=username, 1=password
-	loginStatus string
-
-	// help system
-	showHelp     bool
-	helpText     string
-	tooltipTimer int
-	tooltipX     int
-	tooltipY     int
-
-	// map browser
-	showMapBrowser   bool
-	availableMaps    []string
-	mapBrowserSel    int
-	mapBrowserScroll int
-
-	// enhanced help system
-	showWelcome  bool
-	helpMode     bool
-	keyboardHelp bool
-
-	// undo/redo system
-	undoStack    []protocol.MapDef
-	redoStack    []protocol.MapDef
-	maxUndoSteps int
-
-	// better status and notifications
-	lastAction  string
-	actionTimer int
-
-	// chat window for status messages
-	statusMessages      []string
-	maxStatusMessages   int
-	showStatusLog       bool
-	statusLogX          int
-	statusLogY          int
-	statusLogDragging   bool
-	statusLogDragStartX int
-	statusLogDragStartY int
-}
-
-func getenv(k, def string) string {
-	if v := os.Getenv(k); v != "" {
-		return v
-	}
-	return def
-}
-
-// ConfigDir: mimic client logic so we can reuse token.json
-func sanitize(s string) string {
-	s = strings.TrimSpace(strings.ToLower(s))
-	s = strings.ReplaceAll(s, " ", "_")
-	re := regexp.MustCompile(`[^a-z0-9._-]`)
-	return re.ReplaceAllString(s, "")
-}
-func profileID() string {
-	if p := strings.TrimSpace(os.Getenv("WAR_PROFILE")); p != "" {
-		return sanitize(p)
-	}
-	exe, _ := os.Executable()
-	base := strings.TrimSuffix(filepath.Base(exe), filepath.Ext(exe))
-	h := sha1.Sum([]byte(exe))
-	return sanitize(base) + "-" + hex.EncodeToString(h[:])[:8]
-}
-func configDir() string {
-	root, _ := os.UserConfigDir()
-	if root == "" {
-		if home, _ := os.UserHomeDir(); home != "" {
-			root = filepath.Join(home, ".config")
-		}
-	}
-	d := filepath.Join(root, "WarRumble", profileID())
-	_ = os.MkdirAll(d, 0o755)
-	return d
-}
-func loadToken() string {
-	b, _ := os.ReadFile(filepath.Join(configDir(), "token.json"))
-	return strings.TrimSpace(string(b))
-}
-
-func dialWS(url, token string) (*websocket.Conn, error) {
-	d := websocket.Dialer{HandshakeTimeout: 5 * time.Second,
-		Proxy: func(*http.Request) (*neturl.URL, error) { return nil, nil }}
-	// add token as header and query param (server accepts either)
-	if token != "" {
-		if u, err := neturl.Parse(url); err == nil {
-			q := u.Query()
-			q.Set("token", token)
-			u.RawQuery = q.Encode()
-			url = u.String()
-		}
-	}
-	hdr := http.Header{}
-	if token != "" {
-		hdr.Set("Authorization", "Bearer "+token)
-	}
-	c, _, err := d.Dial(url, hdr)
-	return c, err
-}
-
-func (e *editor) runReader() {
-	for {
-		_, data, err := e.ws.ReadMessage()
-		if err != nil {
-			close(e.inCh)
-			return
-		}
-		var m wsMsg
-		if json.Unmarshal(data, &m) == nil {
-			e.inCh <- m
-		}
-	}
-}
 
 func (e *editor) Update() error {
 	// Handle login screen
@@ -283,6 +88,9 @@ func (e *editor) Update() error {
 				if strings.TrimSpace(e.name) == "" {
 					e.name = md.Def.Name
 				}
+				// Initialize base existence flags based on loaded map
+				e.playerBaseExists = e.def.PlayerBase.X != 0 || e.def.PlayerBase.Y != 0
+				e.enemyBaseExists = e.def.EnemyBase.X != 0 || e.def.EnemyBase.Y != 0
 				// Automatically load the map's background if specified
 				if md.Def.Bg != "" {
 					// Try multiple paths for background images
@@ -309,6 +117,9 @@ func (e *editor) Update() error {
 				} else {
 					e.status = fmt.Sprintf("Loaded map: %s", md.Def.Name)
 				}
+
+				// Auto-scale camera to fit all objects in the map
+				e.autoScaleToFitObjects()
 			case "Maps":
 				// ignore
 			case "Error":
@@ -380,6 +191,71 @@ done:
 		}
 	} else {
 		e.cameraDragging = false
+	}
+
+	// Handle frame manipulation with mouse
+	if e.bg != nil && !e.frameDragging {
+		// Calculate frame handle positions for hit testing
+		const topUIH = 120
+		sw, sh := e.bg.Bounds().Dx(), e.bg.Bounds().Dy()
+		vw, vh := ebiten.WindowSize()
+		vh -= topUIH
+		sx := float64(vw) / float64(sw)
+		sy := float64(vh) / float64(sh)
+		s := sx
+		if sy < sx {
+			s = sy
+		}
+		extendedW := int(float64(sw) * s * 1.2)
+		extendedH := int(float64(sh) * s * 1.2)
+		borderOffX := (vw - extendedW) / 2
+		borderOffY := topUIH + (vh-extendedH)/2
+		mapBorderW := int(float64(extendedW) / 1.2)
+		mapBorderH := int(float64(extendedH) / 1.2)
+		borderOffX += (extendedW - mapBorderW) / 2
+		borderOffY += (extendedH - mapBorderH) / 2
+
+		// Apply configurable frame position and size
+		frameBorderW := int(float64(mapBorderW) * e.frameWidth)
+		frameBorderH := int(float64(mapBorderH) * e.frameHeight)
+		frameOffX := borderOffX + int(float64(mapBorderW)*(e.frameX-0.5)*e.frameWidth) + (mapBorderW-frameBorderW)/2
+		frameOffY := borderOffY + int(float64(mapBorderH)*(e.frameY-0.5)*e.frameHeight) + (mapBorderH-frameBorderH)/2
+
+		handleSize := 8
+		// Check if clicking on frame handles
+		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+			// Corner handles for resizing
+			corners := [][2]int{
+				{frameOffX - handleSize/2, frameOffY - handleSize/2},                               // Top-left
+				{frameOffX + frameBorderW - handleSize/2, frameOffY - handleSize/2},                // Top-right
+				{frameOffX + frameBorderW - handleSize/2, frameOffY + frameBorderH - handleSize/2}, // Bottom-right
+				{frameOffX - handleSize/2, frameOffY + frameBorderH - handleSize/2},                // Bottom-left
+			}
+			handleClicked := false
+			for i, corner := range corners {
+				if mx >= corner[0] && mx < corner[0]+handleSize && my >= corner[1] && my < corner[1]+handleSize {
+					e.frameDragging = true
+					e.frameDragStartX = mx
+					e.frameDragStartY = my
+					e.frameDragHandle = i + 1 // 1=top-left, 2=top-right, 3=bottom-right, 4=bottom-left
+					e.status = fmt.Sprintf("Resizing frame from corner %d", i+1)
+					handleClicked = true
+					break
+				}
+			}
+			// Center handle for moving (only if no corner was clicked)
+			if !handleClicked {
+				centerX := frameOffX + frameBorderW/2 - handleSize/2
+				centerY := frameOffY + frameBorderH/2 - handleSize/2
+				if mx >= centerX-handleSize && mx < centerX+handleSize*2 && my >= centerY-handleSize && my < centerY+handleSize*2 {
+					e.frameDragging = true
+					e.frameDragStartX = mx
+					e.frameDragStartY = my
+					e.frameDragHandle = 0 // 0=center
+					e.status = "Dragging frame position"
+				}
+			}
+		}
 	}
 
 	// Deselect tool when overlays are open to prevent accidental object placement
@@ -467,33 +343,24 @@ done:
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		// Check if clicking on toolbar buttons first
 		toolbarClicked := false
-		for i := 0; i < 6; i++ {
-			x, y, w, h := 8, 8+i*40, 100, 36
+
+		// Handle layer selection buttons (left side - compact)
+		for i := 0; i < 8; i++ {
+			x, y, w, h := 150, 8+i*32, 80, 28
 			if mx >= x && mx < x+w && my >= y && my < y+h {
-				// If clicking the same tool, deselect it
-				if e.tool == i {
-					e.tool = -1
-					e.status = "Tool deselected"
+				if i == 7 {
+					// "All" layer - enable show all layers
+					e.showAllLayers = true
+					e.currentLayer = 7
 				} else {
-					e.tool = i
-					toolNames := []string{"Deploy Zones", "Meeting Stones", "Gold Mines", "Movement Lanes", "Obstacles", "Decorative"}
-					e.status = fmt.Sprintf("Selected: %s", toolNames[i])
+					e.currentLayer = i
+					e.showAllLayers = false // Disable show-all when selecting specific layer
 				}
+				layerNames := []string{"BG", "Frame", "Deploy", "Lanes", "Obstacles", "Assets", "Player Bases", "All"}
+				e.status = fmt.Sprintf("Layer: %s", layerNames[i])
 				toolbarClicked = true
 				break
 			}
-		}
-
-		// Handle camera view toggle button click
-		camX, camY, camW, camH := 300, 8, 120, 36
-		if !toolbarClicked && mx >= camX && mx < camX+camW && my >= camY && my < camY+camH {
-			e.showExtendedCameraSpace = !e.showExtendedCameraSpace
-			if e.showExtendedCameraSpace {
-				e.status = "Extended camera space visualization enabled"
-			} else {
-				e.status = "Extended camera space visualization disabled"
-			}
-			toolbarClicked = true
 		}
 
 		// If toolbar was clicked, don't process object selection
@@ -744,7 +611,8 @@ done:
 		return -1, 0, false
 	}
 	hitPlayerBase := func(mx, my int) bool {
-		if e.def.PlayerBase.X == 0 && e.def.PlayerBase.Y == 0 {
+		// Check if player base exists (use a flag or check if coordinates are valid)
+		if e.def.PlayerBase.X == 0 && e.def.PlayerBase.Y == 0 && !e.playerBaseExists {
 			return false
 		}
 		x, y := toPix(e.def.PlayerBase.X, e.def.PlayerBase.Y)
@@ -753,7 +621,8 @@ done:
 		return mx >= x && mx < x+baseW && my >= y && my < y+baseH
 	}
 	hitEnemyBase := func(mx, my int) bool {
-		if e.def.EnemyBase.X == 0 && e.def.EnemyBase.Y == 0 {
+		// Check if enemy base exists (use a flag or check if coordinates are valid)
+		if e.def.EnemyBase.X == 0 && e.def.EnemyBase.Y == 0 && !e.enemyBaseExists {
 			return false
 		}
 		x, y := toPix(e.def.EnemyBase.X, e.def.EnemyBase.Y)
@@ -767,19 +636,21 @@ done:
 	if e.tooltipTimer > 30 { // Show tooltip after 0.5 seconds of hovering
 		e.showHelp = false
 
-		// Check enhanced toolbar buttons
-		for i := 0; i < 6; i++ {
-			x, y, w, h := 8, 8+i*40, 100, 36
+		// Check layer buttons
+		for i := 0; i < 8; i++ {
+			x, y, w, h := 150, 8+i*32, 80, 28
 			if mx >= x && mx < x+w && my >= y && my < y+h {
-				tooltips := []string{
-					"📦 Deploy Zones: Click to create deployment areas for units",
-					"🏛️ Meeting Stones: Click to place rally points for units",
-					"💰 Gold Mines: Click to place gold resource points",
-					"🛤️ Movement Lanes: Click to start drawing unit movement paths",
-					"🌳 Obstacles: Click to place blocking objects on the map",
-					"🎨 Decorative: Click to place decorative elements on the map",
+				layerTooltips := []string{
+					"🏠 BG Layer: Show/hide background elements (meeting stones, gold mines)",
+					"📐 Frame Layer: Edit map frame position, size and scale",
+					"📦 Deploy Layer: Show/hide deployment zones",
+					"🛤️ Lanes Layer: Show/hide movement lanes",
+					"🌳 Obstacles Layer: Show/hide blocking objects",
+					"🎨 Assets Layer: Show/hide decorative elements",
+					"🏰 Player Bases Layer: Show/hide player and enemy bases",
+					"👁️ All Layers: Show all map elements simultaneously",
 				}
-				e.helpText = tooltips[i]
+				e.helpText = layerTooltips[i]
 				e.tooltipX = x + w + 10
 				e.tooltipY = y
 				e.showHelp = true
@@ -899,10 +770,107 @@ done:
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
 		e.dragging = false
 		if inCanvas(mx, my) {
-			if idx, h, ok := hitDeploy(mx, my); ok {
-				// Check if this is a double-click to change owner
+			// Layer-based selection logic
+			selected := false
+
+			// Layer 1: Frame (only selectable when frame layer is active)
+			if e.currentLayer == 1 && !selected {
+				// Check frame handles first
+				const topUIH = 120
+				sw, sh := e.bg.Bounds().Dx(), e.bg.Bounds().Dy()
+				vw, vh := ebiten.WindowSize()
+				vh -= topUIH
+				sx := float64(vw) / float64(sw)
+				sy := float64(vh) / float64(sh)
+				s := sx
+				if sy < sx {
+					s = sy
+				}
+				extendedW := int(float64(sw) * s * 1.2)
+				extendedH := int(float64(sh) * s * 1.2)
+				borderOffX := (vw - extendedW) / 2
+				borderOffY := topUIH + (vh-extendedH)/2
+				mapBorderW := int(float64(extendedW) / 1.2)
+				mapBorderH := int(float64(extendedH) / 1.2)
+				borderOffX += (extendedW - mapBorderW) / 2
+				borderOffY += (extendedH - mapBorderH) / 2
+
+				frameBorderW := int(float64(mapBorderW) * e.frameWidth)
+				frameBorderH := int(float64(mapBorderH) * e.frameHeight)
+				frameOffX := borderOffX + int(float64(mapBorderW)*(e.frameX-0.5)*e.frameWidth) + (mapBorderW-frameBorderW)/2
+				frameOffY := borderOffY + int(float64(mapBorderH)*(e.frameY-0.5)*e.frameHeight) + (mapBorderH-frameBorderH)/2
+
+				handleSize := 8
+				corners := [][2]int{
+					{frameOffX - handleSize/2, frameOffY - handleSize/2},
+					{frameOffX + frameBorderW - handleSize/2, frameOffY - handleSize/2},
+					{frameOffX + frameBorderW - handleSize/2, frameOffY + frameBorderH - handleSize/2},
+					{frameOffX - handleSize/2, frameOffY + frameBorderH - handleSize/2},
+				}
+
+				for i, corner := range corners {
+					if mx >= corner[0] && mx < corner[0]+handleSize && my >= corner[1] && my < corner[1]+handleSize {
+						e.frameDragging = true
+						e.frameDragStartX = mx
+						e.frameDragStartY = my
+						e.frameDragHandle = i + 1
+						e.status = fmt.Sprintf("Resizing frame from corner %d", i+1)
+						selected = true
+						break
+					}
+				}
+
+				if !selected {
+					centerX := frameOffX + frameBorderW/2 - handleSize/2
+					centerY := frameOffY + frameBorderH/2 - handleSize/2
+					if mx >= centerX-handleSize && mx < centerX+handleSize*2 && my >= centerY-handleSize && my < centerY+handleSize*2 {
+						e.frameDragging = true
+						e.frameDragStartX = mx
+						e.frameDragStartY = my
+						e.frameDragHandle = 0
+						e.status = "Dragging frame position"
+						selected = true
+					}
+				}
+
+				if !selected {
+					// Check if clicking inside frame area
+					if mx >= frameOffX && mx < frameOffX+frameBorderW && my >= frameOffY && my < frameOffY+frameBorderH {
+						e.selKind, e.selIndex, e.selHandle = "frame", -1, -1
+						e.dragging, e.lastMx, e.lastMy = true, mx, my
+						selected = true
+					}
+				}
+			}
+
+			// Allow selection of any element regardless of current layer
+			// Check in priority order: bases first (highest priority), then other elements
+			if hitPlayerBase(mx, my) {
+				e.selKind, e.selIndex, e.selHandle = "playerbase", -1, -1
+				e.dragging = true
+				e.lastMx, e.lastMy = mx, my
+				selected = true
+			} else if hitEnemyBase(mx, my) {
+				e.selKind, e.selIndex, e.selHandle = "enemybase", -1, -1
+				e.dragging = true
+				e.lastMx, e.lastMy = mx, my
+				selected = true
+			} else if idx, h, ok := hitDecorative(mx, my); ok {
+				e.selKind, e.selIndex, e.selHandle = "decorative", idx, h
+				e.dragging, e.lastMx, e.lastMy = true, mx, my
+				selected = true
+			} else if idx, h, ok := hitObstacle(mx, my); ok {
+				e.selKind, e.selIndex, e.selHandle = "obstacle", idx, h
+				e.dragging, e.lastMx, e.lastMy = true, mx, my
+				selected = true
+			} else if i, ok := hitLane(mx, my); ok {
+				e.selKind, e.selIndex, e.selHandle = "lane", i, -1
+				e.dragging = true
+				e.lastMx, e.lastMy = mx, my
+				selected = true
+			} else if idx, h, ok := hitDeploy(mx, my); ok {
 				if e.selKind == "deploy" && e.selIndex == idx && e.selHandle == h {
-					// Change deploy zone owner
+					// Change deploy zone owner on double-click
 					if e.def.DeployZones[idx].Owner == "player" {
 						e.def.DeployZones[idx].Owner = "enemy"
 						e.status = fmt.Sprintf("Deploy Zone %d changed to Enemy", idx+1)
@@ -917,58 +885,83 @@ done:
 					e.selKind, e.selIndex, e.selHandle = "deploy", idx, h
 					e.dragging, e.lastMx, e.lastMy = true, mx, my
 				}
-			} else if hitPlayerBase(mx, my) {
-				e.selKind, e.selIndex, e.selHandle = "playerbase", -1, -1
-				e.dragging = true
-				e.lastMx, e.lastMy = mx, my
-			} else if hitEnemyBase(mx, my) {
-				e.selKind, e.selIndex, e.selHandle = "enemybase", -1, -1
-				e.dragging = true
-				e.lastMx, e.lastMy = mx, my
+				selected = true
 			} else if i, ok := hitPointList(e.def.MeetingStones, mx, my, 6); ok {
 				e.selKind, e.selIndex, e.selHandle = "stone", i, -1
 				e.dragging = true
 				e.lastMx, e.lastMy = mx, my
-			} else if idx, h, ok := hitObstacle(mx, my); ok {
-				e.selKind, e.selIndex, e.selHandle = "obstacle", idx, h
-				e.dragging, e.lastMx, e.lastMy = true, mx, my
-			} else if idx, h, ok := hitDecorative(mx, my); ok {
-				e.selKind, e.selIndex, e.selHandle = "decorative", idx, h
-				e.dragging, e.lastMx, e.lastMy = true, mx, my
+				selected = true
 			} else if i, ok := hitPointList(e.def.GoldMines, mx, my, 6); ok {
 				e.selKind, e.selIndex, e.selHandle = "mine", i, -1
 				e.dragging = true
 				e.lastMx, e.lastMy = mx, my
-			} else if i, ok := hitLane(mx, my); ok {
-				e.selKind, e.selIndex, e.selHandle = "lane", i, -1
-				e.dragging = true
-				e.lastMx, e.lastMy = mx, my
-			} else {
+				selected = true
+			}
+
+			// If nothing was selected, create new objects based on current tool or layer
+			if !selected {
 				nx, ny := toNorm(mx, my)
-				switch e.tool {
-				case 0:
+
+				// Create objects based on current layer or tool
+				switch e.currentLayer {
+				case 2: // Deploy layer - create deploy zones
 					e.def.DeployZones = append(e.def.DeployZones, protocol.DeployZone{X: nx - 0.05, Y: ny - 0.05, W: 0.1, H: 0.1, Owner: "player"})
 					e.selKind, e.selIndex, e.selHandle = "deploy", len(e.def.DeployZones)-1, -1
-					e.tool = -1 // Auto-deselect after placing
-				case 1:
-					e.def.MeetingStones = append(e.def.MeetingStones, protocol.PointF{X: nx, Y: ny})
-					e.selKind, e.selIndex = "stone", len(e.def.MeetingStones)-1
-					e.tool = -1 // Auto-deselect after placing
-				case 2:
-					e.def.GoldMines = append(e.def.GoldMines, protocol.PointF{X: nx, Y: ny})
-					e.selKind, e.selIndex = "mine", len(e.def.GoldMines)-1
-					e.tool = -1 // Auto-deselect after placing
-				case 3:
+					e.status = "Deploy zone created"
+				case 3: // Lanes layer - start drawing lanes
 					e.tmpLane = append(e.tmpLane, protocol.PointF{X: nx, Y: ny})
 					e.selKind = ""
-				case 4:
+					e.status = "Lane point added"
+				case 4: // Obstacles layer - create obstacles
 					e.def.Obstacles = append(e.def.Obstacles, protocol.Obstacle{X: nx - 0.05, Y: ny - 0.05, Type: "tree", Image: "tree.png", Width: 0.1, Height: 0.1})
 					e.selKind, e.selIndex, e.selHandle = "obstacle", len(e.def.Obstacles)-1, -1
-					e.tool = -1 // Auto-deselect after placing
-				case 5:
+					e.status = "Obstacle created"
+				case 5: // Assets layer - create decorative elements
 					e.def.DecorativeElements = append(e.def.DecorativeElements, protocol.DecorativeElement{X: nx - 0.05, Y: ny - 0.05, Image: "decorative.png", Width: 0.1, Height: 0.1, Layer: 1})
 					e.selKind, e.selIndex, e.selHandle = "decorative", len(e.def.DecorativeElements)-1, -1
-					e.tool = -1 // Auto-deselect after placing
+					e.status = "Decorative element created"
+				case 6: // Bases layer - create bases
+					// Create player base if it doesn't exist, otherwise create enemy base
+					if !e.playerBaseExists {
+						e.def.PlayerBase = protocol.PointF{X: nx, Y: ny}
+						e.playerBaseExists = true
+						e.selKind = "playerbase"
+						e.status = "Player base created"
+					} else if !e.enemyBaseExists {
+						e.def.EnemyBase = protocol.PointF{X: nx, Y: ny}
+						e.enemyBaseExists = true
+						e.selKind = "enemybase"
+						e.status = "Enemy base created"
+					} else {
+						e.status = "Both bases already exist. Select and delete one first."
+					}
+				default:
+					// Fallback to tool-based creation for BG and Frame layers
+					switch e.tool {
+					case 0: // Deploy zones
+						e.def.DeployZones = append(e.def.DeployZones, protocol.DeployZone{X: nx - 0.05, Y: ny - 0.05, W: 0.1, H: 0.1, Owner: "player"})
+						e.selKind, e.selIndex, e.selHandle = "deploy", len(e.def.DeployZones)-1, -1
+						e.tool = -1
+					case 1: // Meeting stones
+						e.def.MeetingStones = append(e.def.MeetingStones, protocol.PointF{X: nx, Y: ny})
+						e.selKind, e.selIndex = "stone", len(e.def.MeetingStones)-1
+						e.tool = -1
+					case 2: // Gold mines
+						e.def.GoldMines = append(e.def.GoldMines, protocol.PointF{X: nx, Y: ny})
+						e.selKind, e.selIndex = "mine", len(e.def.GoldMines)-1
+						e.tool = -1
+					case 3: // Movement lanes
+						e.tmpLane = append(e.tmpLane, protocol.PointF{X: nx, Y: ny})
+						e.selKind = ""
+					case 4: // Obstacles
+						e.def.Obstacles = append(e.def.Obstacles, protocol.Obstacle{X: nx - 0.05, Y: ny - 0.05, Type: "tree", Image: "tree.png", Width: 0.1, Height: 0.1})
+						e.selKind, e.selIndex, e.selHandle = "obstacle", len(e.def.Obstacles)-1, -1
+						e.tool = -1
+					case 5: // Decorative elements
+						e.def.DecorativeElements = append(e.def.DecorativeElements, protocol.DecorativeElement{X: nx - 0.05, Y: ny - 0.05, Image: "decorative.png", Width: 0.1, Height: 0.1, Layer: 1})
+						e.selKind, e.selIndex, e.selHandle = "decorative", len(e.def.DecorativeElements)-1, -1
+						e.tool = -1
+					}
 				}
 				e.lastMx, e.lastMy = mx, my
 			}
@@ -1155,6 +1148,105 @@ done:
 		}
 	}
 
+	// Handle frame dragging
+	if e.frameDragging {
+		if ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft) {
+			dx := mx - e.frameDragStartX
+			dy := my - e.frameDragStartY
+
+			// Convert screen delta to normalized frame coordinates
+			vw, vh := ebiten.WindowSize()
+			vh -= topUIH
+			sw, sh := e.bg.Bounds().Dx(), e.bg.Bounds().Dy()
+			sx := float64(vw) / float64(sw)
+			sy := float64(vh) / float64(sh)
+			s := sx
+			if sy < sx {
+				s = sy
+			}
+			extendedW := int(float64(sw) * s * 1.2)
+			extendedH := int(float64(sh) * s * 1.2)
+			mapBorderW := int(float64(extendedW) / 1.2)
+			mapBorderH := int(float64(extendedH) / 1.2)
+
+			// Calculate the change in normalized coordinates
+			scaleFactor := 1.0 / (s * e.frameScale)
+			dFrameX := float64(dx) * scaleFactor / float64(mapBorderW)
+			dFrameY := float64(dy) * scaleFactor / float64(mapBorderH)
+
+			if e.frameDragHandle == 0 {
+				// Center handle: move the frame
+				e.frameX += dFrameX
+				e.frameY += dFrameY
+
+				// Clamp frame position to reasonable bounds
+				if e.frameX < -0.5 {
+					e.frameX = -0.5
+				}
+				if e.frameX > 1.5 {
+					e.frameX = 1.5
+				}
+				if e.frameY < -0.5 {
+					e.frameY = -0.5
+				}
+				if e.frameY > 1.5 {
+					e.frameY = 1.5
+				}
+				e.status = fmt.Sprintf("Frame moved to (%.3f, %.3f)", e.frameX, e.frameY)
+			} else {
+				// Corner handles: resize the frame
+				switch e.frameDragHandle {
+				case 1: // Top-left
+					e.frameX += dFrameX
+					e.frameY += dFrameY
+					e.frameWidth -= dFrameX
+					e.frameHeight -= dFrameY
+				case 2: // Top-right
+					e.frameY += dFrameY
+					e.frameWidth += dFrameX
+					e.frameHeight -= dFrameY
+				case 3: // Bottom-right
+					e.frameWidth += dFrameX
+					e.frameHeight += dFrameY
+				case 4: // Bottom-left
+					e.frameX += dFrameX
+					e.frameWidth -= dFrameX
+					e.frameHeight += dFrameY
+				}
+
+				// Ensure minimum size
+				if e.frameWidth < 0.1 {
+					e.frameWidth = 0.1
+				}
+				if e.frameHeight < 0.1 {
+					e.frameHeight = 0.1
+				}
+
+				// Clamp position to reasonable bounds
+				if e.frameX < -0.5 {
+					e.frameX = -0.5
+				}
+				if e.frameX > 1.5 {
+					e.frameX = 1.5
+				}
+				if e.frameY < -0.5 {
+					e.frameY = -0.5
+				}
+				if e.frameY > 1.5 {
+					e.frameY = 1.5
+				}
+
+				e.status = fmt.Sprintf("Frame resized to (%.3f, %.3f)", e.frameWidth, e.frameHeight)
+			}
+
+			e.frameDragStartX = mx
+			e.frameDragStartY = my
+		} else {
+			e.frameDragging = false
+			e.frameDragHandle = 0
+		}
+	}
+
 	// Right click: finalize lane if drawing; otherwise clear selection
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonRight) {
 		if len(e.tmpLane) > 0 {
@@ -1275,6 +1367,20 @@ done:
 						e.selIndex = -1
 						e.status = "Decorative element deleted"
 					}
+				case "playerbase":
+					// Reset player base to (0,0) and mark as not existing
+					e.def.PlayerBase = protocol.PointF{X: 0, Y: 0}
+					e.playerBaseExists = false
+					e.selKind = ""
+					e.selIndex = -1
+					e.status = "Player base deleted"
+				case "enemybase":
+					// Reset enemy base to (0,0) and mark as not existing
+					e.def.EnemyBase = protocol.PointF{X: 0, Y: 0}
+					e.enemyBaseExists = false
+					e.selKind = ""
+					e.selIndex = -1
+					e.status = "Enemy base deleted"
 				}
 			}
 		}
@@ -1294,6 +1400,57 @@ done:
 		}
 		if k == ebiten.KeyF1 && !e.bgFocus {
 			e.helpMode = !e.helpMode
+		}
+
+		// Frame manipulation shortcuts
+		if k == ebiten.KeyF && !e.bgFocus {
+			// Reset frame to center (0.5, 0.5) and scale 1.0
+			e.frameX = 0.5
+			e.frameY = 0.5
+			e.frameScale = 1.0
+			e.status = "Frame reset to center"
+		}
+		if k == ebiten.KeyArrowLeft && !e.bgFocus {
+			e.frameX -= 0.01
+			if e.frameX < 0 {
+				e.frameX = 0
+			}
+			e.status = fmt.Sprintf("Frame X: %.3f", e.frameX)
+		}
+		if k == ebiten.KeyArrowRight && !e.bgFocus {
+			e.frameX += 0.01
+			if e.frameX > 1 {
+				e.frameX = 1
+			}
+			e.status = fmt.Sprintf("Frame X: %.3f", e.frameX)
+		}
+		if k == ebiten.KeyArrowUp && !e.bgFocus {
+			e.frameY -= 0.01
+			if e.frameY < 0 {
+				e.frameY = 0
+			}
+			e.status = fmt.Sprintf("Frame Y: %.3f", e.frameY)
+		}
+		if k == ebiten.KeyArrowDown && !e.bgFocus {
+			e.frameY += 0.01
+			if e.frameY > 1 {
+				e.frameY = 1
+			}
+			e.status = fmt.Sprintf("Frame Y: %.3f", e.frameY)
+		}
+		if k == ebiten.KeyEqual && !e.bgFocus { // + key
+			e.frameScale += 0.01
+			if e.frameScale > 2.0 {
+				e.frameScale = 2.0
+			}
+			e.status = fmt.Sprintf("Frame Scale: %.3f", e.frameScale)
+		}
+		if k == ebiten.KeyMinus && !e.bgFocus {
+			e.frameScale -= 0.01
+			if e.frameScale < 0.1 {
+				e.frameScale = 0.1
+			}
+			e.status = fmt.Sprintf("Frame Scale: %.3f", e.frameScale)
 		}
 
 		// Number keys for tool selection
@@ -1369,128 +1526,6 @@ done:
 		}
 	}
 	return nil
-}
-
-func (e *editor) attemptLogin() {
-	if strings.TrimSpace(e.loginUser) == "" || strings.TrimSpace(e.loginPass) == "" {
-		e.loginStatus = "Please enter username and password"
-		return
-	}
-
-	e.loginStatus = "Logging in..."
-
-	// Run login in a goroutine to avoid blocking the UI
-	go func() {
-		req := map[string]interface{}{
-			"username": e.loginUser,
-			"password": e.loginPass,
-			"version":  protocol.GameVersion,
-		}
-		b, _ := json.Marshal(req)
-
-		resp, err := http.Post("http://localhost:8080/api/login", "application/json", strings.NewReader(string(b)))
-		if err != nil {
-			e.loginStatus = "Connection failed: " + err.Error()
-			return
-		}
-		defer resp.Body.Close()
-
-		if resp.StatusCode != 200 {
-			if resp.StatusCode == 426 {
-				e.loginStatus = "Version mismatch: please update your game"
-			} else {
-				e.loginStatus = "Invalid credentials"
-			}
-			return
-		}
-
-		var result map[string]interface{}
-		if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
-			e.loginStatus = "Failed to parse response"
-			return
-		}
-
-		token, ok := result["token"].(string)
-		if !ok {
-			e.loginStatus = "Invalid response format"
-			return
-		}
-
-		// Save token
-		if err := os.WriteFile(filepath.Join(configDir(), "token.json"), []byte(strings.TrimSpace(token)), 0o600); err != nil {
-			e.loginStatus = "Failed to save token"
-			return
-		}
-
-		// Save username
-		if err := os.WriteFile(filepath.Join(configDir(), "username.txt"), []byte(strings.TrimSpace(e.loginUser)), 0o600); err != nil {
-			e.loginStatus = "Failed to save username"
-			return
-		}
-
-		e.loginStatus = "Login successful! Connecting..."
-
-		// Connect to WebSocket
-		ws, err := dialWS(getenv("WAR_WS_URL", "ws://127.0.0.1:8080/ws"), token)
-		if err != nil {
-			e.loginStatus = "WebSocket connection failed: " + err.Error()
-			return
-		}
-
-		e.ws = ws
-		e.inCh = make(chan wsMsg, 128)
-		go e.runReader()
-		e.showLogin = false
-		e.loginStatus = ""
-	}()
-}
-
-func (e *editor) save() {
-	nm := strings.TrimSpace(e.name)
-	if nm == "" {
-		nm = "New Map"
-	}
-	e.def.Name = nm
-	if strings.TrimSpace(e.def.ID) == "" {
-		e.def.ID = strings.ReplaceAll(strings.ToLower(nm), " ", "-")
-	}
-
-	// Save locally
-	localDir := "local_maps"
-	_ = os.MkdirAll(localDir, 0o755)
-	filename := e.def.ID + ".json"
-	filepath := filepath.Join(localDir, filename)
-	b, _ := json.MarshalIndent(e.def, "", "  ")
-	localErr := os.WriteFile(filepath, b, 0o644)
-
-	if e.ws == nil {
-		if localErr == nil {
-			e.status = "Saved locally to " + filepath
-		} else {
-			e.status = "Local save failed: " + localErr.Error()
-		}
-		return
-	}
-
-	// Send to server
-	b2, _ := json.Marshal(struct {
-		Type string      `json:"type"`
-		Data interface{} `json:"data"`
-	}{Type: "SaveMap", Data: protocol.SaveMap{Def: e.def}})
-	err := e.ws.WriteMessage(websocket.TextMessage, b2)
-	if err != nil {
-		if localErr == nil {
-			e.status = "Local save ok, server save failed: " + err.Error()
-		} else {
-			e.status = "Save failed: " + err.Error()
-		}
-	} else {
-		if localErr == nil {
-			e.status = "Saved to server and locally"
-		} else {
-			e.status = "Saved to server, local save failed: " + localErr.Error()
-		}
-	}
 }
 
 func (e *editor) refreshAssetsBrowser() {
@@ -1569,6 +1604,125 @@ func (e *editor) refreshDecorativeBrowser() {
 	e.decorativeBrowserScroll = 0
 	e.decorativeBrowserSel = -1
 	e.status = fmt.Sprintf("Browsing: %s (%d items)", e.decorativeCurrentPath, len(items))
+}
+
+func (e *editor) autoScaleToFitObjects() {
+	if e.bg == nil {
+		return
+	}
+
+	// Calculate bounds of all objects
+	minX, minY := 1.0, 1.0
+	maxX, maxY := 0.0, 0.0
+
+	// Check deploy zones
+	for _, r := range e.def.DeployZones {
+		minX = math.Min(minX, r.X)
+		minY = math.Min(minY, r.Y)
+		maxX = math.Max(maxX, r.X+r.W)
+		maxY = math.Max(maxY, r.Y+r.H)
+	}
+
+	// Check meeting stones
+	for _, p := range e.def.MeetingStones {
+		minX = math.Min(minX, p.X-0.01)
+		minY = math.Min(minY, p.Y-0.01)
+		maxX = math.Max(maxX, p.X+0.01)
+		maxY = math.Max(maxY, p.Y+0.01)
+	}
+
+	// Check gold mines
+	for _, p := range e.def.GoldMines {
+		minX = math.Min(minX, p.X-0.01)
+		minY = math.Min(minY, p.Y-0.01)
+		maxX = math.Max(maxX, p.X+0.01)
+		maxY = math.Max(maxY, p.Y+0.01)
+	}
+
+	// Check lanes
+	for _, ln := range e.def.Lanes {
+		for _, p := range ln.Points {
+			minX = math.Min(minX, p.X-0.01)
+			minY = math.Min(minY, p.Y-0.01)
+			maxX = math.Max(maxX, p.X+0.01)
+			maxY = math.Max(maxY, p.Y+0.01)
+		}
+	}
+
+	// Check obstacles
+	for _, obs := range e.def.Obstacles {
+		minX = math.Min(minX, obs.X)
+		minY = math.Min(minY, obs.Y)
+		maxX = math.Max(maxX, obs.X+obs.Width)
+		maxY = math.Max(maxY, obs.Y+obs.Height)
+	}
+
+	// Check decorative elements
+	for _, dec := range e.def.DecorativeElements {
+		minX = math.Min(minX, dec.X)
+		minY = math.Min(minY, dec.Y)
+		maxX = math.Max(maxX, dec.X+dec.Width)
+		maxY = math.Max(maxY, dec.Y+dec.Height)
+	}
+
+	// Check bases
+	if e.def.PlayerBase.X != 0 || e.def.PlayerBase.Y != 0 {
+		minX = math.Min(minX, e.def.PlayerBase.X-0.05)
+		minY = math.Min(minY, e.def.PlayerBase.Y-0.05)
+		maxX = math.Max(maxX, e.def.PlayerBase.X+0.05)
+		maxY = math.Max(maxY, e.def.PlayerBase.Y+0.05)
+	}
+	if e.def.EnemyBase.X != 0 || e.def.EnemyBase.Y != 0 {
+		minX = math.Min(minX, e.def.EnemyBase.X-0.05)
+		minY = math.Min(minY, e.def.EnemyBase.Y-0.05)
+		maxX = math.Max(maxX, e.def.EnemyBase.X+0.05)
+		maxY = math.Max(maxY, e.def.EnemyBase.Y+0.05)
+	}
+
+	// If no objects found, reset to default
+	if minX >= maxX || minY >= maxY {
+		e.cameraX = 0
+		e.cameraY = 0
+		e.cameraZoom = 1.0
+		return
+	}
+
+	// Calculate required zoom to fit all objects
+	vw, vh := ebiten.WindowSize()
+	vh -= 120 // Account for UI height
+
+	objectWidth := maxX - minX
+	objectHeight := maxY - minY
+
+	if objectWidth <= 0 {
+		objectWidth = 0.1
+	}
+	if objectHeight <= 0 {
+		objectHeight = 0.1
+	}
+
+	zoomX := float64(vw) / (objectWidth * float64(e.bg.Bounds().Dx()))
+	zoomY := float64(vh) / (objectHeight * float64(e.bg.Bounds().Dy()))
+
+	// Use the smaller zoom to ensure everything fits
+	newZoom := math.Min(zoomX, zoomY)
+	newZoom = math.Min(newZoom, e.cameraMaxZoom) // Don't exceed max zoom
+	newZoom = math.Max(newZoom, e.cameraMinZoom) // Don't go below min zoom
+
+	// Calculate camera position to center the objects
+	centerX := (minX + maxX) / 2
+	centerY := (minY + maxY) / 2
+
+	// Convert normalized coordinates to screen coordinates
+	screenCenterX := centerX * float64(e.bg.Bounds().Dx()) * newZoom
+	screenCenterY := centerY * float64(e.bg.Bounds().Dy()) * newZoom
+
+	// Center the camera on the objects
+	e.cameraX = screenCenterX - float64(vw)/2
+	e.cameraY = screenCenterY - float64(vh)/2
+	e.cameraZoom = newZoom
+
+	e.status = fmt.Sprintf("Auto-scaled to fit all objects (zoom: %.2f)", newZoom)
 }
 
 func (e *editor) Draw(screen *ebiten.Image) {
@@ -1695,18 +1849,44 @@ func (e *editor) Draw(screen *ebiten.Image) {
 		borderOffX := offX + (extendedW-mapBorderW)/2
 		borderOffY := offY + (extendedH-mapBorderH)/2
 
+		// Apply configurable frame position and scale
+		frameBorderW := int(float64(mapBorderW) * e.frameScale)
+		frameBorderH := int(float64(mapBorderH) * e.frameScale)
+		frameOffX := borderOffX + int(float64(mapBorderW)*(e.frameX-0.5)*e.frameScale) + (mapBorderW-frameBorderW)/2
+		frameOffY := borderOffY + int(float64(mapBorderH)*(e.frameY-0.5)*e.frameScale) + (mapBorderH-frameBorderH)/2
+
 		// Draw border frame with thick lines
 		borderColor := color.NRGBA{255, 255, 255, 255}
 		borderThickness := 6
 
 		// Top border
-		ebitenutil.DrawRect(screen, float64(borderOffX), float64(borderOffY), float64(mapBorderW), float64(borderThickness), borderColor)
+		ebitenutil.DrawRect(screen, float64(frameOffX), float64(frameOffY), float64(frameBorderW), float64(borderThickness), borderColor)
 		// Bottom border
-		ebitenutil.DrawRect(screen, float64(borderOffX), float64(borderOffY+mapBorderH-borderThickness), float64(mapBorderW), float64(borderThickness), borderColor)
+		ebitenutil.DrawRect(screen, float64(frameOffX), float64(frameOffY+frameBorderH-borderThickness), float64(frameBorderW), float64(borderThickness), borderColor)
 		// Left border
-		ebitenutil.DrawRect(screen, float64(borderOffX), float64(borderOffY), float64(borderThickness), float64(mapBorderH), borderColor)
+		ebitenutil.DrawRect(screen, float64(frameOffX), float64(frameOffY), float64(borderThickness), float64(frameBorderH), borderColor)
 		// Right border
-		ebitenutil.DrawRect(screen, float64(borderOffX+mapBorderW-borderThickness), float64(borderOffY), float64(borderThickness), float64(mapBorderH), borderColor)
+		ebitenutil.DrawRect(screen, float64(frameOffX+frameBorderW-borderThickness), float64(frameOffY), float64(borderThickness), float64(frameBorderH), borderColor)
+
+		// Draw frame manipulation handles when not dragging and Frame layer is active
+		if !e.frameDragging && e.currentLayer == 1 {
+			handleSize := 8
+			handleColor := color.NRGBA{100, 200, 255, 255}
+			// Corner handles for scaling
+			corners := [][2]int{
+				{frameOffX - handleSize/2, frameOffY - handleSize/2},                               // Top-left
+				{frameOffX + frameBorderW - handleSize/2, frameOffY - handleSize/2},                // Top-right
+				{frameOffX + frameBorderW - handleSize/2, frameOffY + frameBorderH - handleSize/2}, // Bottom-right
+				{frameOffX - handleSize/2, frameOffY + frameBorderH - handleSize/2},                // Bottom-left
+			}
+			for _, corner := range corners {
+				ebitenutil.DrawRect(screen, float64(corner[0]), float64(corner[1]), float64(handleSize), float64(handleSize), handleColor)
+			}
+			// Center handle for moving
+			centerX := frameOffX + frameBorderW/2 - handleSize/2
+			centerY := frameOffY + frameBorderH/2 - handleSize/2
+			ebitenutil.DrawRect(screen, float64(centerX), float64(centerY), float64(handleSize), float64(handleSize), color.NRGBA{255, 200, 100, 255})
+		}
 
 		// overlays
 		toX := func(nx float64) int { return borderOffX + int(nx*float64(mapBorderW)) }
@@ -1720,157 +1900,181 @@ func (e *editor) Draw(screen *ebiten.Image) {
 				ebitenutil.DrawLine(screen, float64(offX), float64(y), float64(offX+extendedW), float64(y), color.NRGBA{60, 60, 70, 120})
 			}
 		}
-		for i, r := range e.def.DeployZones {
-			x := toX(r.X)
-			y := toY(r.Y)
-			rw := int(r.W * float64(mapBorderW))
-			rh := int(r.H * float64(mapBorderH))
-			ebitenutil.DrawRect(screen, float64(x), float64(y), float64(rw), float64(rh), color.NRGBA{60, 150, 90, 90})
-			if e.selKind == "deploy" && e.selIndex == i {
-				// border
-				ebitenutil.DrawRect(screen, float64(x), float64(y), float64(rw), 1, color.NRGBA{240, 196, 25, 255})
-				ebitenutil.DrawRect(screen, float64(x), float64(y+rh-1), float64(rw), 1, color.NRGBA{240, 196, 25, 255})
-				ebitenutil.DrawRect(screen, float64(x), float64(y), 1, float64(rh), color.NRGBA{240, 196, 25, 255})
-				ebitenutil.DrawRect(screen, float64(x+rw-1), float64(y), 1, float64(rh), color.NRGBA{240, 196, 25, 255})
-				// handles - make them larger to match hit areas
-				handles := [][2]int{{x, y}, {x + rw, y}, {x + rw, y + rh}, {x, y + rh}}
-				for _, h := range handles {
-					ebitenutil.DrawRect(screen, float64(h[0]-6), float64(h[1]-6), 12, 12, color.NRGBA{240, 196, 25, 255})
-				}
-			}
-		}
-		for i, p := range e.def.MeetingStones {
-			col := color.NRGBA{140, 120, 220, 255}
-			if e.selKind == "stone" && e.selIndex == i {
-				col = color.NRGBA{240, 196, 25, 255}
-			}
-			ebitenutil.DrawRect(screen, float64(toX(p.X)-2), float64(toY(p.Y)-2), 4, 4, col)
-		}
-		for i, p := range e.def.GoldMines {
-			col := color.NRGBA{200, 170, 40, 255}
-			if e.selKind == "mine" && e.selIndex == i {
-				col = color.NRGBA{240, 196, 25, 255}
-			}
-			ebitenutil.DrawRect(screen, float64(toX(p.X)-3), float64(toY(p.Y)-3), 6, 6, col)
-		}
-		drawPath := func(pts []protocol.PointF, col color.NRGBA) {
-			for i := 1; i < len(pts); i++ {
-				x0, y0 := toX(pts[i-1].X), toY(pts[i-1].Y)
-				x1, y1 := toX(pts[i].X), toY(pts[i].Y)
-				ebitenutil.DrawLine(screen, float64(x0), float64(y0), float64(x1), float64(y1), col)
-			}
-		}
-		for i, ln := range e.def.Lanes {
-			col := color.NRGBA{90, 160, 220, 255}
-			if ln.Dir < 0 {
-				col = color.NRGBA{220, 110, 110, 255}
-			}
-			if e.selKind == "lane" && e.selIndex == i {
-				col = color.NRGBA{240, 196, 25, 255}
-			}
-			drawPath(ln.Points, col)
-		}
-		if len(e.tmpLane) > 0 {
-			drawPath(e.tmpLane, color.NRGBA{200, 220, 90, 255})
-		}
-		for i, obs := range e.def.Obstacles {
-			x := toX(obs.X)
-			y := toY(obs.Y)
-			w := int(obs.Width * float64(dispW))
-			h := int(obs.Height * float64(dispH))
+		// Draw layers based on current layer or show all layers
+		showDeploy := e.showAllLayers || e.currentLayer == 2 || e.currentLayer == 7
+		showBG := e.showAllLayers || e.currentLayer == 0 || e.currentLayer == 7
+		showLanes := e.showAllLayers || e.currentLayer == 3 || e.currentLayer == 7
+		showObstacles := e.showAllLayers || e.currentLayer == 4 || e.currentLayer == 7
+		showDecorative := e.showAllLayers || e.currentLayer == 5 || e.currentLayer == 7
+		showBases := e.showAllLayers || e.currentLayer == 6 || e.currentLayer == 7
 
-			// Try to draw the actual obstacle image if available
-			drewImage := false
-			if obs.Image != "" {
-				// Try multiple paths for obstacle images
-				obstaclePaths := []string{
-					filepath.Join("..", "..", "client", "internal", "game", "assets", "obstacles", obs.Image), // From mapeditor to client assets
-					filepath.Join("obstacles", obs.Image),                                                     // Local obstacles directory
-					obs.Image,                                                                                 // Original path
-				}
-
-				for _, obstaclePath := range obstaclePaths {
-					if img, _, err := ebitenutil.NewImageFromFile(obstaclePath); err == nil {
-						op := &ebiten.DrawImageOptions{}
-						scaleX := float64(w) / float64(img.Bounds().Dx())
-						scaleY := float64(h) / float64(img.Bounds().Dy())
-						op.GeoM.Scale(scaleX, scaleY)
-						op.GeoM.Translate(float64(x), float64(y))
-						screen.DrawImage(img, op)
-						drewImage = true
-						break
+		// Draw deploy zones if current layer is 2 (Deploy) or show all layers
+		if showDeploy {
+			for i, r := range e.def.DeployZones {
+				x := toX(r.X)
+				y := toY(r.Y)
+				rw := int(r.W * float64(mapBorderW))
+				rh := int(r.H * float64(mapBorderH))
+				ebitenutil.DrawRect(screen, float64(x), float64(y), float64(rw), float64(rh), color.NRGBA{60, 150, 90, 90})
+				if e.selKind == "deploy" && e.selIndex == i {
+					// border
+					ebitenutil.DrawRect(screen, float64(x), float64(y), float64(rw), 1, color.NRGBA{240, 196, 25, 255})
+					ebitenutil.DrawRect(screen, float64(x), float64(y+rh-1), float64(rw), 1, color.NRGBA{240, 196, 25, 255})
+					ebitenutil.DrawRect(screen, float64(x), float64(y), 1, float64(rh), color.NRGBA{240, 196, 25, 255})
+					ebitenutil.DrawRect(screen, float64(x+rw-1), float64(y), 1, float64(rh), color.NRGBA{240, 196, 25, 255})
+					// handles - make them larger to match hit areas
+					handles := [][2]int{{x, y}, {x + rw, y}, {x + rw, y + rh}, {x, y + rh}}
+					for _, h := range handles {
+						ebitenutil.DrawRect(screen, float64(h[0]-6), float64(h[1]-6), 12, 12, color.NRGBA{240, 196, 25, 255})
 					}
 				}
 			}
-
-			// Fallback to rectangle if image couldn't be loaded
-			if !drewImage {
-				ebitenutil.DrawRect(screen, float64(x), float64(y), float64(w), float64(h), color.NRGBA{120, 80, 40, 120})
-			}
-
-			if e.selKind == "obstacle" && e.selIndex == i {
-				// border
-				ebitenutil.DrawRect(screen, float64(x), float64(y), float64(w), 1, color.NRGBA{240, 196, 25, 255})
-				ebitenutil.DrawRect(screen, float64(x), float64(y+h-1), float64(w), 1, color.NRGBA{240, 196, 25, 255})
-				ebitenutil.DrawRect(screen, float64(x), float64(y), 1, float64(h), color.NRGBA{240, 196, 25, 255})
-				ebitenutil.DrawRect(screen, float64(x+w-1), float64(y), 1, float64(h), color.NRGBA{240, 196, 25, 255})
-				// handles
-				handles := [][2]int{{x, y}, {x + w, y}, {x + w, y + h}, {x, y + h}}
-				for _, h := range handles {
-					ebitenutil.DrawRect(screen, float64(h[0]-6), float64(h[1]-6), 12, 12, color.NRGBA{240, 196, 25, 255})
+		}
+		// Draw meeting stones and gold mines if BG layer is active (layer 0) or show all layers
+		if showBG {
+			for i, p := range e.def.MeetingStones {
+				col := color.NRGBA{140, 120, 220, 255}
+				if e.selKind == "stone" && e.selIndex == i {
+					col = color.NRGBA{240, 196, 25, 255}
 				}
+				ebitenutil.DrawRect(screen, float64(toX(p.X)-2), float64(toY(p.Y)-2), 4, 4, col)
+			}
+			for i, p := range e.def.GoldMines {
+				col := color.NRGBA{200, 170, 40, 255}
+				if e.selKind == "mine" && e.selIndex == i {
+					col = color.NRGBA{240, 196, 25, 255}
+				}
+				ebitenutil.DrawRect(screen, float64(toX(p.X)-3), float64(toY(p.Y)-3), 6, 6, col)
 			}
 		}
-		for i, dec := range e.def.DecorativeElements {
-			x := toX(dec.X)
-			y := toY(dec.Y)
-			w := int(dec.Width * float64(dispW))
-			h := int(dec.Height * float64(dispH))
+		// Draw lanes if current layer is 3 (Lanes) or show all layers
+		if showLanes {
+			drawPath := func(pts []protocol.PointF, col color.NRGBA) {
+				for i := 1; i < len(pts); i++ {
+					x0, y0 := toX(pts[i-1].X), toY(pts[i-1].Y)
+					x1, y1 := toX(pts[i].X), toY(pts[i].Y)
+					ebitenutil.DrawLine(screen, float64(x0), float64(y0), float64(x1), float64(y1), col)
+				}
+			}
+			for i, ln := range e.def.Lanes {
+				col := color.NRGBA{90, 160, 220, 255}
+				if ln.Dir < 0 {
+					col = color.NRGBA{220, 110, 110, 255}
+				}
+				if e.selKind == "lane" && e.selIndex == i {
+					col = color.NRGBA{240, 196, 25, 255}
+				}
+				drawPath(ln.Points, col)
+			}
+			if len(e.tmpLane) > 0 {
+				drawPath(e.tmpLane, color.NRGBA{200, 220, 90, 255})
+			}
+		}
+		// Draw obstacles if current layer is 4 (Obstacles) or show all layers
+		if showObstacles {
+			for i, obs := range e.def.Obstacles {
+				x := toX(obs.X)
+				y := toY(obs.Y)
+				w := int(obs.Width * float64(dispW))
+				h := int(obs.Height * float64(dispH))
 
-			// Try to draw the actual decorative image if available
-			drewImage := false
-			if dec.Image != "" {
-				// Try multiple paths for decorative images
-				decorativePaths := []string{
-					filepath.Join("..", "..", "client", "internal", "game", "assets", "obstacles", dec.Image), // From mapeditor to client assets
-					filepath.Join("decorative", dec.Image),                                                    // Local decorative directory
-					dec.Image,                                                                                 // Original path
+				// Try to draw the actual obstacle image if available
+				drewImage := false
+				if obs.Image != "" {
+					// Try multiple paths for obstacle images
+					obstaclePaths := []string{
+						filepath.Join("..", "..", "client", "internal", "game", "assets", "obstacles", obs.Image), // From mapeditor to client assets
+						filepath.Join("obstacles", obs.Image),                                                     // Local obstacles directory
+						obs.Image,                                                                                 // Original path
+					}
+
+					for _, obstaclePath := range obstaclePaths {
+						if img, _, err := ebitenutil.NewImageFromFile(obstaclePath); err == nil {
+							op := &ebiten.DrawImageOptions{}
+							scaleX := float64(w) / float64(img.Bounds().Dx())
+							scaleY := float64(h) / float64(img.Bounds().Dy())
+							op.GeoM.Scale(scaleX, scaleY)
+							op.GeoM.Translate(float64(x), float64(y))
+							screen.DrawImage(img, op)
+							drewImage = true
+							break
+						}
+					}
 				}
 
-				for _, decorativePath := range decorativePaths {
-					if img, _, err := ebitenutil.NewImageFromFile(decorativePath); err == nil {
-						op := &ebiten.DrawImageOptions{}
-						scaleX := float64(w) / float64(img.Bounds().Dx())
-						scaleY := float64(h) / float64(img.Bounds().Dy())
-						op.GeoM.Scale(scaleX, scaleY)
-						op.GeoM.Translate(float64(x), float64(y))
-						screen.DrawImage(img, op)
-						drewImage = true
-						break
+				// Fallback to rectangle if image couldn't be loaded
+				if !drewImage {
+					ebitenutil.DrawRect(screen, float64(x), float64(y), float64(w), float64(h), color.NRGBA{120, 80, 40, 120})
+				}
+
+				if e.selKind == "obstacle" && e.selIndex == i {
+					// border
+					ebitenutil.DrawRect(screen, float64(x), float64(y), float64(w), 1, color.NRGBA{240, 196, 25, 255})
+					ebitenutil.DrawRect(screen, float64(x), float64(y+h-1), float64(w), 1, color.NRGBA{240, 196, 25, 255})
+					ebitenutil.DrawRect(screen, float64(x), float64(y), 1, float64(h), color.NRGBA{240, 196, 25, 255})
+					ebitenutil.DrawRect(screen, float64(x+w-1), float64(y), 1, float64(h), color.NRGBA{240, 196, 25, 255})
+					// handles
+					handles := [][2]int{{x, y}, {x + w, y}, {x + w, y + h}, {x, y + h}}
+					for _, h := range handles {
+						ebitenutil.DrawRect(screen, float64(h[0]-6), float64(h[1]-6), 12, 12, color.NRGBA{240, 196, 25, 255})
 					}
 				}
 			}
+		}
 
-			// Fallback to rectangle if image couldn't be loaded
-			if !drewImage {
-				ebitenutil.DrawRect(screen, float64(x), float64(y), float64(w), float64(h), color.NRGBA{200, 150, 200, 120})
-			}
+		// Draw decorative elements if current layer is 5 (Assets) or show all layers
+		if showDecorative {
+			for i, dec := range e.def.DecorativeElements {
+				x := toX(dec.X)
+				y := toY(dec.Y)
+				w := int(dec.Width * float64(dispW))
+				h := int(dec.Height * float64(dispH))
 
-			if e.selKind == "decorative" && e.selIndex == i {
-				// border
-				ebitenutil.DrawRect(screen, float64(x), float64(y), float64(w), 1, color.NRGBA{240, 196, 25, 255})
-				ebitenutil.DrawRect(screen, float64(x), float64(y+h-1), float64(w), 1, color.NRGBA{240, 196, 25, 255})
-				ebitenutil.DrawRect(screen, float64(x), float64(y), 1, float64(h), color.NRGBA{240, 196, 25, 255})
-				ebitenutil.DrawRect(screen, float64(x+w-1), float64(y), 1, float64(h), color.NRGBA{240, 196, 25, 255})
-				// handles
-				handles := [][2]int{{x, y}, {x + w, y}, {x + w, y + h}, {x, y + h}}
-				for _, h := range handles {
-					ebitenutil.DrawRect(screen, float64(h[0]-6), float64(h[1]-6), 12, 12, color.NRGBA{240, 196, 25, 255})
+				// Try to draw the actual decorative image if available
+				drewImage := false
+				if dec.Image != "" {
+					// Try multiple paths for decorative images
+					decorativePaths := []string{
+						filepath.Join("..", "..", "client", "internal", "game", "assets", "obstacles", dec.Image), // From mapeditor to client assets
+						filepath.Join("decorative", dec.Image),                                                    // Local decorative directory
+						dec.Image,                                                                                 // Original path
+					}
+
+					for _, decorativePath := range decorativePaths {
+						if img, _, err := ebitenutil.NewImageFromFile(decorativePath); err == nil {
+							op := &ebiten.DrawImageOptions{}
+							scaleX := float64(w) / float64(img.Bounds().Dx())
+							scaleY := float64(h) / float64(img.Bounds().Dy())
+							op.GeoM.Scale(scaleX, scaleY)
+							op.GeoM.Translate(float64(x), float64(y))
+							screen.DrawImage(img, op)
+							drewImage = true
+							break
+						}
+					}
+				}
+
+				// Fallback to rectangle if image couldn't be loaded
+				if !drewImage {
+					ebitenutil.DrawRect(screen, float64(x), float64(y), float64(w), float64(h), color.NRGBA{200, 150, 200, 120})
+				}
+
+				if e.selKind == "decorative" && e.selIndex == i {
+					// border
+					ebitenutil.DrawRect(screen, float64(x), float64(y), float64(w), 1, color.NRGBA{240, 196, 25, 255})
+					ebitenutil.DrawRect(screen, float64(x), float64(y+h-1), float64(w), 1, color.NRGBA{240, 196, 25, 255})
+					ebitenutil.DrawRect(screen, float64(x), float64(y), 1, float64(h), color.NRGBA{240, 196, 25, 255})
+					ebitenutil.DrawRect(screen, float64(x+w-1), float64(y), 1, float64(h), color.NRGBA{240, 196, 25, 255})
+					// handles
+					handles := [][2]int{{x, y}, {x + w, y}, {x + w, y + h}, {x, y + h}}
+					for _, h := range handles {
+						ebitenutil.DrawRect(screen, float64(h[0]-6), float64(h[1]-6), 12, 12, color.NRGBA{240, 196, 25, 255})
+					}
 				}
 			}
 		}
-		// Draw player base
-		if e.def.PlayerBase.X != 0 || e.def.PlayerBase.Y != 0 {
+		// Draw player base (if Bases layer is active or show all layers)
+		if showBases && (e.def.PlayerBase.X != 0 || e.def.PlayerBase.Y != 0) {
 			x := toX(e.def.PlayerBase.X)
 			y := toY(e.def.PlayerBase.Y)
 
@@ -1929,8 +2133,8 @@ func (e *editor) Draw(screen *ebiten.Image) {
 				ebitenutil.DrawRect(screen, float64(x+96), float64(y-2), 2, float64(100), color.NRGBA{240, 196, 25, 255})
 			}
 		}
-		// Draw enemy base
-		if e.def.EnemyBase.X != 0 || e.def.EnemyBase.Y != 0 {
+		// Draw enemy base (if Bases layer is active or show all layers)
+		if showBases && (e.def.EnemyBase.X != 0 || e.def.EnemyBase.Y != 0) {
 			x := toX(e.def.EnemyBase.X)
 			y := toY(e.def.EnemyBase.Y)
 
@@ -1990,25 +2194,27 @@ func (e *editor) Draw(screen *ebiten.Image) {
 			}
 		}
 	}
-	// Enhanced toolbar with better styling and fixed text positioning
-	toolLabels := []string{"Deploy", "Stones", "Mines", "Lanes", "Obstacles", "Decorative"}
-	toolIcons := []string{"", "", "", "", "", ""}
-	toolColors := []color.NRGBA{
-		{0x4a, 0x9e, 0xff, 0xff}, // Blue for deploy
-		{0x9c, 0x7a, 0xff, 0xff}, // Purple for stones
-		{0xff, 0xd7, 0x00, 0xff}, // Gold for mines
-		{0x4a, 0xff, 0x7a, 0xff}, // Green for lanes
-		{0x8b, 0x45, 0x13, 0xff}, // Brown for obstacles
-		{0xff, 0x6b, 0x6b, 0xff}, // Pink for decorative
+
+	// Layer selection buttons (center - more accessible)
+	layerNames := []string{"BG", "Frame", "Deploy", "Lanes", "Obstacles", "Assets", "Player Bases", "All"}
+	layerColors := []color.NRGBA{
+		{0x6a, 0x6a, 0x7a, 0xff}, // Gray for BG
+		{0xff, 0xff, 0x00, 0xff}, // Yellow for Frame
+		{0x4a, 0x9e, 0xff, 0xff}, // Blue for Deploy
+		{0x4a, 0xff, 0x7a, 0xff}, // Green for Lanes
+		{0x8b, 0x45, 0x13, 0xff}, // Brown for Obstacles
+		{0xff, 0x6b, 0x6b, 0xff}, // Pink for Assets
+		{0xff, 0x8a, 0x4a, 0xff}, // Orange for Bases
+		{0x8a, 0x8a, 0x9a, 0xff}, // Gray for All (matching other buttons)
 	}
 
-	for i, lb := range toolLabels {
-		x, y, w, h := 8, 8+i*40, 100, 36
+	for i := 0; i < len(layerNames); i++ {
+		x, y, w, h := 150, 8+i*32, 80, 28
 
 		// Background with gradient effect
 		baseCol := color.NRGBA{0x2a, 0x2a, 0x3a, 0xff}
-		if e.tool == i {
-			baseCol = toolColors[i]
+		if e.currentLayer == i {
+			baseCol = layerColors[i]
 		}
 
 		// Draw main button with shadow effect
@@ -2017,7 +2223,7 @@ func (e *editor) Draw(screen *ebiten.Image) {
 
 		// Add border
 		borderCol := color.NRGBA{0x5a, 0x5a, 0x6a, 0xff}
-		if e.tool == i {
+		if e.currentLayer == i {
 			borderCol = color.NRGBA{0xff, 0xff, 0xff, 0xff}
 		}
 		ebitenutil.DrawRect(screen, float64(x), float64(y), float64(w), 1, borderCol)
@@ -2025,45 +2231,17 @@ func (e *editor) Draw(screen *ebiten.Image) {
 		ebitenutil.DrawRect(screen, float64(x), float64(y), 1, float64(h), borderCol)
 		ebitenutil.DrawRect(screen, float64(x+w-1), float64(y), 1, float64(h), borderCol)
 
-		// Draw icon and text (fixed positioning)
-		iconX := x + 8
-		textX := x + 8
-		text.Draw(screen, toolIcons[i], basicfont.Face7x13, iconX, y+16, color.White)
-		text.Draw(screen, lb, basicfont.Face7x13, textX, y+30, color.White)
+		// Draw text (centered)
+		textW := len(layerNames[i]) * 7
+		textX := x + (w-textW)/2
+		text.Draw(screen, layerNames[i], basicfont.Face7x13, textX, y+18, color.White)
 
 		// Selection indicator
-		if e.tool == i {
+		if e.currentLayer == i {
 			ebitenutil.DrawRect(screen, float64(x-2), float64(y), 3, float64(h), color.NRGBA{0xff, 0xff, 0xff, 0xff})
 		}
 	}
 
-	// Quick action buttons (repositioned)
-	quickActions := []string{"Grid", "Snap", "Undo", "Redo"}
-	quickColors := []color.NRGBA{
-		{0x6a, 0x6a, 0x7a, 0xff},
-		{0x7a, 0x6a, 0x8a, 0xff},
-		{0x8a, 0x7a, 0x6a, 0xff},
-		{0x6a, 0x8a, 0x7a, 0xff},
-	}
-
-	for i, action := range quickActions {
-		x, y, w, h := 120, 8+i*40, 80, 36
-
-		col := quickColors[i]
-		if (action == "Grid" && e.showGrid) || (action == "Snap" && e.showGrid) {
-			col = color.NRGBA{0xaa, 0x77, 0x55, 0xff}
-		}
-
-		// Shadow effect
-		ebitenutil.DrawRect(screen, float64(x+1), float64(y+1), float64(w), float64(h), color.NRGBA{0x4a, 0x4a, 0x5a, 0xff})
-		ebitenutil.DrawRect(screen, float64(x), float64(y), float64(w), float64(h), col)
-		ebitenutil.DrawRect(screen, float64(x), float64(y), float64(w), 1, color.NRGBA{0x9a, 0x9a, 0xaa, 0xff})
-		ebitenutil.DrawRect(screen, float64(x), float64(y+h-1), float64(w), 1, color.NRGBA{0x5a, 0x5a, 0x6a, 0xff})
-		ebitenutil.DrawRect(screen, float64(x), float64(y), 1, float64(h), color.NRGBA{0x9a, 0x9a, 0xaa, 0xff})
-		ebitenutil.DrawRect(screen, float64(x+w-1), float64(y), 1, float64(h), color.NRGBA{0x5a, 0x5a, 0x6a, 0xff})
-
-		text.Draw(screen, action, basicfont.Face7x13, x+8, y+20, color.White)
-	}
 	// Map name input (top right, under background info)
 	mapNameY := 72
 	mapNameInputW := 200
@@ -2806,6 +2984,12 @@ func main() {
 		statusLogX:            8,
 		statusLogY:            0, // Will be set dynamically
 		statusLogDragging:     false,
+		// Initialize layer system
+		currentLayer:  0, // Start with BG layer
+		showAllLayers: false,
+		// Initialize base management
+		playerBaseExists: false,
+		enemyBaseExists:  false,
 		// Initialize camera for map editor
 		cameraX:        0,
 		cameraY:        0,
@@ -2813,6 +2997,13 @@ func main() {
 		cameraMinZoom:  0.1,
 		cameraMaxZoom:  2.0,
 		cameraDragging: false,
+		// Initialize frame for map editor
+		frameX:        0.5,
+		frameY:        0.5,
+		frameWidth:    1.0,
+		frameHeight:   1.0,
+		frameScale:    1.0,
+		frameDragging: false,
 	}
 
 	// If we have a token, try to connect immediately

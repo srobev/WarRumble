@@ -1,11 +1,10 @@
 {
-  "id": "west_keep",
-  "name": "Western Keep",
+  "id": "new-map",
+  "name": "New Map",
   "width": 0,
   "height": 0,
-  "bg": "forest_glade.png",
-  "frameX": 0.5019477989871446,
-  "frameY": 0.41565743944636696,
+  "frameX": 0.5,
+  "frameY": 0.5,
   "frameWidth": 1,
   "frameHeight": 1,
   "deployZones": [

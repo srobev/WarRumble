@@ -1154,6 +1154,82 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
+// createBlizzardCircleEffect - DISABLED: Old blizzard effect replaced with ice shards
+// func (ps *ParticleSystem) createBlizzardCircleEffect(x, y float64) {
+// 	// This function is disabled - new ice shard effect is used instead
+// }
+
+// createFrostboltEffect - DISABLED: Old blizzard effect replaced with ice shards
+// func (ps *ParticleSystem) createFrostboltEffect(x, y float64) {
+// 	// This function is disabled - new ice shard effect is used instead
+// }
+
+// createFrostboltRainEffect creates frostbolts falling from the sky towards the circle
+func (ps *ParticleSystem) createFrostboltRainEffect(x, y float64) {
+	radius := 120.0
+
+	// Create multiple frostbolt streams falling from the sky
+	for i := 0; i < 5; i++ {
+		// Calculate position offset for each stream
+		angle := float64(i) * 2 * math.Pi / 5
+		offsetX := math.Cos(angle) * radius * 0.7
+
+		// Create frostbolt particles falling from above towards the circle
+		emitter := NewParticleEmitter(x+offsetX, y-radius-150, 20) // Start higher above the circle
+		emitter.StartColor = color.NRGBA{200, 230, 255, 255}       // Bright light blue frostbolts
+		emitter.EndColor = color.NRGBA{150, 180, 255, 0}
+		emitter.Shape = "circle"
+		emitter.Spread = math.Pi / 6 // Narrow spread toward the target area
+		emitter.Speed = 350          // Fast falling speed like projectiles
+		emitter.SpeedVariance = 50
+		emitter.Life = 1.8
+		emitter.LifeVariance = 0.4
+		emitter.Size = 3
+		emitter.SizeVariance = 1
+		emitter.EmissionRate = 60
+		emitter.Duration = 5.0 // Last for 5 seconds like the spell
+		emitter.Gravity = 120  // Gravity for projectile-like falling
+		emitter.Drag = 0.88
+		ps.AddEmitter(emitter)
+
+		// Add trailing spark effects behind the falling frostbolts
+		trailEmitter := NewParticleEmitter(x+offsetX, y-radius-120, 15)
+		trailEmitter.StartColor = color.NRGBA{255, 255, 255, 220} // Bright white trails
+		trailEmitter.EndColor = color.NRGBA{200, 220, 255, 0}
+		trailEmitter.Shape = "circle"
+		trailEmitter.Spread = math.Pi / 4
+		trailEmitter.Speed = 300
+		trailEmitter.SpeedVariance = 40
+		trailEmitter.Life = 1.2
+		trailEmitter.LifeVariance = 0.3
+		trailEmitter.Size = 1.5
+		trailEmitter.SizeVariance = 0.5
+		trailEmitter.EmissionRate = 45
+		trailEmitter.Duration = 5.0
+		trailEmitter.Gravity = 100
+		trailEmitter.Drag = 0.90
+		ps.AddEmitter(trailEmitter)
+	}
+
+	// Add impact sparkles when frostbolts hit the ground
+	impactEmitter := NewParticleEmitter(x, y, 40)
+	impactEmitter.StartColor = color.NRGBA{255, 255, 255, 255} // Bright white impacts
+	impactEmitter.EndColor = color.NRGBA{150, 180, 255, 0}
+	impactEmitter.Shape = "star"
+	impactEmitter.Spread = 2 * math.Pi
+	impactEmitter.Speed = 60
+	impactEmitter.SpeedVariance = 25
+	impactEmitter.Life = 1.0
+	impactEmitter.LifeVariance = 0.4
+	impactEmitter.Size = 2.5
+	impactEmitter.SizeVariance = 0.8
+	impactEmitter.EmissionRate = 70
+	impactEmitter.Duration = 5.0
+	impactEmitter.Gravity = -20 // Sparkles float up slightly
+	impactEmitter.Drag = 0.93
+	ps.AddEmitter(impactEmitter)
+}
+
 // CreateVictoryCelebration creates a spectacular victory celebration effect
 func (ps *ParticleSystem) CreateVictoryCelebration() {
 	// Create multiple emitters for a spectacular celebration
@@ -1868,4 +1944,441 @@ func (ps *ParticleSystem) CreateAoEImpactEffect(x, y float64, damage int) {
 	emitter4.Gravity = 0
 	emitter4.Drag = 0.95
 	ps.AddEmitter(emitter4)
+}
+
+// CreateSpellCastEffect creates spell casting visual effects
+func (ps *ParticleSystem) CreateSpellCastEffect(x, y float64, spellEffect string) {
+	switch spellEffect {
+	case "arcane_blast":
+		emitter := NewParticleEmitter(x, y, 25)
+		emitter.StartColor = color.NRGBA{150, 100, 255, 255} // Purple
+		emitter.EndColor = color.NRGBA{100, 50, 255, 0}      // Purple to transparent
+		emitter.Shape = "star"
+		emitter.Spread = 2 * math.Pi
+		emitter.Speed = 100
+		emitter.SpeedVariance = 30
+		emitter.Life = 0.8
+		emitter.LifeVariance = 0.3
+		emitter.Size = 3
+		emitter.SizeVariance = 1
+		emitter.EmissionRate = 80
+		emitter.Duration = 0.4
+		emitter.Gravity = 0
+		emitter.Drag = 0.9
+		ps.AddEmitter(emitter)
+
+	case "blizzard":
+		// Blizzard area of effect radius
+		blizzardRadius := 120.0
+
+		// Create intense ice shard storm focused on target location
+		for i := 0; i < 20; i++ {
+			// Create ice shards falling directly onto the target spot
+			angle := rand.Float64() * 2 * math.Pi
+			distance := rand.Float64() * blizzardRadius * 0.5 // Concentrate closer to center
+			startX := x + math.Cos(angle)*distance
+			startY := y - blizzardRadius*0.4 - rand.Float64()*50 // Start higher above
+
+			emitter := NewParticleEmitter(startX, startY, 15)
+			emitter.StartColor = color.NRGBA{200, 230, 255, 255} // Bright ice blue
+			emitter.EndColor = color.NRGBA{150, 200, 255, 150}   // Fade to light blue
+			emitter.Shape = "circle"
+			emitter.Spread = math.Pi / 8 // Very narrow downward spread
+			emitter.Speed = 250          // Fast falling speed
+			emitter.SpeedVariance = 50
+			emitter.Life = 2.0
+			emitter.LifeVariance = 0.5
+			emitter.Size = 4 // Sharp, visible ice shards
+			emitter.SizeVariance = 2
+			emitter.EmissionRate = 60
+			emitter.Duration = 5.0
+			emitter.Gravity = 150 // Heavy gravity for realistic falling
+			emitter.Drag = 0.85
+			ps.AddEmitter(emitter)
+		}
+
+		// Create swirling snow effect around the target
+		for i := 0; i < 6; i++ {
+			angle := float64(i) * math.Pi / 3
+			swirlX := x + math.Cos(angle)*blizzardRadius*0.3
+			swirlY := y + math.Sin(angle)*blizzardRadius*0.3
+
+			swirlEmitter := NewParticleEmitter(swirlX, swirlY, 25)
+			swirlEmitter.StartColor = color.NRGBA{220, 240, 255, 180} // Very light blue-white
+			swirlEmitter.EndColor = color.NRGBA{180, 220, 255, 50}    // Fade to light blue
+			swirlEmitter.Shape = "circle"
+			swirlEmitter.Spread = 2 * math.Pi
+			swirlEmitter.Speed = 30 // Gentle swirling motion
+			swirlEmitter.SpeedVariance = 15
+			swirlEmitter.Life = 4.0
+			swirlEmitter.LifeVariance = 1.0
+			swirlEmitter.Size = 2 // Small snow particles
+			swirlEmitter.SizeVariance = 1
+			swirlEmitter.EmissionRate = 50
+			swirlEmitter.Duration = 5.0
+			swirlEmitter.Gravity = -10 // Slight upward drift
+			swirlEmitter.Drag = 0.95
+			ps.AddEmitter(swirlEmitter)
+		}
+
+		// Add intense sparkle effects at the center
+		centerSparkleEmitter := NewParticleEmitter(x, y, 30)
+		centerSparkleEmitter.StartColor = color.NRGBA{255, 255, 255, 255} // Pure white
+		centerSparkleEmitter.EndColor = color.NRGBA{200, 230, 255, 100}   // Fade to ice blue
+		centerSparkleEmitter.Shape = "star"
+		centerSparkleEmitter.Spread = 2 * math.Pi
+		centerSparkleEmitter.Speed = 60
+		centerSparkleEmitter.SpeedVariance = 20
+		centerSparkleEmitter.Life = 1.5
+		centerSparkleEmitter.LifeVariance = 0.5
+		centerSparkleEmitter.Size = 5 // Bright, visible sparkles
+		centerSparkleEmitter.SizeVariance = 2
+		centerSparkleEmitter.EmissionRate = 80
+		centerSparkleEmitter.Duration = 5.0
+		centerSparkleEmitter.Gravity = -30 // Sparkles shoot upward
+		centerSparkleEmitter.Drag = 0.9
+		ps.AddEmitter(centerSparkleEmitter)
+
+		// Add ground impact effects
+		impactEmitter := NewParticleEmitter(x, y, 20)
+		impactEmitter.StartColor = color.NRGBA{150, 200, 255, 200} // Light blue
+		impactEmitter.EndColor = color.NRGBA{100, 150, 200, 0}     // Fade to transparent
+		impactEmitter.Shape = "circle"
+		impactEmitter.Spread = 2 * math.Pi
+		impactEmitter.Speed = 80
+		impactEmitter.SpeedVariance = 30
+		impactEmitter.Life = 1.0
+		impactEmitter.LifeVariance = 0.3
+		impactEmitter.Size = 8
+		impactEmitter.SizeVariance = 4
+		impactEmitter.EmissionRate = 100
+		impactEmitter.Duration = 5.0
+		impactEmitter.Gravity = 50 // Ground impact effect
+		impactEmitter.Drag = 0.92
+		ps.AddEmitter(impactEmitter)
+
+		// Add perimeter frost ring
+		for i := 0; i < 12; i++ {
+			angle := float64(i) * 2 * math.Pi / 12
+			ringX := x + math.Cos(angle)*blizzardRadius*0.7
+			ringY := y + math.Sin(angle)*blizzardRadius*0.7
+
+			ringEmitter := NewParticleEmitter(ringX, ringY, 10)
+			ringEmitter.StartColor = color.NRGBA{180, 220, 255, 160} // Light blue ring
+			ringEmitter.EndColor = color.NRGBA{130, 180, 255, 40}    // Fade to transparent
+			ringEmitter.Shape = "circle"
+			ringEmitter.Spread = math.Pi / 4
+			ringEmitter.Speed = 20
+			ringEmitter.SpeedVariance = 8
+			ringEmitter.Life = 3.0
+			ringEmitter.LifeVariance = 0.8
+			ringEmitter.Size = 3
+			ringEmitter.SizeVariance = 1
+			ringEmitter.EmissionRate = 25
+			ringEmitter.Duration = 5.0
+			ringEmitter.Gravity = 0
+			ringEmitter.Drag = 0.96
+			ps.AddEmitter(ringEmitter)
+		}
+
+	case "chain_lightning":
+		// Primary lightning strike from above
+		emitter := NewParticleEmitter(x, y-150, 25)          // Start 150 pixels above target
+		emitter.StartColor = color.NRGBA{200, 220, 255, 255} // Bright blue-white
+		emitter.EndColor = color.NRGBA{100, 150, 255, 0}     // Blue to transparent
+		emitter.Shape = "star"
+		emitter.Spread = math.Pi / 6 // Narrow downward spread
+		emitter.Speed = 400          // Fast lightning speed
+		emitter.SpeedVariance = 50
+		emitter.Life = 0.8
+		emitter.LifeVariance = 0.2
+		emitter.Size = 6
+		emitter.SizeVariance = 2
+		emitter.EmissionRate = 150
+		emitter.Duration = 0.4
+		emitter.Gravity = 0
+		emitter.Drag = 0.9
+		ps.AddEmitter(emitter)
+
+		// Secondary sparks - smaller, faster particles
+		sparkEmitter := NewParticleEmitter(x, y-120, 20)
+		sparkEmitter.StartColor = color.NRGBA{255, 255, 255, 255} // Pure white
+		sparkEmitter.EndColor = color.NRGBA{150, 200, 255, 0}     // Blue-white to transparent
+		sparkEmitter.Shape = "circle"
+		sparkEmitter.Spread = math.Pi / 4
+		sparkEmitter.Speed = 300
+		sparkEmitter.SpeedVariance = 100
+		sparkEmitter.Life = 0.6
+		sparkEmitter.LifeVariance = 0.3
+		sparkEmitter.Size = 2
+		sparkEmitter.SizeVariance = 1
+		sparkEmitter.EmissionRate = 100
+		sparkEmitter.Duration = 0.3
+		sparkEmitter.Gravity = 50
+		sparkEmitter.Drag = 0.95
+		ps.AddEmitter(sparkEmitter)
+
+		// Impact flash at target location
+		impactEmitter := NewParticleEmitter(x, y, 15)
+		impactEmitter.StartColor = color.NRGBA{150, 200, 255, 255} // Bright blue
+		impactEmitter.EndColor = color.NRGBA{50, 100, 200, 0}      // Dark blue to transparent
+		impactEmitter.Shape = "star"
+		impactEmitter.Spread = 2 * math.Pi
+		impactEmitter.Speed = 100
+		impactEmitter.SpeedVariance = 30
+		impactEmitter.Life = 0.4
+		impactEmitter.LifeVariance = 0.1
+		impactEmitter.Size = 8
+		impactEmitter.SizeVariance = 3
+		impactEmitter.EmissionRate = 80
+		impactEmitter.Duration = 0.2
+		impactEmitter.Gravity = 0
+		impactEmitter.Drag = 0.9
+		ps.AddEmitter(impactEmitter)
+
+		// Chain lightning to nearby enemies
+		chainRange := 80.0
+		nearbyEnemies := []struct{ x, y float64 }{
+			{x + chainRange*0.8, y + chainRange*0.6},
+			{x - chainRange*0.7, y - chainRange*0.5},
+		}
+
+		for _, enemy := range nearbyEnemies {
+			// Chain lightning arc to enemy
+			chainEmitter := NewParticleEmitter(x, y, 18)
+			chainEmitter.StartColor = color.NRGBA{100, 150, 255, 220} // Lighter blue
+			chainEmitter.EndColor = color.NRGBA{50, 100, 200, 0}      // Blue to transparent
+			chainEmitter.Shape = "star"
+			chainEmitter.Spread = math.Pi / 3
+			chainEmitter.Speed = 250
+			chainEmitter.SpeedVariance = 40
+			chainEmitter.Life = 0.7
+			chainEmitter.LifeVariance = 0.2
+			chainEmitter.Size = 4
+			chainEmitter.SizeVariance = 1.5
+			chainEmitter.EmissionRate = 90
+			chainEmitter.Duration = 0.35
+			chainEmitter.Gravity = 0
+			chainEmitter.Drag = 0.88
+			ps.AddEmitter(chainEmitter)
+
+			// Secondary impact at enemy location
+			enemyImpact := NewParticleEmitter(enemy.x, enemy.y, 12)
+			enemyImpact.StartColor = color.NRGBA{150, 200, 255, 255} // Bright blue
+			enemyImpact.EndColor = color.NRGBA{50, 100, 150, 0}      // Blue to transparent
+			enemyImpact.Shape = "circle"
+			enemyImpact.Spread = 2 * math.Pi
+			enemyImpact.Speed = 80
+			enemyImpact.SpeedVariance = 25
+			enemyImpact.Life = 0.5
+			enemyImpact.LifeVariance = 0.15
+			enemyImpact.Size = 5
+			enemyImpact.SizeVariance = 2
+			enemyImpact.EmissionRate = 60
+			enemyImpact.Duration = 0.25
+			enemyImpact.Gravity = 0
+			enemyImpact.Drag = 0.9
+			ps.AddEmitter(enemyImpact)
+		}
+
+		// Crackling electricity particles around main target
+		crackleEmitter := NewParticleEmitter(x, y, 10)
+		crackleEmitter.StartColor = color.NRGBA{200, 220, 255, 180} // Light blue
+		crackleEmitter.EndColor = color.NRGBA{100, 150, 200, 0}     // Blue to transparent
+		crackleEmitter.Shape = "star"
+		crackleEmitter.Spread = 2 * math.Pi
+		crackleEmitter.Speed = 60
+		crackleEmitter.SpeedVariance = 20
+		crackleEmitter.Life = 1.0
+		crackleEmitter.LifeVariance = 0.4
+		crackleEmitter.Size = 2
+		crackleEmitter.SizeVariance = 0.8
+		crackleEmitter.EmissionRate = 40
+		crackleEmitter.Duration = 0.8
+		crackleEmitter.Gravity = -10
+		crackleEmitter.Drag = 0.96
+		ps.AddEmitter(crackleEmitter)
+
+	case "holy_nova":
+		// Golden opaque balloon enlargement effect
+		emitter := NewParticleEmitter(x, y, 60)
+		emitter.StartColor = color.NRGBA{255, 215, 0, 200} // Golden yellow, semi-transparent
+		emitter.EndColor = color.NRGBA{255, 140, 0, 50}    // Orange-gold, more transparent
+		emitter.Shape = "circle"
+		emitter.Spread = 2 * math.Pi
+		emitter.Speed = 80
+		emitter.SpeedVariance = 25
+		emitter.Life = 2.0
+		emitter.LifeVariance = 0.6
+		emitter.Size = 6
+		emitter.SizeVariance = 3
+		emitter.EmissionRate = 120
+		emitter.Duration = 1.0
+		emitter.Gravity = -30
+		emitter.Drag = 0.85
+		ps.AddEmitter(emitter)
+
+		// Explosion effect with golden sparks
+		explosionEmitter := NewParticleEmitter(x, y, 50)
+		explosionEmitter.StartColor = color.NRGBA{255, 255, 150, 255} // Bright gold
+		explosionEmitter.EndColor = color.NRGBA{255, 200, 0, 0}       // Gold to transparent
+		explosionEmitter.Shape = "star"
+		explosionEmitter.Spread = 2 * math.Pi
+		explosionEmitter.Speed = 150
+		explosionEmitter.SpeedVariance = 50
+		explosionEmitter.Life = 1.5
+		explosionEmitter.LifeVariance = 0.4
+		explosionEmitter.Size = 5
+		explosionEmitter.SizeVariance = 2.5
+		explosionEmitter.EmissionRate = 100
+		explosionEmitter.Duration = 0.8
+		explosionEmitter.Gravity = -60
+		explosionEmitter.Drag = 0.8
+		ps.AddEmitter(explosionEmitter)
+
+		// Inner core glow effect
+		coreEmitter := NewParticleEmitter(x, y, 25)
+		coreEmitter.StartColor = color.NRGBA{255, 255, 200, 180} // Bright white-gold
+		coreEmitter.EndColor = color.NRGBA{255, 215, 100, 20}    // Gold to very transparent
+		coreEmitter.Shape = "circle"
+		coreEmitter.Spread = 2 * math.Pi
+		coreEmitter.Speed = 40
+		coreEmitter.SpeedVariance = 15
+		coreEmitter.Life = 2.5
+		coreEmitter.LifeVariance = 0.8
+		coreEmitter.Size = 8
+		coreEmitter.SizeVariance = 4
+		coreEmitter.EmissionRate = 50
+		coreEmitter.Duration = 1.5
+		coreEmitter.Gravity = -20
+		coreEmitter.Drag = 0.9
+		ps.AddEmitter(coreEmitter)
+
+	case "execute":
+		emitter := NewParticleEmitter(x, y, 20)
+		emitter.StartColor = color.NRGBA{255, 100, 100, 255} // Red
+		emitter.EndColor = color.NRGBA{255, 50, 50, 0}       // Red to transparent
+		emitter.Shape = "circle"
+		emitter.Spread = 2 * math.Pi
+		emitter.Speed = 90
+		emitter.SpeedVariance = 25
+		emitter.Life = 0.7
+		emitter.LifeVariance = 0.2
+		emitter.Size = 3
+		emitter.SizeVariance = 1
+		emitter.EmissionRate = 70
+		emitter.Duration = 0.35
+		emitter.Gravity = 0
+		emitter.Drag = 0.93
+		ps.AddEmitter(emitter)
+
+	case "living_bomb":
+		emitter := NewParticleEmitter(x, y, 25)
+		emitter.StartColor = color.NRGBA{255, 150, 0, 255} // Orange
+		emitter.EndColor = color.NRGBA{255, 50, 0, 0}      // Orange to transparent
+		emitter.Shape = "circle"
+		emitter.Spread = 2 * math.Pi
+		emitter.Speed = 80
+		emitter.SpeedVariance = 20
+		emitter.Life = 0.8
+		emitter.LifeVariance = 0.3
+		emitter.Size = 3.5
+		emitter.SizeVariance = 1.2
+		emitter.EmissionRate = 60
+		emitter.Duration = 0.4
+		emitter.Gravity = 0
+		emitter.Drag = 0.9
+		ps.AddEmitter(emitter)
+
+	case "earth_and_moon":
+		emitter := NewParticleEmitter(x, y, 45)
+		emitter.StartColor = color.NRGBA{150, 200, 100, 255} // Green
+		emitter.EndColor = color.NRGBA{100, 150, 50, 0}      // Green to transparent
+		emitter.Shape = "circle"
+		emitter.Spread = 2 * math.Pi
+		emitter.Speed = 130
+		emitter.SpeedVariance = 40
+		emitter.Life = 1.5
+		emitter.LifeVariance = 0.5
+		emitter.Size = 5
+		emitter.SizeVariance = 2
+		emitter.EmissionRate = 80
+		emitter.Duration = 0.7
+		emitter.Gravity = 0
+		emitter.Drag = 0.92
+		ps.AddEmitter(emitter)
+
+	case "polymorph":
+		emitter := NewParticleEmitter(x, y, 22)
+		emitter.StartColor = color.NRGBA{200, 100, 255, 255} // Purple
+		emitter.EndColor = color.NRGBA{150, 50, 255, 0}      // Purple to transparent
+		emitter.Shape = "star"
+		emitter.Spread = 2 * math.Pi
+		emitter.Speed = 70
+		emitter.SpeedVariance = 20
+		emitter.Life = 1.0
+		emitter.LifeVariance = 0.3
+		emitter.Size = 3
+		emitter.SizeVariance = 1
+		emitter.EmissionRate = 50
+		emitter.Duration = 0.5
+		emitter.Gravity = 0
+		emitter.Drag = 0.95
+		ps.AddEmitter(emitter)
+
+	case "smoke_bomb":
+		emitter := NewParticleEmitter(x, y, 30)
+		emitter.StartColor = color.NRGBA{100, 100, 100, 200} // Gray
+		emitter.EndColor = color.NRGBA{50, 50, 50, 0}        // Gray to transparent
+		emitter.Shape = "circle"
+		emitter.Spread = 2 * math.Pi
+		emitter.Speed = 60
+		emitter.SpeedVariance = 15
+		emitter.Life = 2.0
+		emitter.LifeVariance = 0.6
+		emitter.Size = 3
+		emitter.SizeVariance = 1
+		emitter.EmissionRate = 40
+		emitter.Duration = 1.0
+		emitter.Gravity = -10
+		emitter.Drag = 0.97
+		ps.AddEmitter(emitter)
+
+	case "whelp_eggs":
+		emitter := NewParticleEmitter(x, y, 25)
+		emitter.StartColor = color.NRGBA{150, 100, 50, 255} // Brown
+		emitter.EndColor = color.NRGBA{100, 75, 25, 0}      // Brown to transparent
+		emitter.Shape = "circle"
+		emitter.Spread = 2 * math.Pi
+		emitter.Speed = 50
+		emitter.SpeedVariance = 15
+		emitter.Life = 1.2
+		emitter.LifeVariance = 0.4
+		emitter.Size = 2.5
+		emitter.SizeVariance = 0.8
+		emitter.EmissionRate = 35
+		emitter.Duration = 0.6
+		emitter.Gravity = 0
+		emitter.Drag = 0.96
+		ps.AddEmitter(emitter)
+
+	default:
+		// Generic spell effect
+		emitter := NewParticleEmitter(x, y, 20)
+		emitter.StartColor = color.NRGBA{200, 200, 255, 255} // Light blue
+		emitter.EndColor = color.NRGBA{150, 150, 255, 0}     // Blue to transparent
+		emitter.Shape = "star"
+		emitter.Spread = 2 * math.Pi
+		emitter.Speed = 100
+		emitter.SpeedVariance = 30
+		emitter.Life = 0.8
+		emitter.LifeVariance = 0.3
+		emitter.Size = 3
+		emitter.SizeVariance = 1
+		emitter.EmissionRate = 60
+		emitter.Duration = 0.4
+		emitter.Gravity = 0
+		emitter.Drag = 0.9
+		ps.AddEmitter(emitter)
+	}
 }

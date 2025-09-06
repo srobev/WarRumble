@@ -57,6 +57,12 @@ type MapDef struct {
 	BgOffsetX float64 `json:"bgOffsetX,omitempty"` // background X offset
 	BgOffsetY float64 `json:"bgOffsetY,omitempty"` // background Y offset
 
+	// Frame boundaries for camera movement limits
+	FrameX      float64 `json:"frameX,omitempty"`      // frame center X position (normalized 0-1)
+	FrameY      float64 `json:"frameY,omitempty"`      // frame center Y position (normalized 0-1)
+	FrameWidth  float64 `json:"frameWidth,omitempty"`  // frame width (normalized 0-1)
+	FrameHeight float64 `json:"frameHeight,omitempty"` // frame height (normalized 0-1)
+
 	DeployZones        []DeployZone        `json:"deployZones"`
 	MeetingStones      []PointF            `json:"meetingStones"`
 	GoldMines          []PointF            `json:"goldMines"`

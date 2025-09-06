@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"time"
 
 	"rumble/shared/protocol"
 )
@@ -61,6 +62,7 @@ type Unit struct {
 	Heal           int
 	Hps            int
 	Speed          float64 // px/s
+	BaseSpeed      float64 // Original speed before debuffs
 	OwnerID        int64
 	Class          string
 	SubClass       string
@@ -68,7 +70,8 @@ type Unit struct {
 	Particle       string
 	Facing, CD     float64
 	HealCD         float64
-	AttackCooldown float64 // Configurable attack cooldown duration
+	AttackCooldown float64           // Configurable attack cooldown duration
+	SpeedDebuffs   map[int64]float64 // Active speed debuffs (blizzardID -> speedMultiplier)
 }
 
 type Projectile struct {
@@ -86,6 +89,20 @@ type Projectile struct {
 	ProjectileType string  // Type for visual effects
 }
 
+type BlizzardEffect struct {
+	ID           int64
+	CasterID     int64
+	X            float64
+	Y            float64
+	Radius       float64
+	Damage       int
+	Duration     float64
+	TickInterval float64
+	LastTick     float64
+	StartTime    float64
+	TotalTime    float64 // Track total elapsed time for duration
+}
+
 type Game struct {
 	minis       []MiniCard
 	units       map[int64]*Unit
@@ -94,6 +111,9 @@ type Game struct {
 	width       int
 	height      int
 	mapDef      *protocol.MapDef // Current map definition
+
+	// Blizzard effects
+	blizzards map[int64]*BlizzardEffect
 
 	// Timer system
 	timerActive   bool
@@ -114,6 +134,7 @@ func NewGame() *Game {
 		players:     make(map[int64]*Player),
 		width:       protocol.ScreenW,
 		height:      protocol.ScreenH,
+		blizzards:   make(map[int64]*BlizzardEffect),
 		// init maps, players, etc.
 	}
 	g.loadMinis()
@@ -236,7 +257,7 @@ func (g *Game) tryBuildArmyByNames(p *Player, names []string) bool {
 		}
 		cards = append(cards, m)
 	}
-	// simple validation: 1 champion + 6 non-spell minis
+	// simple validation: 1 champion + 6 minis (spells allowed)
 	champ := 0
 	minis := 0
 	for _, c := range cards {
@@ -244,7 +265,7 @@ func (g *Game) tryBuildArmyByNames(p *Player, names []string) bool {
 		cl := strings.ToLower(c.Class)
 		if r == "champion" || cl == "champion" {
 			champ++
-		} else if r == "mini" && cl != "spell" {
+		} else if r == "mini" {
 			minis++
 		}
 	}
@@ -289,7 +310,7 @@ func (g *Game) dealArmy(p *Player) {
 		switch {
 		case r == "champion" || c == "champion":
 			champs = append(champs, m)
-		case r == "mini" && c != "spell":
+		case r == "mini":
 			minis = append(minis, m)
 		}
 	}
@@ -453,6 +474,109 @@ func (g *Game) GetTimerState() (remainingSeconds int, isPaused bool) {
 	return int(math.Ceil(g.timeRemaining)), g.isPaused
 }
 
+// recalculateUnitSpeed updates a unit's effective speed based on active debuffs
+func (g *Game) recalculateUnitSpeed(unit *Unit) {
+	// Start with base speed
+	unit.Speed = unit.BaseSpeed
+
+	// Apply all active speed debuffs (multiply by debuff multipliers)
+	for _, multiplier := range unit.SpeedDebuffs {
+		unit.Speed *= multiplier
+	}
+}
+
+func (g *Game) tickBlizzard(blizzardID int64, dt float64) {
+	blizzard, exists := g.blizzards[blizzardID]
+	if !exists {
+		return
+	}
+
+	// Set start time on first tick
+	if blizzard.StartTime == 0 {
+		blizzard.StartTime = blizzard.LastTick
+	}
+
+	// Update total time elapsed
+	blizzard.TotalTime += dt
+
+	// Check if blizzard has expired using TotalTime
+	if blizzard.TotalTime >= blizzard.Duration {
+		// Remove speed debuffs from all units affected by this blizzard
+		for _, unit := range g.units {
+			if _, hasDebuff := unit.SpeedDebuffs[blizzardID]; hasDebuff {
+				delete(unit.SpeedDebuffs, blizzardID)
+				g.recalculateUnitSpeed(unit)
+			}
+		}
+		delete(g.blizzards, blizzardID)
+		return
+	}
+
+	// Apply/Remove speed debuffs based on unit positions
+	for _, unit := range g.units {
+		if unit.HP <= 0 {
+			continue
+		}
+
+		dist := hypot(blizzard.X, blizzard.Y, unit.X, unit.Y)
+		_, hasDebuff := unit.SpeedDebuffs[blizzardID]
+
+		if dist <= blizzard.Radius && unit.OwnerID != blizzard.CasterID {
+			// Unit is in blizzard area and is an enemy - apply debuff
+			if !hasDebuff {
+				unit.SpeedDebuffs[blizzardID] = 0.5 // 50% speed reduction
+				g.recalculateUnitSpeed(unit)
+			}
+		} else {
+			// Unit is outside blizzard area or is friendly - remove debuff
+			if hasDebuff {
+				delete(unit.SpeedDebuffs, blizzardID)
+				g.recalculateUnitSpeed(unit)
+			}
+		}
+	}
+
+	// Check if it's time for a damage tick using LastTick for intervals
+	if blizzard.LastTick-blizzard.StartTime >= blizzard.TickInterval {
+		// Deal damage to all enemy units in radius
+		for _, unit := range g.units {
+			if unit.OwnerID == blizzard.CasterID || unit.HP <= 0 {
+				continue
+			}
+			dist := hypot(blizzard.X, blizzard.Y, unit.X, unit.Y)
+			if dist <= blizzard.Radius {
+				unit.HP -= blizzard.Damage
+				if unit.HP < 0 {
+					unit.HP = 0
+				}
+			}
+		}
+
+		// Deal damage to all enemy bases in radius
+		for _, player := range g.players {
+			if player.ID == blizzard.CasterID {
+				continue
+			}
+			// Calculate distance from blizzard center to base center
+			baseCenterX := float64(player.Base.X + player.Base.W/2)
+			baseCenterY := float64(player.Base.Y + player.Base.H/2)
+			dist := hypot(blizzard.X, blizzard.Y, baseCenterX, baseCenterY)
+			if dist <= blizzard.Radius {
+				player.Base.HP -= blizzard.Damage
+				if player.Base.HP < 0 {
+					player.Base.HP = 0
+				}
+			}
+		}
+
+		// Reset tick timer for next damage interval
+		blizzard.LastTick = blizzard.StartTime
+	}
+
+	// Update last tick time for damage intervals
+	blizzard.LastTick += dt
+}
+
 func (g *Game) Step(dt float64) protocol.StateDelta {
 	// If game is paused, don't update anything
 	if g.isPaused {
@@ -463,6 +587,11 @@ func (g *Game) Step(dt float64) protocol.StateDelta {
 			Projectiles:  []protocol.ProjectileState{},
 			Bases:        []protocol.BaseState{},
 		}
+	}
+
+	// Update blizzards
+	for blizzardID := range g.blizzards {
+		g.tickBlizzard(blizzardID, dt)
 	}
 
 	// Update projectiles
@@ -922,12 +1051,14 @@ func (g *Game) HandleDeploy(pid int64, d protocol.DeployMiniAt) {
 		Heal:           card.Heal,
 		Hps:            card.Hps,
 		Speed:          speedPx(card.Speed),
+		BaseSpeed:      speedPx(card.Speed),
 		OwnerID:        pid,
 		Class:          card.Class,
 		SubClass:       card.SubClass,
 		Range:          card.Range,
 		Particle:       card.Particle,
 		AttackCooldown: attackCooldown,
+		SpeedDebuffs:   make(map[int64]float64),
 	}
 	g.units[u.ID] = u
 
@@ -960,6 +1091,408 @@ func (g *Game) HandleDeploy(pid int64, d protocol.DeployMiniAt) {
 		p.Next = nil
 	}
 
+}
+
+// HandleSpellCast processes spell casting from a player
+func (g *Game) HandleSpellCast(pid int64, s protocol.CastSpell) {
+	p, ok := g.players[pid]
+	if !ok {
+		log.Printf("spell cast: unknown player %d", pid)
+		return
+	}
+
+	// Find the spell card in hand
+	spellIndex := -1
+	for i, card := range p.Hand {
+		if card.Name == s.SpellName {
+			spellIndex = i
+			break
+		}
+	}
+
+	if spellIndex == -1 {
+		log.Printf("spell cast: spell %s not found in hand for player %d", s.SpellName, pid)
+		return
+	}
+
+	spellCard := p.Hand[spellIndex]
+	if p.Gold < spellCard.Cost {
+		log.Printf("spell cast: not enough gold pid=%d have=%d need=%d", pid, p.Gold, spellCard.Cost)
+		return
+	}
+
+	// Deduct gold
+	p.Gold -= spellCard.Cost
+
+	// Process spell effects based on spell name
+	g.processSpellEffect(pid, s)
+
+	// Broadcast spell cast event for visual effects
+	if g.broadcastEvent != nil {
+		spellEvent := protocol.SpellCastEvent{
+			SpellName: s.SpellName,
+			CasterID:  pid,
+			TargetX:   s.X,
+			TargetY:   s.Y,
+		}
+		g.broadcastEvent("SpellCastEvent", spellEvent)
+	}
+
+	// Remove spell from hand and rotate cards
+	played := p.Hand[spellIndex]
+	if p.Next != nil {
+		p.Hand[spellIndex] = *p.Next
+	}
+	if len(p.Queue) > 0 {
+		p.Queue = append(p.Queue[1:], played)
+	}
+	if len(p.Queue) > 0 {
+		nx := p.Queue[0]
+		p.Next = &nx
+	} else {
+		p.Next = nil
+	}
+}
+
+// processSpellEffect applies the effects of a spell based on its name
+func (g *Game) processSpellEffect(casterID int64, s protocol.CastSpell) {
+	switch s.SpellName {
+	case "Arcane Blast":
+		// Single target damage spell
+		g.castArcaneBlast(casterID, s.X, s.Y)
+
+	case "Blizzard":
+		// Area damage spell
+		g.castBlizzard(casterID, s.X, s.Y)
+
+	case "Chain Lightning":
+		// Chain damage spell
+		g.castChainLightning(casterID, s.X, s.Y)
+
+	case "Execute":
+		// Execute low HP targets
+		g.castExecute(casterID, s.X, s.Y)
+
+	case "Holy Nova":
+		// Area healing/damage spell
+		g.castHolyNova(casterID, s.X, s.Y)
+
+	case "Living Bomb":
+		// DoT spell
+		g.castLivingBomb(casterID, s.X, s.Y)
+
+	case "Earth and Moon":
+		// Area damage spell
+		g.castEarthAndMoon(casterID, s.X, s.Y)
+
+	case "Polymorph":
+		// Utility spell
+		g.castPolymorph(casterID, s.X, s.Y)
+
+	case "Smoke Bomb":
+		// Area utility spell
+		g.castSmokeBomb(casterID, s.X, s.Y)
+
+	case "Whelp Eggs":
+		// Summon spell
+		g.castWhelpEggs(casterID, s.X, s.Y)
+	}
+}
+
+// Individual spell casting functions
+func (g *Game) castArcaneBlast(casterID int64, targetX, targetY float64) {
+	damage := 200
+	// Find closest enemy unit within range
+	for _, unit := range g.units {
+		if unit.OwnerID == casterID || unit.HP <= 0 {
+			continue
+		}
+		dist := hypot(targetX, targetY, unit.X, unit.Y)
+		if dist <= 50 { // 50 pixel range
+			unit.HP -= damage
+			if unit.HP < 0 {
+				unit.HP = 0
+			}
+			break // Only hit first target
+		}
+	}
+}
+
+func (g *Game) castBlizzard(casterID int64, targetX, targetY float64) {
+	damage := 50 // Damage per tick (total 250 over 5 seconds)
+	radius := 120.0
+	duration := 5.0     // 5 seconds
+	tickInterval := 1.0 // 1 second ticks
+
+	// Create blizzard area effect
+	blizzardID := protocol.NewID()
+
+	g.blizzards[blizzardID] = &BlizzardEffect{
+		ID:           blizzardID,
+		CasterID:     casterID,
+		X:            targetX,
+		Y:            targetY,
+		Radius:       radius,
+		Damage:       damage,
+		Duration:     duration,
+		TickInterval: tickInterval,
+		LastTick:     0,
+		StartTime:    0, // Will be set when first tick occurs
+	}
+
+	// Initial damage tick
+	g.tickBlizzard(blizzardID, 0)
+}
+
+func (g *Game) castChainLightning(casterID int64, targetX, targetY float64) {
+	damage := 120
+	jumps := 3
+	reduction := 0.6 // 60% damage reduction per jump
+
+	// Find initial target
+	var initialTarget *Unit
+	minDist := math.MaxFloat64
+	for _, unit := range g.units {
+		if unit.OwnerID == casterID || unit.HP <= 0 {
+			continue
+		}
+		dist := hypot(targetX, targetY, unit.X, unit.Y)
+		if dist < minDist {
+			minDist = dist
+			initialTarget = unit
+		}
+	}
+
+	if initialTarget == nil {
+		return
+	}
+
+	// Chain to nearby enemies
+	currentTarget := initialTarget
+	currentDamage := damage
+
+	for i := 0; i < jumps; i++ {
+		currentTarget.HP -= int(currentDamage)
+		if currentTarget.HP < 0 {
+			currentTarget.HP = 0
+		}
+
+		// Find next target
+		var nextTarget *Unit
+		minDist = math.MaxFloat64
+		for _, unit := range g.units {
+			if unit.OwnerID == casterID || unit.HP <= 0 || unit.ID == currentTarget.ID {
+				continue
+			}
+			dist := hypot(currentTarget.X, currentTarget.Y, unit.X, unit.Y)
+			if dist < minDist && dist <= 100 { // 100 pixel chain range
+				minDist = dist
+				nextTarget = unit
+			}
+		}
+
+		if nextTarget == nil {
+			break
+		}
+
+		currentTarget = nextTarget
+		currentDamage = int(float64(currentDamage) * reduction)
+	}
+}
+
+func (g *Game) castExecute(casterID int64, targetX, targetY float64) {
+	threshold := 0.25 // 25% HP threshold
+	// Find enemy unit with lowest HP percentage
+	for _, unit := range g.units {
+		if unit.OwnerID == casterID || unit.HP <= 0 {
+			continue
+		}
+		dist := hypot(targetX, targetY, unit.X, unit.Y)
+		if dist <= 60 && float64(unit.HP)/float64(unit.MaxHP) <= threshold {
+			unit.HP = 0 // Execute
+			break
+		}
+	}
+}
+
+func (g *Game) castHolyNova(casterID int64, targetX, targetY float64) {
+	healAmount := 350 // Heal amount for friendly units
+	damage := 350     // Damage amount for enemy units
+	aoeDamage := 105  // 30% of healing amount (350 * 0.3) - damages ALL units
+	radius := 120.0   // Same radius as Blizzard
+
+	// First apply AoE damage to ALL units in area
+	for _, unit := range g.units {
+		if unit.HP <= 0 {
+			continue
+		}
+		dist := hypot(targetX, targetY, unit.X, unit.Y)
+		if dist <= radius {
+			// AoE damage affects all units regardless of ownership
+			unit.HP -= aoeDamage
+			if unit.HP < 0 {
+				unit.HP = 0
+			}
+		}
+	}
+
+	// Then apply healing/damage effects
+	for _, unit := range g.units {
+		if unit.HP <= 0 {
+			continue
+		}
+		dist := hypot(targetX, targetY, unit.X, unit.Y)
+		if dist <= radius {
+			if unit.OwnerID == casterID {
+				// Heal friendly units (after AoE damage)
+				unit.HP += healAmount
+				if unit.HP > unit.MaxHP {
+					unit.HP = unit.MaxHP
+				}
+			} else {
+				// Additional damage to enemy units (after AoE damage)
+				unit.HP -= damage
+				if unit.HP < 0 {
+					unit.HP = 0
+				}
+			}
+		}
+	}
+
+	// Also heal friendly bases and damage enemy bases
+	for _, player := range g.players {
+		if player.ID == casterID {
+			// Heal friendly base
+			player.Base.HP += healAmount
+			if player.Base.HP > player.Base.MaxHP {
+				player.Base.HP = player.Base.MaxHP
+			}
+		} else {
+			// Damage enemy bases
+			baseCenterX := float64(player.Base.X + player.Base.W/2)
+			baseCenterY := float64(player.Base.Y + player.Base.H/2)
+			dist := hypot(targetX, targetY, baseCenterX, baseCenterY)
+			if dist <= radius {
+				player.Base.HP -= damage
+				if player.Base.HP < 0 {
+					player.Base.HP = 0
+				}
+			}
+		}
+	}
+}
+
+func (g *Game) castLivingBomb(casterID int64, targetX, targetY float64) {
+	damage := 300
+	duration := 3.0 // 3 seconds
+	// Find target unit
+	for _, unit := range g.units {
+		if unit.OwnerID == casterID || unit.HP <= 0 {
+			continue
+		}
+		dist := hypot(targetX, targetY, unit.X, unit.Y)
+		if dist <= 50 {
+			// Apply DoT effect (simplified - just damage after delay)
+			go func(target *Unit) {
+				time.Sleep(time.Duration(duration) * time.Second)
+				if target.HP > 0 {
+					target.HP -= damage
+					if target.HP < 0 {
+						target.HP = 0
+					}
+				}
+			}(unit)
+			break
+		}
+	}
+}
+
+func (g *Game) castEarthAndMoon(casterID int64, targetX, targetY float64) {
+	damage := 180
+	radius := 120.0
+	// Damage all enemy units in large area
+	for _, unit := range g.units {
+		if unit.OwnerID == casterID || unit.HP <= 0 {
+			continue
+		}
+		dist := hypot(targetX, targetY, unit.X, unit.Y)
+		if dist <= radius {
+			unit.HP -= damage
+			if unit.HP < 0 {
+				unit.HP = 0
+			}
+		}
+	}
+}
+
+func (g *Game) castPolymorph(casterID int64, targetX, targetY float64) {
+	duration := 5.0 // 5 seconds
+	// Find target unit
+	for _, unit := range g.units {
+		if unit.OwnerID == casterID || unit.HP <= 0 {
+			continue
+		}
+		dist := hypot(targetX, targetY, unit.X, unit.Y)
+		if dist <= 60 {
+			// Disable unit temporarily (simplified - just prevent movement/attacks)
+			unit.Speed = 0
+			unit.DMG = 0
+			go func(target *Unit, originalSpeed float64, originalDMG int) {
+				time.Sleep(time.Duration(duration) * time.Second)
+				if target.HP > 0 {
+					target.Speed = originalSpeed
+					target.DMG = originalDMG
+				}
+			}(unit, unit.Speed, unit.DMG)
+			break
+		}
+	}
+}
+
+func (g *Game) castSmokeBomb(casterID int64, targetX, targetY float64) {
+	duration := 4.0 // 4 seconds
+	radius := 60.0
+	// Reduce accuracy/speed of enemy units in area
+	for _, unit := range g.units {
+		if unit.OwnerID == casterID || unit.HP <= 0 {
+			continue
+		}
+		dist := hypot(targetX, targetY, unit.X, unit.Y)
+		if dist <= radius {
+			originalSpeed := unit.Speed
+			unit.Speed *= 0.5 // 50% speed reduction
+			go func(target *Unit, originalSpeed float64) {
+				time.Sleep(time.Duration(duration) * time.Second)
+				if target.HP > 0 {
+					target.Speed = originalSpeed
+				}
+			}(unit, originalSpeed)
+		}
+	}
+}
+
+func (g *Game) castWhelpEggs(casterID int64, targetX, targetY float64) {
+	// Summon 3 whelps
+	for i := 0; i < 3; i++ {
+		offsetX := (float64(i) - 1.0) * 30 // Spread them out
+		whelp := &Unit{
+			ID:             protocol.NewID(),
+			Name:           "Whelp",
+			X:              targetX + offsetX,
+			Y:              targetY + float64(rand.Intn(20)-10),
+			HP:             100,
+			MaxHP:          100,
+			DMG:            30,
+			Speed:          80,
+			BaseSpeed:      80,
+			OwnerID:        casterID,
+			Class:          "melee",
+			Range:          20,
+			AttackCooldown: 1.5,
+			SpeedDebuffs:   make(map[int64]float64),
+		}
+		g.units[whelp.ID] = whelp
+	}
 }
 
 // Info needed to render the army picker
@@ -1008,7 +1541,7 @@ func (g *Game) DefaultAIArmy() []string {
 		class := strings.ToLower(m.Class)
 		if champ == "" && (role == "champion" || class == "champion") {
 			champ = m.Name
-		} else if role == "mini" && class != "spell" {
+		} else if role == "mini" {
 			minis = append(minis, miniCost{m.Name, m.Cost})
 		}
 	}

@@ -17,7 +17,11 @@
     "class": "spell",
     "role": "mini",
     "cost": 1,
-    "speed": 1
+    "speed": 1,
+    "spell_type": "damage",
+    "target_type": "single",
+    "instant_cast": true,
+    "spell_effect": "arcane_blast"
   },
   {
     "name": "Wraith",
@@ -76,7 +80,12 @@
     "class": "spell",
     "role": "mini",
     "cost": 3,
-    "speed": 1
+    "speed": 1,
+    "spell_type": "damage",
+    "target_type": "area",
+    "effect_range": 80,
+    "instant_cast": true,
+    "spell_effect": "blizzard"
   },
   {
     "name": "Chain Lightning",
@@ -86,7 +95,13 @@
     "class": "spell",
     "role": "mini",
     "cost": 3,
-    "speed": 1
+    "speed": 1,
+    "spell_type": "damage",
+    "target_type": "chain",
+    "chain_targets": 3,
+    "chain_damage_reduction": 0.6,
+    "instant_cast": true,
+    "spell_effect": "chain_lightning"
   },
   {
     "name": "Twin Wyrnn",
@@ -144,7 +159,12 @@
     "class": "spell",
     "role": "mini",
     "cost": 3,
-    "speed": 1
+    "speed": 1,
+    "spell_type": "damage",
+    "target_type": "single",
+    "execute_threshold": 0.25,
+    "instant_cast": true,
+    "spell_effect": "execute"
   },
     {
     "name": "Jungle Headhunter",
@@ -255,7 +275,12 @@
     "class": "spell",
     "role": "mini",
     "cost": 3,
-    "speed": 1
+    "speed": 1,
+    "spell_type": "damage",
+    "target_type": "area",
+    "effect_range": 100,
+    "instant_cast": true,
+    "spell_effect": "holy_nova"
   },
   {
     "name": "Night Sentinel",
@@ -289,7 +314,12 @@
     "class": "spell",
     "role": "mini",
     "cost": 6,
-    "speed": 1
+    "speed": 1,
+    "spell_type": "damage",
+    "target_type": "single",
+    "duration": 3,
+    "instant_cast": true,
+    "spell_effect": "living_bomb"
   },
   {
     "name": "The Warden",
@@ -347,7 +377,12 @@
     "class": "spell",
     "role": "mini",
     "cost": 3,
-    "speed": 1
+    "speed": 1,
+    "spell_type": "damage",
+    "target_type": "area",
+    "effect_range": 120,
+    "instant_cast": true,
+    "spell_effect": "earth_and_moon"
   },
   {
     "name": "Reanimator",
@@ -367,7 +402,12 @@
     "class": "spell",
     "role": "mini",
     "cost": 2,
-    "speed": 1
+    "speed": 1,
+    "spell_type": "utility",
+    "target_type": "single",
+    "duration": 5,
+    "instant_cast": true,
+    "spell_effect": "polymorph"
   },
   {
     "name": "Razorboar",
@@ -441,7 +481,13 @@
     "class": "spell",
     "role": "mini",
     "cost": 1,
-    "speed": 1
+    "speed": 1,
+    "spell_type": "utility",
+    "target_type": "area",
+    "effect_range": 60,
+    "duration": 4,
+    "instant_cast": true,
+    "spell_effect": "smoke_bomb"
   },
   {
     "name": "Earthhoof",
@@ -495,7 +541,13 @@
     "class": "spell",
     "role": "mini",
     "cost": 2,
-    "speed": 1
+    "speed": 1,
+    "spell_type": "summon",
+    "target_type": "area",
+    "summon_count": 3,
+    "summon_unit": "Whelp",
+    "instant_cast": true,
+    "spell_effect": "whelp_eggs"
   },
   {
     "name": "Voodoo Hexer",

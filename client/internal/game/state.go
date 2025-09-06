@@ -217,6 +217,9 @@ type Game struct {
 	pauseRestartBtn       rect   // restart button in pause overlay
 	pauseSurrenderBtn     rect   // surrender button in pause overlay
 
+	// --- Base shooting system ---
+	baseLastShot map[int64]int64 // baseID -> last shot timestamp (UnixMilli)
+
 	//Avatars and profile
 	avatar      string
 	showProfile bool

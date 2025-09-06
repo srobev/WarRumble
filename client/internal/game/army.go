@@ -1,17 +1,19 @@
 package game
 
 import (
-    "rumble/shared/protocol"
-    "strings"
+	"rumble/shared/protocol"
+	"strings"
 
-    "github.com/hajimehoshi/ebiten/v2"
+	"github.com/hajimehoshi/ebiten/v2"
 )
 
 func (g *Game) ensureArmyBgLayer() {
-    if g.armyBg == nil { g.armyBg = loadImage("assets/ui/army_bg.png") }
-    if g.armyBg == nil {
-        return
-    }
+	if g.armyBg == nil {
+		g.armyBg = loadImage("assets/ui/army_bg.png")
+	}
+	if g.armyBg == nil {
+		return
+	}
 
 	sw, sh := protocol.ScreenW, protocol.ScreenH
 	viewW, viewH := sw, sh-topBarH-menuBarH
@@ -60,34 +62,41 @@ func (g *Game) trySaveArmy() {
 }
 
 func (g *Game) buildArmyNames() []string {
-    out := make([]string, 0, 7)
-    if g.selectedChampion != "" {
-        out = append(out, g.selectedChampion)
-    }
-    // use explicit slot order when available
-    count := 0
-    for i := 0; i < 6; i++ {
-        if g.selectedOrder[i] != "" {
-            out = append(out, g.selectedOrder[i])
-            count++
-        }
-    }
-    if count < 6 {
-        // fallback to map order to fill
-        for _, m := range g.minisOnly {
-            if g.selectedMinis[m.Name] {
-                // ensure not already included
-                already := false
-                for _, n := range out[1:] { if n == m.Name { already = true; break } }
-                if !already {
-                    out = append(out, m.Name)
-                    count++
-                    if count == 6 { break }
-                }
-            }
-        }
-    }
-    return out
+	out := make([]string, 0, 7)
+	if g.selectedChampion != "" {
+		out = append(out, g.selectedChampion)
+	}
+	// use explicit slot order when available
+	count := 0
+	for i := 0; i < 6; i++ {
+		if g.selectedOrder[i] != "" {
+			out = append(out, g.selectedOrder[i])
+			count++
+		}
+	}
+	if count < 6 {
+		// fallback to map order to fill
+		for _, m := range g.minisOnly {
+			if g.selectedMinis[m.Name] {
+				// ensure not already included
+				already := false
+				for _, n := range out[1:] {
+					if n == m.Name {
+						already = true
+						break
+					}
+				}
+				if !already {
+					out = append(out, m.Name)
+					count++
+					if count == 6 {
+						break
+					}
+				}
+			}
+		}
+	}
+	return out
 }
 
 func (g *Game) validateArmy(names []string) string {
@@ -106,32 +115,41 @@ func (g *Game) validateArmy(names []string) string {
 
 	for i := 1; i < 7; i++ {
 		m := info[names[i]]
-		if !strings.EqualFold(m.Role, "mini") || strings.EqualFold(m.Class, "spell") {
-			return "Slots 2..7 must be Minis (non-spell)."
+		if !strings.EqualFold(m.Role, "mini") {
+			return "Slots 2..7 must be Minis."
 		}
 	}
 	return ""
 }
 
 func (g *Game) selectedMinisList() []string {
-    // Return explicit slot order if defined
-    out := make([]string, 0, 6)
-    hasAny := false
-    for i := 0; i < 6; i++ {
-        if g.selectedOrder[i] != "" { hasAny = true; break }
-    }
-    if hasAny {
-        for i := 0; i < 6; i++ { if g.selectedOrder[i] != "" { out = append(out, g.selectedOrder[i]) } }
-        return out
-    }
-    // Fallback: derive from map order
-    for _, m := range g.minisOnly {
-        if g.selectedMinis[m.Name] {
-            out = append(out, m.Name)
-            if len(out) == 6 { break }
-        }
-    }
-    return out
+	// Return explicit slot order if defined
+	out := make([]string, 0, 6)
+	hasAny := false
+	for i := 0; i < 6; i++ {
+		if g.selectedOrder[i] != "" {
+			hasAny = true
+			break
+		}
+	}
+	if hasAny {
+		for i := 0; i < 6; i++ {
+			if g.selectedOrder[i] != "" {
+				out = append(out, g.selectedOrder[i])
+			}
+		}
+		return out
+	}
+	// Fallback: derive from map order
+	for _, m := range g.minisOnly {
+		if g.selectedMinis[m.Name] {
+			out = append(out, m.Name)
+			if len(out) == 6 {
+				break
+			}
+		}
+	}
+	return out
 }
 
 func (g *Game) setChampArmyFromSelected() {
@@ -142,30 +160,38 @@ func (g *Game) setChampArmyFromSelected() {
 		g.champToMinis[g.selectedChampion] = map[string]bool{}
 	}
 
-    dst := map[string]bool{}
-    for k := range g.selectedMinis {
-        dst[k] = true
-    }
-    g.champToMinis[g.selectedChampion] = dst
-    // also persist order
-    if g.champToOrder == nil { g.champToOrder = map[string][6]string{} }
-    g.champToOrder[g.selectedChampion] = g.selectedOrder
+	dst := map[string]bool{}
+	for k := range g.selectedMinis {
+		dst[k] = true
+	}
+	g.champToMinis[g.selectedChampion] = dst
+	// also persist order
+	if g.champToOrder == nil {
+		g.champToOrder = map[string][6]string{}
+	}
+	g.champToOrder[g.selectedChampion] = g.selectedOrder
 }
 
 func (g *Game) loadSelectedForChampion(name string) {
-    g.selectedChampion = name
+	g.selectedChampion = name
 
-    g.selectedMinis = map[string]bool{}
-    if set, ok := g.champToMinis[name]; ok { for k := range set { g.selectedMinis[k] = true } }
-    // load slot order if available
-    g.selectedOrder = [6]string{}
-    if ord, ok := g.champToOrder[name]; ok {
-        g.selectedOrder = ord
-    } else {
-        // derive initial order from map order
-        list := g.selectedMinisList()
-        for i := 0; i < len(list) && i < 6; i++ { g.selectedOrder[i] = list[i] }
-    }
+	g.selectedMinis = map[string]bool{}
+	if set, ok := g.champToMinis[name]; ok {
+		for k := range set {
+			g.selectedMinis[k] = true
+		}
+	}
+	// load slot order if available
+	g.selectedOrder = [6]string{}
+	if ord, ok := g.champToOrder[name]; ok {
+		g.selectedOrder = ord
+	} else {
+		// derive initial order from map order
+		list := g.selectedMinisList()
+		for i := 0; i < len(list) && i < 6; i++ {
+			g.selectedOrder[i] = list[i]
+		}
+	}
 }
 
 func (g *Game) autoSaveCurrentChampionArmy() {
@@ -173,12 +199,16 @@ func (g *Game) autoSaveCurrentChampionArmy() {
 	if g.selectedChampion == "" {
 		return
 	}
-    minis := make([]string, 0, 6)
-    for i := 0; i < 6; i++ { if g.selectedOrder[i] != "" { minis = append(minis, g.selectedOrder[i]) } }
-    if len(minis) != 6 {
-        return
-    }
-    names := append([]string{g.selectedChampion}, minis...)
+	minis := make([]string, 0, 6)
+	for i := 0; i < 6; i++ {
+		if g.selectedOrder[i] != "" {
+			minis = append(minis, g.selectedOrder[i])
+		}
+	}
+	if len(minis) != 6 {
+		return
+	}
+	names := append([]string{g.selectedChampion}, minis...)
 	if msg := g.validateArmy(names); msg != "" {
 		return
 	}

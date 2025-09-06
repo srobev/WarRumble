@@ -50,6 +50,7 @@ func New(args ...string) ebiten.Game {
 		hpFxUnits:        make(map[int64]*hpFx),
 		hpFxBases:        make(map[int64]*hpFx),
 		particleSystem:   NewParticleSystem(),
+		baseLastShot:     make(map[int64]int64),
 
 		connCh: make(chan connResult, 4),
 		connSt: stateConnected,
@@ -194,6 +195,7 @@ afterMessages:
 			}
 		}
 		if myHP >= 0 && enemyHP >= 0 {
+			// Only trigger victory/defeat when a base actually reaches 0 HP
 			g.endActive = (myHP <= 0 || enemyHP <= 0 || g.timerRemainingSeconds <= 0)
 			g.endVictory = (enemyHP <= 0 && myHP > 0) || (enemyHP <= 0 && g.timerRemainingSeconds <= 0 && myHP > 0)
 		} else {
@@ -1384,6 +1386,45 @@ func (g *Game) drawProjectileByType(screen *ebiten.Image, currentX, currentY, ta
 			sparkleY := currentY + (rand.Float64()-0.5)*20*zoom
 			ebitenutil.DrawCircle(screen, sparkleX, sparkleY, trailSize*0.4, color.NRGBA{255, 220, 255, 200})
 		}
+
+	case "arrow":
+		// ARROW - Simple arrow projectile
+		// Calculate direction vector
+		dx := targetX - currentX
+		dy := targetY - currentY
+		dist := math.Sqrt(dx*dx + dy*dy)
+		if dist > 0 {
+			dx /= dist
+			dy /= dist
+		}
+
+		// Arrow shaft (elongated rectangle)
+		arrowLength := projectileSize * 4.5
+
+		// Draw arrow shaft as a line
+		endX := currentX + dx*arrowLength
+		endY := currentY + dy*arrowLength
+		ebitenutil.DrawLine(screen, currentX, currentY, endX, endY, color.NRGBA{139, 69, 19, 255}) // Brown shaft
+
+		// Arrow head (triangle)
+		headSize := projectileSize * 0.8
+
+		// Draw arrow head as small triangle
+		perpX := -dy * headSize * 0.3
+		perpY := dx * headSize * 0.3
+
+		// Arrow head points
+		p1x := endX
+		p1y := endY
+		p2x := endX - dx*headSize*0.5 + perpX
+		p2y := endY - dy*headSize*0.5 + perpY
+		p3x := endX - dx*headSize*0.5 - perpX
+		p3y := endY - dy*headSize*0.5 - perpY
+
+		// Draw arrow head triangle
+		ebitenutil.DrawLine(screen, p1x, p1y, p2x, p2y, color.NRGBA{100, 100, 100, 255})
+		ebitenutil.DrawLine(screen, p1x, p1y, p3x, p3y, color.NRGBA{100, 100, 100, 255})
+		ebitenutil.DrawLine(screen, p2x, p2y, p3x, p3y, color.NRGBA{100, 100, 100, 255})
 
 	default:
 		// ENERGY BOLT - Generic magical projectile
