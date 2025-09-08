@@ -132,13 +132,19 @@ func (r *Room) Join(c *client) {
 	c.room = r
 
 	r.players = append(r.players, c)
-	log.Printf("JOIN room=%s player=%s id=%d players=%d", r.id, c.name, c.id, len(r.players))
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	log.Printf("[%s] %s: JOIN room=%s player=%s id=%d players=%d", timestamp, c.name, r.id, c.name, c.id, len(r.players))
 	sendJSON(c, "Profile", protocol.Profile{PlayerID: c.id})
 }
 
 // ---- Begin gameplay: send Init + immediate snapshot, then enable ticking
 func (r *Room) StartBattle() {
-	log.Printf("ROOM %s StartBattle: players=%d", r.id, len(r.players))
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	playerNames := []string{}
+	for _, c := range r.players {
+		playerNames = append(playerNames, c.name)
+	}
+	log.Printf("[%s] SYSTEM: ROOM %s StartBattle: players=%d [%v]", timestamp, r.id, len(r.players), playerNames)
 
 	// Load map for friendly duels
 	if r.Mode == "friendly" {

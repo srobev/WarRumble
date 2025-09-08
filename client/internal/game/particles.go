@@ -202,6 +202,8 @@ func (e *ParticleEmitter) Draw(screen *ebiten.Image) {
 		switch particle.Shape {
 		case "circle":
 			vector.DrawFilledCircle(screen, float32(particle.X), float32(particle.Y), float32(particle.Size), col, true)
+		case "cloud":
+			e.drawCloud(screen, particle.X, particle.Y, particle.Size, particle.Rotation, col)
 		case "square":
 			halfSize := particle.Size
 			vector.DrawFilledRect(screen, float32(particle.X-halfSize), float32(particle.Y-halfSize), float32(particle.Size*2), float32(particle.Size*2), col, true)
@@ -255,6 +257,31 @@ func (e *ParticleEmitter) emitParticle() {
 	particle.RotSpeed = (rand.Float64() - 0.5) * 10
 
 	particle.Shape = e.Shape
+}
+
+// drawCloud draws a cloud shape by overlapping multiple circles of different sizes
+func (e *ParticleEmitter) drawCloud(screen *ebiten.Image, x, y, size, rotation float64, col color.NRGBA) {
+	// Cloud is made of overlapping circles in a puff pattern
+	// Center large circle
+	vector.DrawFilledCircle(screen, float32(x), float32(y), float32(size*0.8), col, true)
+
+	// Left upper circle (offset from center)
+	vector.DrawFilledCircle(screen, float32(x-size*0.7), float32(y-size*0.3), float32(size*0.6), col, true)
+
+	// Left lower circle
+	vector.DrawFilledCircle(screen, float32(x-size*0.5), float32(y+size*0.2), float32(size*0.55), col, true)
+
+	// Right upper circle
+	vector.DrawFilledCircle(screen, float32(x+size*0.6), float32(y-size*0.4), float32(size*0.7), col, true)
+
+	// Right lower circle
+	vector.DrawFilledCircle(screen, float32(x+size*0.8), float32(y), float32(size*0.65), col, true)
+
+	// Top circle for fluffy appearance
+	vector.DrawFilledCircle(screen, float32(x-size*0.2), float32(y-size*0.6), float32(size*0.5), col, true)
+
+	// Extra right circle for more cloud volume
+	vector.DrawFilledCircle(screen, float32(x+size), float32(y+size*0.1), float32(size*0.45), col, true)
 }
 
 // drawStar draws a star shape
@@ -1944,6 +1971,207 @@ func (ps *ParticleSystem) CreateAoEImpactEffect(x, y float64, damage int) {
 	emitter4.Gravity = 0
 	emitter4.Drag = 0.95
 	ps.AddEmitter(emitter4)
+}
+
+// initWorldMapParticles initializes world map particle emitters
+func (g *Game) initWorldMapParticles() {
+	if g.particleSystem == nil {
+		g.particleSystem = NewParticleSystem() // Initialize if nil
+	}
+
+	// Clear existing emitters
+	g.particleSystem.Emitters = g.particleSystem.Emitters[:0]
+
+	// Add REAL CLOUD-SHAPED PARTICLES floating from EAST to WEST - Warcraft Rumble style
+	// Generate clouds OFF-SCREEN (to the left) and let them drift into view from left to right
+	// Focus in the vertical CENTER of the screen
+
+	// Screen dimensions (approximate)
+	screenWidth := 800.0 // Assume typical screen width
+	screenHeight := 600.0
+
+	// Generate clouds outside the visible area (left side) across FULL vertical range
+	for i := 0; i < 18; i++ { // More clouds for coverage across full height
+		// Horizontal position: OFF-SCREEN to the left, evenly spaced
+		xPos := float64(-150-i*60) + rand.Float64()*60 // Start farther left, closer spacing
+
+		// Vertical position: ACROSS ENTIRE SCREEN HEIGHT (not just center)
+		yPos := rand.Float64() * screenHeight // Random across full screen height
+
+		emitter := NewParticleEmitter(xPos, yPos, 6)        // Fewer particles per emitter
+		emitter.StartColor = color.NRGBA{255, 255, 255, 40} // Very subtle (16% visibility)
+		emitter.EndColor = color.NRGBA{255, 255, 255, 20}   // Fade to almost transparent
+		emitter.Shape = "cloud"                             // Cloud-shaped particles!
+		emitter.Spread = math.Pi / 4                        // Focused rightward direction (east)
+		emitter.Speed = 9.2 + rand.Float64()*7.2            // 15% faster (+1.2 and +1.2)
+		emitter.SpeedVariance = 4.5
+		emitter.Life = 80          // Even longer-lasting for full off-screen travel
+		emitter.LifeVariance = 40  // More variation for natural despawn
+		emitter.Size = 18          // Larger cloud size
+		emitter.SizeVariance = 10  // Some size variation for natural look
+		emitter.EmissionRate = 0.8 // Slow emission for smooth appearance
+		emitter.Gravity = 0
+		emitter.Drag = 0.995 // Natural, smooth movement
+		g.particleSystem.AddEmitter(emitter)
+	}
+
+	// Add a few additional clouds for atmosphere - these start on screen for instant coverage
+	for i := 0; i < 6; i++ {
+		xPos := rand.Float64() * screenWidth * 0.8                  // Spread across 80% of screen width
+		yPos := screenHeight*0.45 + rand.Float64()*screenHeight*0.3 // Center vertical area
+
+		emitter := NewParticleEmitter(xPos, yPos, 4)        // Smaller emitters for atmospheric effect
+		emitter.StartColor = color.NRGBA{255, 255, 255, 30} // Even subtler
+		emitter.EndColor = color.NRGBA{255, 255, 255, 15}   // Fade to barely visible
+		emitter.Shape = "cloud"                             // Cloud-shaped particles!
+		emitter.Spread = math.Pi / 3                        // Rightward direction
+		emitter.Speed = 6 + rand.Float64()*4                // Slightly slower
+		emitter.SpeedVariance = 3
+		emitter.Life = 90          // Very long lasting atmospheric clouds
+		emitter.LifeVariance = 40  // Lots of fade variety
+		emitter.Size = 12          // Smaller size
+		emitter.SizeVariance = 6   // Smaller variation
+		emitter.EmissionRate = 0.5 // Very slow emission
+		emitter.Gravity = 0
+		emitter.Drag = 0.998 // Very smooth
+		g.particleSystem.AddEmitter(emitter)
+	}
+
+}
+
+// drawParticlesWithoutCamera draws particles at their world positions without camera transformation
+func (g *Game) drawParticlesWithoutCamera(screen *ebiten.Image, offsetX, offsetY float64, areaWidth, areaHeight float64) {
+	if g.particleSystem == nil {
+		return
+	}
+
+	for _, emitter := range g.particleSystem.Emitters {
+		emitter.DrawWithoutCameraOffset(screen, offsetX, offsetY, areaWidth, areaHeight)
+	}
+
+	// Particle system update handled in game loop
+}
+
+// DrawWithoutCameraOffset renders particles within a specific screen area
+func (e *ParticleEmitter) DrawWithoutCameraOffset(screen *ebiten.Image, offsetX, offsetY, areaWidth, areaHeight float64) {
+	// Only draw particles that are within the specified screen area
+	for _, particle := range e.Particles {
+		if !particle.Active {
+			continue
+		}
+
+		// Apply offset to particle positions (for world map positioning)
+		screenX := particle.X + offsetX
+		screenY := particle.Y + offsetY
+
+		// Skip particles outside the area
+		if screenX < offsetX-50 || screenX > offsetX+areaWidth+50 ||
+			screenY < offsetY-50 || screenY > offsetY+areaHeight+50 {
+			continue
+		}
+
+		// Interpolate color
+		t := 1.0 - particle.Life
+		r := uint8(float64(e.StartColor.R) + float64(e.EndColor.R-e.StartColor.R)*t)
+		g := uint8(float64(e.StartColor.G) + float64(e.EndColor.G-e.StartColor.G)*t)
+		b := uint8(float64(e.StartColor.B) + float64(e.EndColor.B-e.StartColor.B)*t)
+		a := uint8(float64(e.StartColor.A) + float64(e.EndColor.A-e.StartColor.A)*t)
+		col := color.NRGBA{r, g, b, a}
+
+		// Draw based on shape
+		switch particle.Shape {
+		case "circle":
+			vector.DrawFilledCircle(screen, float32(screenX), float32(screenY), float32(particle.Size), col, true)
+		case "cloud":
+			e.drawCloudWithoutOffset(screen, screenX, screenY, particle.Size, particle.Rotation, col)
+		case "square":
+			halfSize := particle.Size
+			vector.DrawFilledRect(screen, float32(screenX-halfSize), float32(screenY-halfSize),
+				float32(particle.Size*2), float32(particle.Size*2), col, true)
+		case "star":
+			e.drawStarWithoutOffset(screen, screenX, screenY, particle.Size, particle.Rotation, col)
+		}
+	}
+}
+
+// drawCloudWithoutOffset draws a cloud shape by overlapping multiple circles of different sizes (uses mirror drawing)
+func (e *ParticleEmitter) drawCloudMirrored(screen *ebiten.Image, mirrorY func(float64) float64, x, y, size, rotation float64, col color.NRGBA) {
+	// Cloud is made of overlapping circles in a pattern
+	// Apply mirroring to Y coordinates
+	my := func(origY float64) float64 {
+		return mirrorY(origY)
+	}
+
+	// Center large circle
+	vector.DrawFilledCircle(screen, float32(x), float32(my(y)), float32(size*0.8), col, true)
+
+	// Left upper circle (offset from center)
+	vector.DrawFilledCircle(screen, float32(x-size*0.7), float32(my(y-size*0.3)), float32(size*0.6), col, true)
+
+	// Left lower circle
+	vector.DrawFilledCircle(screen, float32(x-size*0.5), float32(my(y+size*0.2)), float32(size*0.55), col, true)
+
+	// Right upper circle
+	vector.DrawFilledCircle(screen, float32(x+size*0.6), float32(my(y-size*0.4)), float32(size*0.7), col, true)
+
+	// Right lower circle
+	vector.DrawFilledCircle(screen, float32(x+size*0.8), float32(my(y)), float32(size*0.65), col, true)
+
+	// Top circle for fluffy appearance
+	vector.DrawFilledCircle(screen, float32(x-size*0.2), float32(my(y-size*0.6)), float32(size*0.5), col, true)
+
+	// Extra right circle for more cloud volume
+	vector.DrawFilledCircle(screen, float32(x+size), float32(my(y+size*0.1)), float32(size*0.45), col, true)
+}
+
+// drawCloudWithoutOffset draws a cloud shape by overlapping multiple circles of different sizes
+func (e *ParticleEmitter) drawCloudWithoutOffset(screen *ebiten.Image, x, y, size, rotation float64, col color.NRGBA) {
+	// Cloud is made of overlapping circles in a puff pattern
+	// Center large circle
+	vector.DrawFilledCircle(screen, float32(x), float32(y), float32(size*0.8), col, true)
+
+	// Left upper circle (offset from center)
+	vector.DrawFilledCircle(screen, float32(x-size*0.7), float32(y-size*0.3), float32(size*0.6), col, true)
+
+	// Left lower circle
+	vector.DrawFilledCircle(screen, float32(x-size*0.5), float32(y+size*0.2), float32(size*0.55), col, true)
+
+	// Right upper circle
+	vector.DrawFilledCircle(screen, float32(x+size*0.6), float32(y-size*0.4), float32(size*0.7), col, true)
+
+	// Right lower circle
+	vector.DrawFilledCircle(screen, float32(x+size*0.8), float32(y), float32(size*0.65), col, true)
+
+	// Top circle for fluffy appearance
+	vector.DrawFilledCircle(screen, float32(x-size*0.2), float32(y-size*0.6), float32(size*0.5), col, true)
+
+	// Extra right circle for more cloud volume
+	vector.DrawFilledCircle(screen, float32(x+size), float32(y+size*0.1), float32(size*0.45), col, true)
+}
+
+// drawStarWithoutOffset draws a star shape without camera offset
+func (e *ParticleEmitter) drawStarWithoutOffset(screen *ebiten.Image, x, y, size, rotation float64, col color.NRGBA) {
+	points := 5
+	outerRadius := size
+	innerRadius := size * 0.4
+
+	for i := 0; i < points*2; i++ {
+		angle := (float64(i) * math.Pi / float64(points)) + rotation
+		radius := outerRadius
+		if i%2 == 1 {
+			radius = innerRadius
+		}
+
+		px := x + math.Cos(angle)*radius
+		py := y + math.Sin(angle)*radius
+
+		if i == 0 {
+			continue // Skip first point for line drawing
+		}
+
+		// Draw star points
+		vector.DrawFilledCircle(screen, float32(px), float32(py), 1, col, true)
+	}
 }
 
 // CreateSpellCastEffect creates spell casting visual effects

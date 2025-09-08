@@ -9,6 +9,9 @@ require (
 	rumble/shared v0.0.0
 )
 
+// Windows native file dialogs - available as optional enhancement
+// require fyne.io/fyne/v2 v2.5.2 // Not added to avoid breaking existing functionality
+
 require (
 	github.com/ebitengine/gomobile v0.0.0-20250329061421-6d0a8e981e4c // indirect
 	github.com/ebitengine/hideconsole v1.0.0 // indirect

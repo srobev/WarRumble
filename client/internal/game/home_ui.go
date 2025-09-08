@@ -23,6 +23,14 @@ import (
 func (g *Game) drawHomeContent(screen *ebiten.Image) {
 	switch g.activeTab {
 	case tabArmy:
+		// Draw map background first
+		g.ensureArmyBgLayer()
+		if g.armyBgLayer != nil {
+			var op ebiten.DrawImageOptions
+			op.GeoM.Translate(0, float64(topBarH))
+			screen.DrawImage(g.armyBgLayer, &op)
+		}
+
 		// Layout numbers (mirror Update)
 		const champCardW, champCardH = 100, 116
 		const miniCardW, miniCardH = 100, 116
@@ -1154,11 +1162,12 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 		}
 	case tabMap:
 		disp := g.displayMapID()
-		bg := g.ensureBgForMap(disp)
-		offX, offY, dispW, dispH, s := g.mapRenderRect(bg)
 
-		if bg != nil {
-			c := g.mapEdgeColor(disp, bg)
+		mapBg := g.ensureBgForMap(disp)
+		offX, offY, dispW, dispH, s := g.mapRenderRect(mapBg)
+
+		if mapBg != nil {
+			c := g.mapEdgeColor(disp, mapBg)
 			if offY > 0 {
 				ebitenutil.DrawRect(screen, 0, 0, float64(protocol.ScreenW), float64(offY), c)
 				ebitenutil.DrawRect(screen, 0, float64(offY+dispH),
@@ -1169,8 +1178,20 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 			op.GeoM.Translate(float64(offX), float64(offY))
 			// Use linear filtering for smoother scaling on high-resolution displays
 			op.Filter = ebiten.FilterLinear
-			screen.DrawImage(bg, op)
+			screen.DrawImage(mapBg, op)
 		}
+		// Initialize world map particles when switching to map tab
+		if g.particleSystem == nil {
+			g.initWorldMapParticles()
+		}
+
+		// Ensure particles are initialized even if particle system exists but is empty
+		if g.particleSystem != nil && len(g.particleSystem.Emitters) == 0 {
+			g.initWorldMapParticles()
+		}
+
+		// Draw particles AFTER the map so they appear on top!
+		g.drawParticlesWithoutCamera(screen, 0, 0, protocol.ScreenW, protocol.ScreenH)
 
 		text.Draw(screen, "Map — click a location, then press Start",
 			basicfont.Face7x13, pad, topBarH-6, color.White)

@@ -72,3 +72,8 @@ This project is WarRumble, a multiplayer game built in Go.
 - Mobile version uses `main_android.go` for Android builds.
 
 This memory bank serves as a central repository for project information. Update as needed during development.
+
+## Related Documentation
+- See [projectbrief.md](projectbrief.md) for high-level project overview
+- See [techContext.md](techContext.md) for detailed development setup and constraints
+- See [progress.md](progress.md) for current implementation status and roadmap

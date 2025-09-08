@@ -99,7 +99,8 @@ type RegisterResp struct {
 }
 
 func (a *Auth) HandleRegister(w http.ResponseWriter, r *http.Request) {
-	log.Println("HandleRegister")
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	log.Printf("[%s] SYSTEM: HandleRegister request", timestamp)
 	var req RegisterReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
@@ -134,7 +135,8 @@ type LoginResp struct {
 }
 
 func (a *Auth) HandleLogin(w http.ResponseWriter, r *http.Request) {
-	log.Println("HandleLogin")
+	timestamp := time.Now().Format("2006-01-02 15:04:05")
+	log.Printf("[%s] SYSTEM: HandleLogin request", timestamp)
 	var req LoginReq
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid json", http.StatusBadRequest)
@@ -142,9 +144,9 @@ func (a *Auth) HandleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check game version compatibility
-	log.Printf("Client version: %q, Server version: %q", req.Version, protocol.GameVersion)
+	log.Printf("[%s] SYSTEM: Client version=%q, Server version=%q", timestamp, req.Version, protocol.GameVersion)
 	if req.Version != protocol.GameVersion {
-		log.Printf("Version mismatch detected: client=%q, server=%q", req.Version, protocol.GameVersion)
+		log.Printf("[%s] SYSTEM: Version mismatch detected: client=%q, server=%q", timestamp, req.Version, protocol.GameVersion)
 		http.Error(w, "version mismatch: please update your game to the latest version", http.StatusUpgradeRequired)
 		return
 	}
@@ -180,7 +182,7 @@ func (a *Auth) ParseToken(tok string) (string, error) {
 		// Check version compatibility in token claims
 		if ver, ok := claims["ver"].(string); ok {
 			if ver != protocol.GameVersion {
-				log.Printf("Token version mismatch: token=%q, server=%q", ver, protocol.GameVersion)
+				log.Printf("[%s] SYSTEM: Token version mismatch: token=%q, server=%q", time.Now().Format("2006-01-02 15:04:05"), ver, protocol.GameVersion)
 				return "", errors.New("token version mismatch: please re-login")
 			}
 		}

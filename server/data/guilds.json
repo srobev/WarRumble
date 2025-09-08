@@ -5,12 +5,23 @@
     "desc": "",
     "privacy": "public",
     "region": "NA",
-    "leader": "tester",
+    "leader": "tester2",
     "members": {
-      "silvester": "member",
-      "tester": "leader",
       "tester2": "member"
     },
     "created": 1756713614
+  },
+  "g-1757237974642085700": {
+    "guildId": "g-1757237974642085700",
+    "name": "guilder",
+    "desc": "",
+    "privacy": "public",
+    "region": "NA",
+    "leader": "silvester",
+    "members": {
+      "silvester": "leader",
+      "tester": "member"
+    },
+    "created": 1757237974
   }
 }

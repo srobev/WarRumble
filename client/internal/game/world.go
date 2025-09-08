@@ -364,21 +364,31 @@ func (w *World) applyBaseCollisionAvoidance(unitID int64, newX, newY float64) (f
 
 	// Check collision with bases only (no unit-to-unit collision)
 	for _, base := range w.Bases {
-		baseCenterX := float64(base.X + base.W/2)
-		baseCenterY := float64(base.Y + base.H/2)
-		baseRadius := math.Sqrt(float64(base.W*base.W+base.H*base.H)) / 2
+		// Use rectangular collision with actual base dimensions (96x96)
+		baseLeft := float64(base.X) - baseBuffer
+		baseRight := float64(base.X+base.W) + baseBuffer
+		baseTop := float64(base.Y) - baseBuffer
+		baseBottom := float64(base.Y+base.H) + baseBuffer
 
-		dx := newX - baseCenterX
-		dy := newY - baseCenterY
-		dist := math.Sqrt(dx*dx + dy*dy)
-		minDist := unitRadius + baseRadius + baseBuffer
+		// Find closest point on expanded base rectangle
+		closestX := math.Max(baseLeft, math.Min(newX, baseRight))
+		closestY := math.Max(baseTop, math.Min(newY, baseBottom))
 
-		if dist < minDist && dist > 0 {
-			// Unit is too close to base, push it away
-			pushX := dx / dist * (minDist - dist)
-			pushY := dy / dist * (minDist - dist)
-			newX += pushX
-			newY += pushY
+		// Check if unit is inside the expanded rectangle
+		if newX >= baseLeft && newX <= baseRight && newY >= baseTop && newY <= baseBottom {
+			// Unit is inside expanded base area, push it out
+			dx := newX - closestX
+			dy := newY - closestY
+
+			if dx != 0 || dy != 0 {
+				dist := math.Sqrt(dx*dx + dy*dy)
+				if dist > 0 {
+					// Push unit away from closest point
+					pushDist := unitRadius + baseBuffer
+					newX = closestX + (dx/dist)*pushDist
+					newY = closestY + (dy/dist)*pushDist
+				}
+			}
 		}
 	}
 

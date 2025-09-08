@@ -124,10 +124,10 @@ func (h *Hub) EnqueuePvp(c *client) {
 		if selectedArena != "" {
 			if mapDef, err := loadMapDef(selectedArena); err == nil {
 				r.g.mapDef = &mapDef
-				log.Printf("Selected arena %s for PvP: playerBase=%.2f,%.2f enemyBase=%.2f,%.2f",
+				log.Printf("SYSTEM: Selected arena %s for PvP: playerBase=%.2f,%.2f enemyBase=%.2f,%.2f",
 					selectedArena, mapDef.PlayerBase.X, mapDef.PlayerBase.Y, mapDef.EnemyBase.X, mapDef.EnemyBase.Y)
 			} else {
-				log.Printf("Failed to load arena %s for PvP: %v", selectedArena, err)
+				log.Printf("SYSTEM: Failed to load arena %s for PvP: %v", selectedArena, err)
 			}
 		}
 
@@ -187,13 +187,13 @@ func (h *Hub) selectRandomArena() string {
 
 	// If no arenas found, return empty string (will use default map)
 	if len(arenaIDs) == 0 {
-		log.Printf("No arenas found, using default map for PvP")
+		log.Printf("SYSTEM: No arenas found, using default map for PvP")
 		return ""
 	}
 
 	// Randomly select one
 	selected := arenaIDs[rand.Intn(len(arenaIDs))]
-	log.Printf("Randomly selected arena: %s (from %d available arenas)", selected, len(arenaIDs))
+	log.Printf("SYSTEM: Randomly selected arena: %s (from %d available arenas)", selected, len(arenaIDs))
 	return selected
 }
 
@@ -319,18 +319,25 @@ func (c *client) reader(h *Hub) {
 		h.mu.Unlock()
 	}()
 
+	// Helper function for logging with account name and timestamp
+	logWithAccount := func(accountName, message string) {
+		timestamp := time.Now().Format("2006-01-02 15:04:05")
+		log.Printf("[%s] %s: %s", timestamp, accountName, message)
+	}
+
 	for {
 		_, data, err := c.conn.ReadMessage()
 		if err != nil {
-			log.Println("read:", err)
+			logWithAccount(c.name, "WebSocket read error: "+err.Error())
 			return
 		}
 
 		var env protocol.MsgEnvelope
 		if err := json.Unmarshal(data, &env); err != nil {
+			logWithAccount(c.name, "Failed to unmarshal WebSocket message")
 			continue
 		}
-		log.Printf("WS msg type=%s", env.Type)
+		logWithAccount(c.name, "WS msg type="+env.Type)
 
 		switch env.Type {
 
@@ -935,10 +942,10 @@ func (c *client) reader(h *Hub) {
 			// Load map definition fresh each time (no caching)
 			if mapDef, err := loadMapDef(m.MapID); err == nil {
 				r.g.mapDef = &mapDef
-				log.Printf("Loaded map %s for PvE: playerBase=%.2f,%.2f enemyBase=%.2f,%.2f",
-					m.MapID, mapDef.PlayerBase.X, mapDef.PlayerBase.Y, mapDef.EnemyBase.X, mapDef.EnemyBase.Y)
+				logWithAccount(c.name, "Loaded map "+m.MapID+" for PvE: playerBase="+fmt.Sprintf("%.2f,%.2f enemyBase=%.2f,%.2f",
+					mapDef.PlayerBase.X, mapDef.PlayerBase.Y, mapDef.EnemyBase.X, mapDef.EnemyBase.Y))
 			} else {
-				log.Printf("Failed to load map %s for PvE: %v", m.MapID, err)
+				logWithAccount(c.name, "Failed to load map "+m.MapID+" for PvE: "+err.Error())
 			}
 			// Join with the session identity so c.id == s.PlayerID
 			r.JoinClient(c, s)

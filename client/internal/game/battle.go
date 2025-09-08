@@ -1061,7 +1061,7 @@ func (g *Game) updateBaseShooting() {
 		// If no enemy units in range, check enemy bases
 		if closestTarget == nil {
 			for _, enemyBase := range g.world.Bases {
-				if enemyBase.OwnerID == g.playerID {
+				if enemyBase.OwnerID == base.OwnerID {
 					continue
 				}
 

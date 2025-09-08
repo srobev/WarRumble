@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"image"
 	"image/color"
+	"math"
 	"os"
 	"sort"
 	"strconv"
@@ -39,11 +40,123 @@ type guildMember struct {
 
 // UpdateSocial handles input for Social tab
 func (g *Game) updateSocial() {
-	// Use logical coordinates to match our layout rects under window scaling
-	mx, my := g.logicalCursor()
+	// Use exact cursor position like other tabs
+	mx, my := ebiten.CursorPosition()
 
-	// If member profile overlay (or its confirmation) is open, block clicks to underlying UI
-	if (g.memberProfileOverlay || g.transferLeaderConfirm) && inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+	// Handle overlays first - they should handle their own clicks and dismiss
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		// Handle member profile overlay close and button clicks
+		if g.memberProfileOverlay {
+			w, h := 520, 380
+			x := (protocol.ScreenW - w) / 2
+			y := (protocol.ScreenH - h) / 2
+
+			// Check buttons first
+			isSelf := strings.EqualFold(g.memberProfile.Name, g.name)
+			canKick := false
+			canPromote := false
+			canDemote := false
+			canTransfer := false
+			isFriend := false
+			for _, fr := range g.friends {
+				if strings.EqualFold(fr.Name, g.memberProfile.Name) {
+					isFriend = true
+					break
+				}
+			}
+
+			meRole := "member"
+			selRole := "member"
+			for _, m := range g.guildMembers {
+				if strings.EqualFold(m.Name, g.name) {
+					meRole = strings.ToLower(m.Role)
+				}
+				if strings.EqualFold(m.Name, g.memberProfile.Name) {
+					selRole = strings.ToLower(m.Role)
+				}
+			}
+
+			if meRole == "leader" {
+				canKick = !isSelf
+				canPromote = !isSelf
+				canDemote = !isSelf
+				canTransfer = !isSelf
+			} else if meRole == "officer" {
+				if selRole == "member" {
+					canKick = !isSelf
+					canPromote = true
+					canDemote = true
+				}
+			}
+
+			actionsTop := y + int(float64(h)*0.85) - 64
+
+			// Handle button clicks
+			if !g.profileFromFriends {
+				if canPromote && ptIn(mx, my, image.Rect(x+14+84, actionsTop, x+14+84+96, actionsTop+24)) {
+					g.send("PromoteMember", protocol.PromoteMember{User: g.memberProfile.Name})
+					g.send("GetGuild", protocol.GetGuild{})
+					return
+				}
+				if canDemote && ptIn(mx, my, image.Rect(x+14+84+110, actionsTop, x+14+84+110+96, actionsTop+24)) {
+					g.send("DemoteMember", protocol.DemoteMember{User: g.memberProfile.Name})
+					g.send("GetGuild", protocol.GetGuild{})
+					return
+				}
+				if canKick && ptIn(mx, my, image.Rect(x+14+84, actionsTop+30, x+14+84+96, actionsTop+30+24)) {
+					g.send("KickMember", protocol.KickMember{User: g.memberProfile.Name})
+					g.send("GetGuild", protocol.GetGuild{})
+					return
+				}
+				if canTransfer && ptIn(mx, my, image.Rect(x+14+84+110, actionsTop+30, x+14+84+110+96, actionsTop+30+24)) {
+					g.transferLeaderTarget = g.memberProfile.Name
+					g.transferLeaderConfirm = true
+					return
+				}
+			}
+
+			// Handle Message and Unfriend buttons
+			if isFriend && !isSelf {
+				baseY := actionsTop
+				if !g.profileFromFriends {
+					baseY = actionsTop + 60
+				}
+				if ptIn(mx, my, image.Rect(x+14+84, baseY, x+14+84+96, baseY+24)) {
+					g.selectedFriend = g.memberProfile.Name
+					g.socialTab = int(socialFriends)
+					g.dmOverlay = true
+					g.dmInputFocus = true
+					g.guildChatFocus = false
+					g.send("GetFriendHistory", protocol.GetFriendHistory{With: g.selectedFriend, Limit: 50})
+					g.memberProfileOverlay = false
+					g.profileFromFriends = false
+					return
+				}
+				if ptIn(mx, my, image.Rect(x+14+84+110, baseY, x+14+84+110+96, baseY+24)) {
+					g.send("RemoveFriend", protocol.RemoveFriend{Name: g.memberProfile.Name})
+					return
+				}
+			}
+
+			// Handle close button
+			closeR := image.Rect(x+w-28, y+8, x+w-8, y+28)
+			if ptIn(mx, my, closeR) {
+				g.memberProfileOverlay = false
+				g.profileFromFriends = false
+				return
+			}
+		}
+
+		// Handle transfer leader confirmation
+		if g.transferLeaderConfirm {
+			if g.handleTransferLeaderConfirmation(mx, my) {
+				return
+			}
+		}
+	}
+
+	// If overlays are open, block other UI interactions
+	if g.memberProfileOverlay || g.transferLeaderConfirm {
 		return
 	}
 
@@ -80,7 +193,7 @@ func (g *Game) updateSocial() {
 	segY := topBarH + pad
 	segFriends := image.Rect(segX, segY, segX+segW/2, segY+segH)
 	segGuild := image.Rect(segX+segW/2, segY, segX+segW, segY+segH)
-	// Top-right buttons when on Guild tab and in a guild
+	// Top-right buttons when on Guild tab and in a guild - use logical coordinates
 	leaveTopBtn := image.Rect(protocol.ScreenW-pad-120, segY+6, protocol.ScreenW-pad, segY+6+24)
 	disbandTopBtn := image.Rect(protocol.ScreenW-pad-240, segY+6, protocol.ScreenW-pad-124, segY+6+24)
 
@@ -355,25 +468,50 @@ func (g *Game) updateSocial() {
 			g.guildMembersScroll = maxStart
 		}
 
-		// Rects used in interactions
+		// Rects used in interactions - match exact positions from drawGuild
 		sortBtn := image.Rect(x+fullW-120, contentY+12, x+fullW-12, contentY+12+26)
 		// Members panel area
 		membersArea := image.Rect(x, contentY+12, x+fullW, contentY+12+topH)
-		// Chat
+		// Guild rewards button - exact positioning from drawGuild
+		guildRewardsBtn := image.Rect(x+(fullW-160)/2, contentY+12+topH+6, x+(fullW-160)/2+160, contentY+12+topH+6+26)
+		// Chat input area - exact positioning from drawGuild
 		chatTop := contentY + 12 + topH + 36
 		inputW := fullW - 180
-		chatInputRect := image.Rect(x+8, chatTop+botH-26, x+8+inputW, chatTop+botH-26+22)
 		// leaveR removed (no bottom leave button)
 
-		// Mouse interactions
+		// Mouse interactions - check specific buttons first, then general areas
 		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-			// Sort toggle
+			// Check specific buttons first (highest priority)
+			sendBtnX := x + 8 + inputW + 6
+			sendBtnY := chatTop + botH - 26
+			sendBtnW := 70
+			sendBtnH := 22
+			sendBtnRect := image.Rect(sendBtnX, sendBtnY, sendBtnX+sendBtnW, sendBtnY+sendBtnH)
+
+			// 1. Send button in chat
+			if ptIn(mx, my, sendBtnRect) && strings.TrimSpace(g.guildChatInput) != "" {
+				if time.Since(g.guildSendClickAt) > 120*time.Millisecond {
+					g.send("GuildChatSend", protocol.GuildChatSend{Text: strings.TrimSpace(g.guildChatInput)})
+					g.guildChatInput = ""
+					g.guildSendClickAt = time.Now()
+				}
+				return
+			}
+
+			// 2. Guild Rewards button
+			if ptIn(mx, my, guildRewardsBtn) {
+				g.armyMsg = "Guild Rewards coming soon!"
+				return
+			}
+
+			// 3. Sort button
 			if ptIn(mx, my, sortBtn) {
 				g.guildSortMode = (g.guildSortMode + 1) % 3
 				g.guildMembersScroll = 0
+				return
 			}
 
-			// Click rows: compute index
+			// 4. Check members panel (before general areas)
 			if ptIn(mx, my, membersArea) {
 				idx := (my - (rowsTop - 12)) / rowH
 				if idx >= 0 {
@@ -386,38 +524,16 @@ func (g *Game) updateSocial() {
 						g.selectedGuildMember = name
 					}
 				}
+				return
 			}
 
-			// Send via click (pressed) first - use exact button bounds
-			sendBtnX := x + 8 + inputW + 6
-			sendBtnY := chatTop + botH - 26
-			sendBtnW := 70
-			sendBtnH := 22
-			sendBtnRect := image.Rect(sendBtnX, sendBtnY, sendBtnX+sendBtnW, sendBtnY+sendBtnH)
-
-			if ptIn(mx, my, sendBtnRect) && strings.TrimSpace(g.guildChatInput) != "" {
-				if time.Since(g.guildSendClickAt) > 120*time.Millisecond {
-					g.send("GuildChatSend", protocol.GuildChatSend{Text: strings.TrimSpace(g.guildChatInput)})
-					g.guildChatInput = ""
-					g.guildSendClickAt = time.Now()
-				}
-			}
-			// Chat input focus: clicking anywhere in chat panel focuses input
+			// 5. Chat panel focus (lowest priority - if nothing else was clicked)
 			chatPanel := image.Rect(x, chatTop, x+fullW, chatTop+botH)
-			if ptIn(mx, my, chatPanel) || ptIn(mx, my, chatInputRect) {
+			if ptIn(mx, my, chatPanel) {
 				g.guildChatFocus = true
 			} else if !ptIn(mx, my, sendBtnRect) {
 				g.guildChatFocus = false
 			}
-			// Also handle send on mouse release or while pressed as a fallback
-			if (inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) || ebiten.IsMouseButtonPressed(ebiten.MouseButtonLeft)) && ptIn(mx, my, sendBtnRect) && strings.TrimSpace(g.guildChatInput) != "" {
-				if time.Since(g.guildSendClickAt) > 120*time.Millisecond {
-					g.send("GuildChatSend", protocol.GuildChatSend{Text: strings.TrimSpace(g.guildChatInput)})
-					g.guildChatInput = ""
-					g.guildSendClickAt = time.Now()
-				}
-			}
-			// No bottom leave button anymore
 
 			// Click name in chat to open profile (first line of each wrapped message)
 			maxRows := (botH - 32) / 16
@@ -645,6 +761,7 @@ func (g *Game) updateSocial() {
 		inputRect := image.Rect(x+12, y+h-30, x+w-12-(btnW+6), y+h-8)
 		sendRect := image.Rect(inputRect.Max.X+6, y+h-30, inputRect.Max.X+6+btnW, y+h-8)
 		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+			mx, my := ebiten.CursorPosition()
 			if ptIn(mx, my, closeR) {
 				g.dmOverlay = false
 			}
@@ -861,6 +978,127 @@ func (g *Game) drawSocial(screen *ebiten.Image) {
 			text.Draw(screen, "Guild: "+strings.TrimSpace(g.guildName), basicfont.Face7x13, x+14+84, y+88, color.White)
 		}
 
+		// Display equipped army as visual grid with average cost and level
+		if len(g.memberProfile.Army) > 0 {
+			// Add centered "Current Army:" header
+			headerY := y + 116
+			headerText := "Current Army:"
+			headerWidth := text.BoundString(basicfont.Face7x13, headerText).Dx()
+			headerX := x + (w-headerWidth)/2
+			text.Draw(screen, headerText, basicfont.Face7x13, headerX, headerY, color.NRGBA{220, 220, 230, 255})
+
+			// Move army down to accommodate header
+			armyTop := y + 130
+
+			// Calculate average cost and level
+			totalCost := 0
+			levelSum := 0
+			unitCount := 0
+			costMap := map[string]int{}
+			for _, mini := range g.minisAll {
+				costMap[mini.Name] = mini.Cost
+			}
+
+			xpLevels := []int{0, 2, 5, 10, 20, 35, 65, 120, 210, 375, 675, 1200, 2100, 3750, 6500, 12000, 25000, 50000, 100000, 200000}
+
+			for _, unitName := range g.memberProfile.Army {
+				if cost, ok := costMap[unitName]; ok {
+					totalCost += cost
+					unitCount++
+				}
+				if xp, exists := g.memberProfile.UnitXP[unitName]; exists {
+					level := 0
+					for i, reqXP := range xpLevels {
+						if xp >= reqXP {
+							level = i
+						} else {
+							break
+						}
+					}
+					levelSum += level
+				}
+			}
+
+			if unitCount > 0 {
+				avgCost := float64(totalCost) / float64(unitCount)
+				avgLevel := float64(levelSum) / float64(unitCount)
+
+				// Center the champion and mini units horizontally in the overlay
+				championSize := 80 // Smaller champion to fit better
+				miniSize := 50
+
+				// Calculate total width needed: champion + spacing + mini grid
+				miniGridWidth := 3*miniSize + 2*2               // 3 units + 2 spacing gaps
+				totalWidth := championSize + 30 + miniGridWidth // champion + spacing + grid
+
+				// Center everything horizontally in the overlay
+				startX := x + (w-totalWidth)/2
+
+				// Draw champion unit (first in army)
+				championLeft := startX
+				if len(g.memberProfile.Army) > 0 {
+					if img := g.ensureMiniImageByName(g.memberProfile.Army[0]); img != nil {
+						scale := float64(championSize) / math.Max(float64(img.Bounds().Dx()), float64(img.Bounds().Dy()))
+						op := &ebiten.DrawImageOptions{}
+						if img.Bounds().Dx() > img.Bounds().Dy() {
+							scale = float64(championSize) / float64(img.Bounds().Dx())
+						} else {
+							scale = float64(championSize) / float64(img.Bounds().Dy())
+						}
+						op.GeoM.Scale(scale, scale)
+						op.GeoM.Translate(float64(championLeft), float64(armyTop))
+						screen.DrawImage(img, op)
+					}
+				}
+
+				// Draw mini units 3x2 grid (units 2-7)
+				miniLeft := startX + championSize + 30 // After champion + spacing
+				for i := 1; i < len(g.memberProfile.Army) && i < 7; i++ {
+					row := (i - 1) / 3
+					col := (i - 1) % 3
+					mx := miniLeft + col*(miniSize+2)
+					my := armyTop + row*(miniSize+2)
+
+					img := g.ensureMiniImageByName(g.memberProfile.Army[i])
+					if img != nil {
+						scale := float64(miniSize) / math.Max(float64(img.Bounds().Dx()), float64(img.Bounds().Dy()))
+						op := &ebiten.DrawImageOptions{}
+						if img.Bounds().Dx() > img.Bounds().Dy() {
+							scale = float64(miniSize) / float64(img.Bounds().Dx())
+						} else {
+							scale = float64(miniSize) / float64(img.Bounds().Dy())
+						}
+						op.GeoM.Scale(scale, scale)
+						op.GeoM.Translate(float64(mx), float64(my))
+						screen.DrawImage(img, op)
+					}
+				}
+
+				// Display averages under the unit grid (well below portraits)
+				championBottom := armyTop + championSize
+				minisBottom := armyTop + (miniSize+2)*2
+				statsTop := championBottom
+				if minisBottom > championBottom {
+					statsTop = minisBottom
+				}
+				statsTop += 15 // Extra spacing below the grid
+
+				// Center both texts within the centered area
+				centerX := startX + totalWidth/2
+				costText := fmt.Sprintf("Avg Cost: %.1f gold", avgCost)
+				levelText := fmt.Sprintf("Avg Level: %.1f", avgLevel)
+				costWidth := text.BoundString(basicfont.Face7x13, costText).Dx()
+				levelWidth := text.BoundString(basicfont.Face7x13, levelText).Dx()
+
+				// Position cost text left, level text right, evenly spaced
+				costX := centerX - (costWidth+levelWidth+10)/2
+				levelX := costX + costWidth + 10
+
+				text.Draw(screen, costText, basicfont.Face7x13, costX, statsTop, color.NRGBA{240, 196, 25, 255})
+				text.Draw(screen, levelText, basicfont.Face7x13, levelX, statsTop, color.NRGBA{120, 180, 255, 255})
+			}
+		}
+
 		// Admin actions (leader/officer) and Unfriend
 		meRole := "member"
 		selRole := "member"
@@ -872,20 +1110,7 @@ func (g *Game) drawSocial(screen *ebiten.Image) {
 				selRole = strings.ToLower(m.Role)
 			}
 		}
-		btn := func(rx, ry int, label string, enabled bool) image.Rectangle {
-			r := image.Rect(rx, ry, rx+96, ry+24)
-			col := color.NRGBA{60, 60, 80, 255}
-			if enabled {
-				col = color.NRGBA{70, 110, 70, 255}
-			}
-			ebitenutil.DrawRect(screen, float64(r.Min.X), float64(r.Min.Y), float64(r.Dx()), float64(r.Dy()), col)
-			text.Draw(screen, label, basicfont.Face7x13, r.Min.X+8, r.Min.Y+16, color.White)
-			return r
-		}
 		// Move action buttons 20% north
-		actionsTop := y + int(float64(h)*0.8) - 64
-		var promoteR, demoteR, kickR, transferR image.Rectangle
-		var unfriendR, messageR image.Rectangle
 		isSelf := strings.EqualFold(g.memberProfile.Name, g.name)
 		canKick := false
 		canPromote := false
@@ -911,63 +1136,39 @@ func (g *Game) drawSocial(screen *ebiten.Image) {
 				canDemote = true
 			}
 		}
-		// Two rows to fit within overlay width; hide admin buttons when opened from friends
+
+		// Draw buttons below statistics - ensure no overlap
+		actionsTop := y + int(float64(h)*0.85) - 64
 		if !g.profileFromFriends {
-			promoteR = btn(x+14+84, actionsTop, "Promote", canPromote)
-			demoteR = btn(x+14+84+110, actionsTop, "Demote", canDemote)
-			kickR = btn(x+14+84, actionsTop+30, "Kick", canKick)
-			if meRole == "leader" {
-				transferR = btn(x+14+84+110, actionsTop+30, "Make Leader", canTransfer)
+			if canPromote {
+				g.fantasyUI.DrawThemedButtonWithStyle(screen, x+14+84, actionsTop, 96, 24,
+					"Promote", ButtonNormal, true)
+			}
+			if canDemote {
+				g.fantasyUI.DrawThemedButtonWithStyle(screen, x+14+84+110, actionsTop, 96, 24,
+					"Demote", ButtonNormal, true)
+			}
+			if canKick {
+				g.fantasyUI.DrawThemedButtonWithStyle(screen, x+14+84, actionsTop+30, 96, 24,
+					"Kick", ButtonNormal, true)
+			}
+			if canTransfer {
+				g.fantasyUI.DrawThemedButtonWithStyle(screen, x+14+84+110, actionsTop+30, 96, 24,
+					"Make Leader", ButtonNormal, true)
 			}
 		}
 		// Unfriend button if viewing a friend (not self)
 		if isFriend && !isSelf {
-			baseX := x + 14 + 84
 			baseY := actionsTop
 			if !g.profileFromFriends {
 				baseY = actionsTop + 60
 			}
-			messageR = btn(baseX, baseY, "Message", true)
-			unfriendR = btn(baseX+110, baseY, "Unfriend", true)
+			g.fantasyUI.DrawThemedButtonWithStyle(screen, x+14+84, baseY, 96, 24,
+				"Message", ButtonNormal, true)
+			g.fantasyUI.DrawThemedButtonWithStyle(screen, x+14+84+110, baseY, 96, 24,
+				"Unfriend", ButtonNormal, true)
 		}
-		mx, my := g.logicalCursor()
-		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-			if ptIn(mx, my, closeR) {
-				g.memberProfileOverlay = false
-				g.profileFromFriends = false
-			}
-			// Action handlers
-			if canPromote && ptIn(mx, my, promoteR) {
-				g.send("PromoteMember", protocol.PromoteMember{User: g.memberProfile.Name})
-				g.send("GetGuild", protocol.GetGuild{})
-			}
-			if canDemote && ptIn(mx, my, demoteR) {
-				g.send("DemoteMember", protocol.DemoteMember{User: g.memberProfile.Name})
-				g.send("GetGuild", protocol.GetGuild{})
-			}
-			if canKick && ptIn(mx, my, kickR) {
-				g.send("KickMember", protocol.KickMember{User: g.memberProfile.Name})
-				g.send("GetGuild", protocol.GetGuild{})
-			}
-			if canTransfer && ptIn(mx, my, transferR) {
-				g.transferLeaderTarget = g.memberProfile.Name
-				g.transferLeaderConfirm = true
-			}
-			if isFriend && !isSelf && ptIn(mx, my, unfriendR) {
-				g.send("RemoveFriend", protocol.RemoveFriend{Name: g.memberProfile.Name})
-			}
-			if isFriend && !isSelf && ptIn(mx, my, messageR) {
-				g.selectedFriend = g.memberProfile.Name
-				// Switch to Friends tab and open DM overlay focused
-				g.socialTab = int(socialFriends)
-				g.dmOverlay = true
-				g.dmInputFocus = true
-				g.guildChatFocus = false
-				g.send("GetFriendHistory", protocol.GetFriendHistory{With: g.selectedFriend, Limit: 50})
-				g.memberProfileOverlay = false
-				g.profileFromFriends = false
-			}
-		}
+
 		// Transfer leader confirm popup
 		if g.transferLeaderConfirm && g.transferLeaderTarget != "" {
 			box := image.Rect(x+40, y+h-98, x+w-40, y+h-42)
@@ -980,19 +1181,7 @@ func (g *Game) drawSocial(screen *ebiten.Image) {
 			ebitenutil.DrawRect(screen, float64(no.Min.X), float64(no.Min.Y), float64(no.Dx()), float64(no.Dy()), color.NRGBA{90, 70, 70, 255})
 			text.Draw(screen, "Yes", basicfont.Face7x13, yes.Min.X+16, yes.Min.Y+16, color.White)
 			text.Draw(screen, "No", basicfont.Face7x13, no.Min.X+20, no.Min.Y+16, color.White)
-			mx, my := g.logicalCursor()
-			if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-				if ptIn(mx, my, yes) {
-					g.send("TransferLeader", protocol.TransferLeader{To: g.transferLeaderTarget})
-					g.transferLeaderConfirm = false
-					g.transferLeaderTarget = ""
-					g.send("GetGuild", protocol.GetGuild{})
-				}
-				if ptIn(mx, my, no) {
-					g.transferLeaderConfirm = false
-					g.transferLeaderTarget = ""
-				}
-			}
+			// Move mouse handling to updateSocial - click handling doesn't belong in draw
 		}
 	}
 }
@@ -1391,6 +1580,29 @@ func wrapString(s string, maxW int) []string {
 		lines = []string{""}
 	}
 	return lines
+}
+
+func (g *Game) handleTransferLeaderConfirmation(mx, my int) bool {
+	w, h := 520, 380
+	x := (protocol.ScreenW - w) / 2
+	y := (protocol.ScreenH - h) / 2
+	box := image.Rect(x+40, y+h-98, x+w-40, y+h-42)
+	yes := image.Rect(box.Min.X+10, box.Min.Y+28, box.Min.X+10+64, box.Min.Y+28+22)
+	no := image.Rect(box.Min.X+84, box.Min.Y+28, box.Min.X+84+64, box.Min.Y+28+22)
+
+	if ptIn(mx, my, yes) {
+		g.send("TransferLeader", protocol.TransferLeader{To: g.transferLeaderTarget})
+		g.transferLeaderConfirm = false
+		g.transferLeaderTarget = ""
+		g.send("GetGuild", protocol.GetGuild{})
+		return true
+	}
+	if ptIn(mx, my, no) {
+		g.transferLeaderConfirm = false
+		g.transferLeaderTarget = ""
+		return true
+	}
+	return false
 }
 
 // visibleGuildChatLines returns the last maxRows lines for the chat panel, wrapped.

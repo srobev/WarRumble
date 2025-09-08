@@ -1,5 +1,5 @@
 {
-  "playerId": 115553,
+  "playerId": 1111309,
   "name": "tester",
   "army": [
     "Bloodmage Thalor",
@@ -24,5 +24,6 @@
   "accountXp": 0,
   "pvp_rating": 1124,
   "pvp_rank": "Knight",
-  "avatar": "default.png"
+  "avatar": "default.png",
+  "guildId": "g-1757237974642085700"
 }

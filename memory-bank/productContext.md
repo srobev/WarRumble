@@ -84,3 +84,8 @@ WarRumble addresses the growing demand for accessible, strategic multiplayer gam
 - Social interaction frequency
 - Tournament participation
 - Player feedback and satisfaction scores
+
+## Related Documentation
+- See [projectbrief.md](projectbrief.md) for core features and technical requirements
+- See [progress.md](progress.md) for current implementation status
+- See [activeContext.md](activeContext.md) for current work priorities

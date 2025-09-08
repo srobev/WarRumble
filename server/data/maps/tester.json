@@ -3,20 +3,24 @@
   "name": "iiiooohht",
   "width": 0,
   "height": 0,
+  "frameX": 0.5,
+  "frameY": 0.5,
+  "frameWidth": 1,
+  "frameHeight": 1,
   "deployZones": [
     {
-      "x": 0.41312689274185477,
-      "y": 0,
-      "w": 0.1,
-      "h": 0.1,
-      "owner": ""
+      "x": -0.3,
+      "y": 0.6,
+      "w": 0.6,
+      "h": 0.2,
+      "owner": "player"
     },
     {
-      "x": 0.44346068088788315,
-      "y": 0.9,
-      "w": 0.1,
-      "h": 0.1,
-      "owner": ""
+      "x": -0.3,
+      "y": -0.2,
+      "w": 0.6,
+      "h": 0.2,
+      "owner": "enemy"
     }
   ],
   "meetingStones": [
@@ -54,11 +58,11 @@
   "lanes": null,
   "obstacles": null,
   "playerBase": {
-    "x": 0,
-    "y": 0
+    "x": 0.5,
+    "y": 0.75
   },
   "enemyBase": {
-    "x": 0,
-    "y": 0
+    "x": 0.5,
+    "y": -0.25
   }
 }

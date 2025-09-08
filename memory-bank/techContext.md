@@ -263,3 +263,8 @@ func main() {
 - **Graceful Shutdown**: Handle interrupts and cleanup resources
 - **Panic Recovery**: Use recover() in critical goroutines
 - **Error Reporting**: Log errors with context for debugging
+
+## Related Documentation
+- See [systemPatterns.md](systemPatterns.md) for architecture patterns and design decisions
+- See [project_context.md](project_context.md) for project structure and setup
+- See [progress.md](progress.md) for current implementation status

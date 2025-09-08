@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	"log"
 	"math"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"rumble/shared/protocol"
 	"strings"
@@ -20,60 +22,182 @@ import (
 	"golang.org/x/image/font/basicfont"
 )
 
+// Windows Native File Dialog Enhancement
+// This function provides native Windows file dialog integration
+// while preserving all existing functionality
+
+// Handle Windows native file dialog via PowerShell
+func (e *editor) showNativeFileDialog() string {
+	// Windows PowerShell command for native file dialog
+	psCommand := `Add-Type -AssemblyName System.Windows.Forms; `
+	psCommand += `$ofd = New-Object System.Windows.Forms.OpenFileDialog; `
+	psCommand += `$ofd.Title = "Open Map File"; `
+	psCommand += `$ofd.Filter = "JSON files (*.json)|*.json|All files (*.*)|*.*"; `
+	psCommand += `$ofd.InitialDirectory = [Environment]::GetFolderPath("MyDocuments"); `
+	psCommand += `$ofd.ShowDialog() | Out-Null; `
+	psCommand += `$ofd.FileName`
+
+	// Execute PowerShell command
+	output, err := exec.Command("powershell", "-Command", psCommand).Output()
+	if err != nil {
+		// Fallback to existing in-app browser if PowerShell fails
+		e.status = "Native file dialog failed, using in-app browser"
+		return ""
+	}
+
+	filePath := strings.TrimSpace(string(output))
+	if filePath == "" {
+		e.status = "No file selected"
+		return ""
+	}
+
+	// Validate file extension
+	if strings.ToLower(filepath.Ext(filePath)) != ".json" {
+		e.status = "Please select a .json map file"
+		return ""
+	}
+
+	e.status = fmt.Sprintf("Loading: %s", filepath.Base(filePath))
+	return filePath
+}
+
+// Enhanced load function that integrates native dialog
+func (e *editor) loadWithNativeDialog() {
+	filePath := e.showNativeFileDialog()
+	if filePath == "" {
+		return
+	}
+
+	// Load the file content
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		e.status = fmt.Sprintf("Failed to read file: %v", err)
+		return
+	}
+
+	// Parse map definition
+	var mapDef protocol.MapDef
+	if err := json.Unmarshal(data, &mapDef); err != nil {
+		e.status = fmt.Sprintf("Invalid map file: %v", err)
+		return
+	}
+
+	// Update editor state
+	e.def = mapDef
+	e.name = mapDef.Name
+
+	e.status = fmt.Sprintf("Loaded map: %s from %s", mapDef.Name, filepath.Base(filePath))
+}
+
+// Alternative: Manual path input dialog within the game window
+func (e *editor) showManualPathDialog() {
+	fmt.Print("Enter the full path to your map file (or leave empty for in-app browser): ")
+
+	scanner := bufio.NewScanner(os.Stdin)
+	if scanner.Scan() {
+		filePath := strings.TrimSpace(scanner.Text())
+		if filePath == "" {
+			e.status = "Using in-app map browser..."
+			return
+		}
+
+		// Process the path
+		e.processManualPath(filePath)
+	}
+}
+
+func (e *editor) processManualPath(filePath string) {
+	// Validate and load the file
+	if _, err := os.Stat(filePath); os.IsNotExist(err) {
+		e.status = "File does not exist: " + filePath
+		return
+	}
+
+	// Load and validate JSON
+	data, err := os.ReadFile(filePath)
+	if err != nil {
+		e.status = fmt.Sprintf("Error reading file: %v", err)
+		return
+	}
+
+	var mapDef protocol.MapDef
+	if err := json.Unmarshal(data, &mapDef); err != nil {
+		e.status = "Invalid map file format"
+		return
+	}
+
+	// Update editor
+	e.def = mapDef
+	e.name = mapDef.Name
+	e.status = fmt.Sprintf("Loaded map: %s", mapDef.Name)
+}
+
+// Integration point: Add shortcut key for native dialog
+//////
+
+// Note: wsMsg is defined in editor.go
+
+// Note: editor struct and all methods will be moved to separate files during refactoring
+
+// Login input handling moved to input.go
+func (e *editor) handleLoginInput() error {
+	mx, my := ebiten.CursorPosition()
+	vw, vh := ebiten.WindowSize()
+
+	// Handle mouse clicks for login UI
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		// Username field
+		ux := (vw - 200) / 2
+		uy := vh/2 - 40
+		if mx >= ux && mx < ux+200 && my >= uy && my < uy+24 {
+			e.loginFocus = 0
+		}
+		// Password field
+		px := (vw - 200) / 2
+		py := vh / 2
+		if mx >= px && mx < px+200 && my >= py && my < py+24 {
+			e.loginFocus = 1
+		}
+		// Login button
+		bx := (vw - 100) / 2
+		by := vh/2 + 60
+		if mx >= bx && mx < bx+100 && my >= by && my < by+30 {
+			e.attemptLogin()
+		}
+	}
+
+	// Handle keyboard input
+	for _, k := range inpututil.AppendJustPressedKeys(nil) {
+		if k == ebiten.KeyTab {
+			e.loginFocus = (e.loginFocus + 1) % 2
+		}
+		if k == ebiten.KeyEnter {
+			e.attemptLogin()
+		}
+		if k == ebiten.KeyBackspace {
+			if e.loginFocus == 0 && len(e.loginUser) > 0 {
+				e.loginUser = e.loginUser[:len(e.loginUser)-1]
+			} else if e.loginFocus == 1 && len(e.loginPass) > 0 {
+				e.loginPass = e.loginPass[:len(e.loginPass)-1]
+			}
+		}
+	}
+	for _, r := range ebiten.AppendInputChars(nil) {
+		if r >= 32 {
+			if e.loginFocus == 0 {
+				e.loginUser += string(r)
+			} else if e.loginFocus == 1 {
+				e.loginPass += string(r)
+			}
+		}
+	}
+	return nil
+}
+
 func (e *editor) Update() error {
 	// Handle login screen
 	if e.showLogin {
-		mx, my := ebiten.CursorPosition()
-		vw, vh := ebiten.WindowSize()
-
-		// Handle mouse clicks for login UI
-		if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-			// Username field
-			ux := (vw - 200) / 2
-			uy := vh/2 - 40
-			if mx >= ux && mx < ux+200 && my >= uy && my < uy+24 {
-				e.loginFocus = 0
-			}
-			// Password field
-			px := (vw - 200) / 2
-			py := vh / 2
-			if mx >= px && mx < px+200 && my >= py && my < py+24 {
-				e.loginFocus = 1
-			}
-			// Login button
-			bx := (vw - 100) / 2
-			by := vh/2 + 60
-			if mx >= bx && mx < bx+100 && my >= by && my < by+30 {
-				e.attemptLogin()
-			}
-		}
-
-		// Handle keyboard input
-		for _, k := range inpututil.AppendJustPressedKeys(nil) {
-			if k == ebiten.KeyTab {
-				e.loginFocus = (e.loginFocus + 1) % 2
-			}
-			if k == ebiten.KeyEnter {
-				e.attemptLogin()
-			}
-			if k == ebiten.KeyBackspace {
-				if e.loginFocus == 0 && len(e.loginUser) > 0 {
-					e.loginUser = e.loginUser[:len(e.loginUser)-1]
-				} else if e.loginFocus == 1 && len(e.loginPass) > 0 {
-					e.loginPass = e.loginPass[:len(e.loginPass)-1]
-				}
-			}
-		}
-		for _, r := range ebiten.AppendInputChars(nil) {
-			if r >= 32 {
-				if e.loginFocus == 0 {
-					e.loginUser += string(r)
-				} else if e.loginFocus == 1 {
-					e.loginPass += string(r)
-				}
-			}
-		}
-		return nil
+		return e.handleLoginInput()
 	}
 
 	// pump messages
@@ -118,8 +242,31 @@ func (e *editor) Update() error {
 					e.status = fmt.Sprintf("Loaded map: %s", md.Def.Name)
 				}
 
-				// Auto-scale camera to fit all objects in the map
-				e.autoScaleToFitObjects()
+				// Only auto-scale if the map doesn't have saved background positioning
+				if md.Def.BgScale > 0 && e.bg != nil {
+					// Use the saved background scale and position directly
+					// Convert from game's scale system to map editor's system
+
+					// Game uses: availableWidth for scaling, Map editor uses: windowWidth - 120 UI
+					sw, _ := e.bg.Bounds().Dx(), e.bg.Bounds().Dy()
+					_ = sw // Use the variable to avoid unused variable error
+
+					// Game's base scale (fits to available width for battle)
+					gameBaseScale := float64(protocol.ScreenW) / float64(sw)
+
+					// Convert game's saved scale back to map editor's coordinate system
+					if gameBaseScale > 0 {
+						e.cameraZoom = md.Def.BgScale / gameBaseScale
+						e.cameraX = md.Def.BgOffsetX * gameBaseScale
+						e.cameraY = md.Def.BgOffsetY * gameBaseScale
+					} else {
+						// Fallback to auto-scale if calculation invalid
+						e.autoScaleToFitObjects()
+					}
+				} else {
+					// Auto-scale camera to fit all objects in the map (only if no saved positioning or no background)
+					e.autoScaleToFitObjects()
+				}
 			case "Maps":
 				// ignore
 			case "Error":
@@ -379,12 +526,12 @@ done:
 	helpX := loadX + 100
 	helpY := loadY
 
-	// Map name input positions - moved to right side
+	// Calculate positions for UI elements
 	vw, _ := ebiten.WindowSize()
-	mapNameX := vw - 250
+	mapNameX := (vw - 500) / 2
 	mapNameY := 8
-	mapNameInputX := mapNameX + 40
-	mapNameInputY := mapNameY
+	mapNameInputX := mapNameX + 120
+	mapNameInputY := mapNameY + 4
 
 	// BG buttons (streamlined - removed Load, Copy; kept Set and BG)
 	bx := 8
@@ -412,6 +559,7 @@ done:
 		offX = (vw - dispW) / 2
 		offY = topUIH + (vh-dispH)/2
 	}
+
 	inCanvas := func(x, y int) bool { return x >= offX && x < offX+dispW && y >= offY && y < offY+dispH }
 	toNorm := func(px, py int) (float64, float64) {
 		return float64(px-offX) / float64(dispW), float64(py-offY) / float64(dispH)
@@ -637,10 +785,11 @@ done:
 		e.showHelp = false
 
 		// Check layer buttons
+		var layerTooltips []string
 		for i := 0; i < 8; i++ {
 			x, y, w, h := 150, 8+i*32, 80, 28
 			if mx >= x && mx < x+w && my >= y && my < y+h {
-				layerTooltips := []string{
+				layerTooltips = []string{
 					"🏠 BG Layer: Show/hide background elements (meeting stones, gold mines)",
 					"📐 Frame Layer: Edit map frame position, size and scale",
 					"📦 Deploy Layer: Show/hide deployment zones",
@@ -1257,7 +1406,54 @@ done:
 			e.dragging = false
 		}
 	}
-	// Enhanced keyboard shortcuts
+	// Handle input for focused text fields FIRST (before shortcuts)
+	if e.bgFocus || e.nameFocus {
+		for _, k := range inpututil.AppendJustPressedKeys(nil) {
+			if k == ebiten.KeyBackspace {
+				if e.nameFocus && len(e.name) > 0 {
+					e.name = e.name[:len(e.name)-1]
+				} else if e.bgFocus && len(e.bgInput) > 0 {
+					e.bgInput = e.bgInput[:len(e.bgInput)-1]
+				}
+			}
+			if k == ebiten.KeyEnter {
+				if e.nameFocus {
+					e.nameFocus = false // Exit name input mode on Enter
+				} else if e.bgFocus {
+					p := strings.TrimSpace(e.bgInput)
+					if p == "" {
+						p = e.bgPath
+					}
+					if p != "" {
+						if img, _, err := ebitenutil.NewImageFromFile(p); err == nil {
+							e.bg = img
+							e.bgPath = p
+							e.status = "BG loaded"
+						} else {
+							e.status = "BG load failed"
+						}
+					}
+				}
+			}
+			// Exit focus on Escape
+			if k == ebiten.KeyEscape {
+				e.nameFocus = false
+				e.bgFocus = false
+			}
+		}
+		for _, r := range ebiten.AppendInputChars(nil) {
+			if r >= 32 && r < 127 { // Standard ASCII characters
+				if e.nameFocus {
+					e.name += string(r)
+				} else if e.bgFocus {
+					e.bgInput += string(r)
+				}
+			}
+		}
+		return nil // Early return when handling text input to prevent shortcuts
+	}
+
+	// Enhanced keyboard shortcuts (only when not in text input mode)
 	for _, k := range inpututil.AppendJustPressedKeys(nil) {
 		ctrlPressed := ebiten.IsKeyPressed(ebiten.KeyControl) || ebiten.IsKeyPressed(ebiten.KeyMeta)
 		shiftPressed := ebiten.IsKeyPressed(ebiten.KeyShift)
@@ -1284,7 +1480,7 @@ done:
 				e.mapBrowserScroll = 0
 			}
 		}
-		if k == ebiten.KeyG && !e.bgFocus {
+		if k == ebiten.KeyG {
 			e.showGrid = !e.showGrid
 			if e.showGrid {
 				e.status = "Grid overlay enabled"
@@ -1292,27 +1488,69 @@ done:
 				e.status = "Grid overlay disabled"
 			}
 		}
-		if k == ebiten.KeyC && ctrlPressed && !e.bgFocus {
+		if k == ebiten.KeyC && ctrlPressed {
 			// Copy selected element (placeholder)
 			e.status = "Copy functionality coming soon"
 		}
-		if k == ebiten.KeyV && ctrlPressed && !e.bgFocus {
+		if k == ebiten.KeyV && ctrlPressed {
 			// Paste element (placeholder)
 			e.status = "Paste functionality coming soon"
 		}
-		if k == ebiten.KeyZ && ctrlPressed && !e.bgFocus {
+		if k == ebiten.KeyZ && ctrlPressed {
 			// Undo (placeholder)
 			e.status = "Undo functionality coming soon"
 		}
-		if k == ebiten.KeyY && ctrlPressed && !e.bgFocus {
+		if k == ebiten.KeyY && ctrlPressed {
 			// Redo (placeholder)
 			e.status = "Redo functionality coming soon"
 		}
-		if k == ebiten.KeyA && ctrlPressed && !e.bgFocus {
+		if k == ebiten.KeyA && ctrlPressed {
 			// Select all (placeholder)
 			e.status = "Select all functionality coming soon"
 		}
-		if k == ebiten.KeyEscape && !e.bgFocus {
+		// Arrow key scrolling
+		if k == ebiten.KeyArrowLeft || k == ebiten.KeyArrowRight ||
+			k == ebiten.KeyArrowUp || k == ebiten.KeyArrowDown {
+
+			// Update scroll position
+			if k == ebiten.KeyArrowLeft {
+				e.scrollX -= e.scrollStep
+			} else if k == ebiten.KeyArrowRight {
+				e.scrollX += e.scrollStep
+			}
+
+			if k == ebiten.KeyArrowUp {
+				e.scrollY -= e.scrollStep
+			} else if k == ebiten.KeyArrowDown {
+				e.scrollY += e.scrollStep
+			}
+
+			// Apply boundaries if we have a background image
+			if e.bg != nil {
+				vw, vh := ebiten.WindowSize()
+				vh -= 120 // Account for UI height
+
+				// Calculate maximum scroll based on viewport and content
+				maxScrollX := int(math.Max(0, float64(int(e.cameraMaxZoom*float64(e.bg.Bounds().Dx()))/2-vw/2)))
+				maxScrollY := int(math.Max(0, float64(int(e.cameraMaxZoom*float64(e.bg.Bounds().Dy()))/2-vh/2)))
+
+				// Constrain scroll positions
+				if e.scrollX > maxScrollX {
+					e.scrollX = maxScrollX
+				} else if e.scrollX < -maxScrollX {
+					e.scrollX = -maxScrollX
+				}
+
+				if e.scrollY > maxScrollY {
+					e.scrollY = maxScrollY
+				} else if e.scrollY < -maxScrollY {
+					e.scrollY = -maxScrollY
+				}
+
+				e.status = fmt.Sprintf("Scroll: (%d, %d)", e.scrollX, e.scrollY)
+			}
+		}
+		if k == ebiten.KeyEscape {
 			// Clear selection
 			e.selKind = ""
 			e.selIndex = -1
@@ -1322,69 +1560,67 @@ done:
 			e.status = "Selection cleared"
 		}
 		if k == ebiten.KeyDelete || (k == ebiten.KeyBackspace && shiftPressed) {
-			if !e.bgFocus { // don't treat as delete when typing
-				// Delete selected element
-				switch e.selKind {
-				case "deploy":
-					if e.selIndex >= 0 && e.selIndex < len(e.def.DeployZones) {
-						e.def.DeployZones = append(e.def.DeployZones[:e.selIndex], e.def.DeployZones[e.selIndex+1:]...)
-						e.selKind = ""
-						e.selIndex = -1
-						e.status = "Deploy zone deleted"
-					}
-				case "stone":
-					if e.selIndex >= 0 && e.selIndex < len(e.def.MeetingStones) {
-						e.def.MeetingStones = append(e.def.MeetingStones[:e.selIndex], e.def.MeetingStones[e.selIndex+1:]...)
-						e.selKind = ""
-						e.selIndex = -1
-						e.status = "Meeting stone deleted"
-					}
-				case "mine":
-					if e.selIndex >= 0 && e.selIndex < len(e.def.GoldMines) {
-						e.def.GoldMines = append(e.def.GoldMines[:e.selIndex], e.def.GoldMines[e.selIndex+1:]...)
-						e.selKind = ""
-						e.selIndex = -1
-						e.status = "Gold mine deleted"
-					}
-				case "lane":
-					if e.selIndex >= 0 && e.selIndex < len(e.def.Lanes) {
-						e.def.Lanes = append(e.def.Lanes[:e.selIndex], e.def.Lanes[e.selIndex+1:]...)
-						e.selKind = ""
-						e.selIndex = -1
-						e.status = "Movement lane deleted"
-					}
-				case "obstacle":
-					if e.selIndex >= 0 && e.selIndex < len(e.def.Obstacles) {
-						e.def.Obstacles = append(e.def.Obstacles[:e.selIndex], e.def.Obstacles[e.selIndex+1:]...)
-						e.selKind = ""
-						e.selIndex = -1
-						e.status = "Obstacle deleted"
-					}
-				case "decorative":
-					if e.selIndex >= 0 && e.selIndex < len(e.def.DecorativeElements) {
-						e.def.DecorativeElements = append(e.def.DecorativeElements[:e.selIndex], e.def.DecorativeElements[e.selIndex+1:]...)
-						e.selKind = ""
-						e.selIndex = -1
-						e.status = "Decorative element deleted"
-					}
-				case "playerbase":
-					// Reset player base to (0,0) and mark as not existing
-					e.def.PlayerBase = protocol.PointF{X: 0, Y: 0}
-					e.playerBaseExists = false
+			// Delete selected element
+			switch e.selKind {
+			case "deploy":
+				if e.selIndex >= 0 && e.selIndex < len(e.def.DeployZones) {
+					e.def.DeployZones = append(e.def.DeployZones[:e.selIndex], e.def.DeployZones[e.selIndex+1:]...)
 					e.selKind = ""
 					e.selIndex = -1
-					e.status = "Player base deleted"
-				case "enemybase":
-					// Reset enemy base to (0,0) and mark as not existing
-					e.def.EnemyBase = protocol.PointF{X: 0, Y: 0}
-					e.enemyBaseExists = false
-					e.selKind = ""
-					e.selIndex = -1
-					e.status = "Enemy base deleted"
+					e.status = "Deploy zone deleted"
 				}
+			case "stone":
+				if e.selIndex >= 0 && e.selIndex < len(e.def.MeetingStones) {
+					e.def.MeetingStones = append(e.def.MeetingStones[:e.selIndex], e.def.MeetingStones[e.selIndex+1:]...)
+					e.selKind = ""
+					e.selIndex = -1
+					e.status = "Meeting stone deleted"
+				}
+			case "mine":
+				if e.selIndex >= 0 && e.selIndex < len(e.def.GoldMines) {
+					e.def.GoldMines = append(e.def.GoldMines[:e.selIndex], e.def.GoldMines[e.selIndex+1:]...)
+					e.selKind = ""
+					e.selIndex = -1
+					e.status = "Gold mine deleted"
+				}
+			case "lane":
+				if e.selIndex >= 0 && e.selIndex < len(e.def.Lanes) {
+					e.def.Lanes = append(e.def.Lanes[:e.selIndex], e.def.Lanes[e.selIndex+1:]...)
+					e.selKind = ""
+					e.selIndex = -1
+					e.status = "Movement lane deleted"
+				}
+			case "obstacle":
+				if e.selIndex >= 0 && e.selIndex < len(e.def.Obstacles) {
+					e.def.Obstacles = append(e.def.Obstacles[:e.selIndex], e.def.Obstacles[e.selIndex+1:]...)
+					e.selKind = ""
+					e.selIndex = -1
+					e.status = "Obstacle deleted"
+				}
+			case "decorative":
+				if e.selIndex >= 0 && e.selIndex < len(e.def.DecorativeElements) {
+					e.def.DecorativeElements = append(e.def.DecorativeElements[:e.selIndex], e.def.DecorativeElements[e.selIndex+1:]...)
+					e.selKind = ""
+					e.selIndex = -1
+					e.status = "Decorative element deleted"
+				}
+			case "playerbase":
+				// Reset player base to (0,0) and mark as not existing
+				e.def.PlayerBase = protocol.PointF{X: 0, Y: 0}
+				e.playerBaseExists = false
+				e.selKind = ""
+				e.selIndex = -1
+				e.status = "Player base deleted"
+			case "enemybase":
+				// Reset enemy base to (0,0) and mark as not existing
+				e.def.EnemyBase = protocol.PointF{X: 0, Y: 0}
+				e.enemyBaseExists = false
+				e.selKind = ""
+				e.selIndex = -1
+				e.status = "Enemy base deleted"
 			}
 		}
-		if k == ebiten.KeyD && !e.bgFocus {
+		if k == ebiten.KeyD {
 			if e.selKind == "lane" && e.selIndex >= 0 && e.selIndex < len(e.def.Lanes) {
 				if e.def.Lanes[e.selIndex].Dir >= 0 {
 					e.def.Lanes[e.selIndex].Dir = -1
@@ -1395,57 +1631,57 @@ done:
 				}
 			}
 		}
-		if k == ebiten.KeyH && !e.bgFocus {
+		if k == ebiten.KeyH {
 			e.helpMode = !e.helpMode
 		}
-		if k == ebiten.KeyF1 && !e.bgFocus {
+		if k == ebiten.KeyF1 {
 			e.helpMode = !e.helpMode
 		}
 
 		// Frame manipulation shortcuts
-		if k == ebiten.KeyF && !e.bgFocus {
+		if k == ebiten.KeyF {
 			// Reset frame to center (0.5, 0.5) and scale 1.0
 			e.frameX = 0.5
 			e.frameY = 0.5
 			e.frameScale = 1.0
 			e.status = "Frame reset to center"
 		}
-		if k == ebiten.KeyArrowLeft && !e.bgFocus {
+		if k == ebiten.KeyArrowLeft {
 			e.frameX -= 0.01
 			if e.frameX < 0 {
 				e.frameX = 0
 			}
 			e.status = fmt.Sprintf("Frame X: %.3f", e.frameX)
 		}
-		if k == ebiten.KeyArrowRight && !e.bgFocus {
+		if k == ebiten.KeyArrowRight {
 			e.frameX += 0.01
 			if e.frameX > 1 {
 				e.frameX = 1
 			}
 			e.status = fmt.Sprintf("Frame X: %.3f", e.frameX)
 		}
-		if k == ebiten.KeyArrowUp && !e.bgFocus {
+		if k == ebiten.KeyArrowUp {
 			e.frameY -= 0.01
 			if e.frameY < 0 {
 				e.frameY = 0
 			}
 			e.status = fmt.Sprintf("Frame Y: %.3f", e.frameY)
 		}
-		if k == ebiten.KeyArrowDown && !e.bgFocus {
+		if k == ebiten.KeyArrowDown {
 			e.frameY += 0.01
 			if e.frameY > 1 {
 				e.frameY = 1
 			}
 			e.status = fmt.Sprintf("Frame Y: %.3f", e.frameY)
 		}
-		if k == ebiten.KeyEqual && !e.bgFocus { // + key
+		if k == ebiten.KeyEqual { // + key
 			e.frameScale += 0.01
 			if e.frameScale > 2.0 {
 				e.frameScale = 2.0
 			}
 			e.status = fmt.Sprintf("Frame Scale: %.3f", e.frameScale)
 		}
-		if k == ebiten.KeyMinus && !e.bgFocus {
+		if k == ebiten.KeyMinus {
 			e.frameScale -= 0.01
 			if e.frameScale < 0.1 {
 				e.frameScale = 0.1
@@ -1454,7 +1690,7 @@ done:
 		}
 
 		// Number keys for tool selection
-		if k >= ebiten.Key1 && k <= ebiten.Key6 && !e.bgFocus {
+		if k >= ebiten.Key1 && k <= ebiten.Key6 {
 			toolIndex := int(k - ebiten.Key1)
 			if toolIndex >= 0 && toolIndex < 6 {
 				e.tool = toolIndex
@@ -1727,6 +1963,7 @@ func (e *editor) autoScaleToFitObjects() {
 
 func (e *editor) Draw(screen *ebiten.Image) {
 	vw, vh := ebiten.WindowSize()
+	mapNameInputWidth := 280
 
 	// Coordinates text position - bottom right corner
 	coordX := vw - 120
@@ -1818,36 +2055,48 @@ func (e *editor) Draw(screen *ebiten.Image) {
 
 	// BG
 	if e.bg != nil {
-		// Scale background to cover the extended camera space (120% to account for 20% scroll margins)
-		sw, sh := e.bg.Bounds().Dx(), e.bg.Bounds().Dy()
+		// Use game-consistent scaling to match battle screen rendering
+		imgW, imgH := e.bg.Bounds().Dx(), e.bg.Bounds().Dy()
 		vw, vh = ebiten.WindowSize()
 		vh -= topUIH
 
-		// Calculate scale to fit the extended area (120% of original)
-		extendedScale := 1.2
-		sx := float64(vw) / (float64(sw) * extendedScale)
-		sy := float64(vh) / (float64(sh) * extendedScale)
-		s := sx
-		if sy < sx {
-			s = sy
+		// Game battle area dimensions (exact same as game client)
+		gameBattleTopUI := 50
+		gameBattleBottomUI := 160
+		gameBattleAvailableHeight := protocol.ScreenH - gameBattleTopUI - gameBattleBottomUI
+		gameBattleAvailableWidth := protocol.ScreenW
+
+		// Calculate scale exactly like the game client - fit to width
+		scaleX := float64(gameBattleAvailableWidth) / float64(imgW)
+		scaleY := float64(gameBattleAvailableHeight) / float64(imgH)
+		scale := scaleX
+		if scaleY < scaleX {
+			scale = scaleY // Use smaller scale to maintain aspect ratio
 		}
 
-		// Calculate dimensions for the extended area
-		extendedW := int(float64(sw) * s * extendedScale)
-		extendedH := int(float64(sh) * s * extendedScale)
-		offX := (vw - extendedW) / 2
-		offY := topUIH + (vh-extendedH)/2
+		// Calculate display dimensions exactly like game
+		dispW := int(float64(imgW) * scale)
+		_ = int(float64(imgH) * scale) // dispH not used in this scope
+
+		// Game-style positioning: center in window
+		offX := (vw - dispW) / 2
+		offY := topUIH + (vh-dispH)/2
 
 		op := &ebiten.DrawImageOptions{}
-		op.GeoM.Scale(s*e.cameraZoom, s*e.cameraZoom)
-		op.GeoM.Translate(float64(offX)+e.cameraX, float64(offY)+e.cameraY)
+		op.GeoM.Scale(scale, scale) // No extra zoom overlay
+		op.GeoM.Translate(float64(offX), float64(offY))
 		screen.DrawImage(e.bg, op)
 
 		// Draw border frame showing the actual map boundaries (0-1 area)
-		mapBorderW := int(float64(extendedW) / extendedScale)
-		mapBorderH := int(float64(extendedH) / extendedScale)
-		borderOffX := offX + (extendedW-mapBorderW)/2
-		borderOffY := offY + (extendedH-mapBorderH)/2
+		// Use consistent border calculations with game rendering
+		borderThickness := 6
+		borderOffX := offX
+		borderOffY := offY
+		mapBorderW := dispW
+		mapBorderH := dispH
+
+		// Grid drawing uses consistent positioning
+		vw, vh = ebiten.WindowSize()
 
 		// Apply configurable frame position and scale
 		frameBorderW := int(float64(mapBorderW) * e.frameScale)
@@ -1857,7 +2106,7 @@ func (e *editor) Draw(screen *ebiten.Image) {
 
 		// Draw border frame with thick lines
 		borderColor := color.NRGBA{255, 255, 255, 255}
-		borderThickness := 6
+		borderThickness = 6
 
 		// Top border
 		ebitenutil.DrawRect(screen, float64(frameOffX), float64(frameOffY), float64(frameBorderW), float64(borderThickness), borderColor)
@@ -1896,8 +2145,13 @@ func (e *editor) Draw(screen *ebiten.Image) {
 			for i := 1; i < 10; i++ {
 				x := toX(float64(i) / 10.0)
 				y := toY(float64(i) / 10.0)
-				ebitenutil.DrawLine(screen, float64(x), float64(offY), float64(x), float64(offY+extendedH), color.NRGBA{60, 60, 70, 120})
-				ebitenutil.DrawLine(screen, float64(offX), float64(y), float64(offX+extendedW), float64(y), color.NRGBA{60, 60, 70, 120})
+				// Calculate grid bounds based on current display area
+				gridTop := offY
+				gridLeft := offX
+				gridRight := offX + dispW
+				gridBottom := offY + dispH
+				ebitenutil.DrawLine(screen, float64(x), float64(gridTop), float64(x), float64(gridBottom), color.NRGBA{60, 60, 70, 120})
+				ebitenutil.DrawLine(screen, float64(gridLeft), float64(y), float64(gridRight), float64(y), color.NRGBA{60, 60, 70, 120})
 			}
 		}
 		// Draw layers based on current layer or show all layers
@@ -2251,12 +2505,12 @@ func (e *editor) Draw(screen *ebiten.Image) {
 	mapNameInputY := mapNameY
 
 	// Draw map name input box
-	ebitenutil.DrawRect(screen, float64(mapNameInputX), float64(mapNameInputY), float64(mapNameInputW), 24, color.NRGBA{40, 40, 50, 255})
+	ebitenutil.DrawRect(screen, float64(mapNameInputX), float64(mapNameInputY), float64(mapNameInputWidth), 24, color.NRGBA{40, 40, 50, 255})
 	if e.nameFocus {
-		ebitenutil.DrawRect(screen, float64(mapNameInputX), float64(mapNameInputY), float64(mapNameInputW), 24, color.NRGBA{60, 60, 80, 255})
+		ebitenutil.DrawRect(screen, float64(mapNameInputX), float64(mapNameInputY), float64(mapNameInputWidth), 24, color.NRGBA{60, 60, 80, 255})
 	}
 	nm := e.name
-	if nm == "" {
+	if e.name == "" {
 		nm = "New Map"
 	}
 	text.Draw(screen, nm, basicfont.Face7x13, mapNameInputX+6, mapNameInputY+16, color.White)
@@ -2329,6 +2583,23 @@ func (e *editor) Draw(screen *ebiten.Image) {
 		}
 		if mx >= helpX && mx < helpX+60 && my >= helpY && my < helpY+24 {
 			e.helpMode = !e.helpMode
+		}
+
+		// Handle map name input field click - FIXED: Now clickable!
+		if mx >= mapNameInputX && mx < mapNameInputX+280 && my >= mapNameInputY && my < mapNameInputY+24 {
+			e.nameFocus = true
+			e.bgFocus = false // Clear other focus
+			e.status = "Map name field clicked - you can now type a new map name"
+		} else {
+			// If clicking elsewhere, clear name focus unless clicking on UI elements or canvas
+			uiElementsClicked := (mx >= saveX && mx < saveX+100 && my >= saveY && my < saveY+24) ||
+				(mx >= clrX && mx < clrX+80 && my >= clrY && my < clrY+24) ||
+				(mx >= assetsX && mx < assetsX+80 && my >= assetsY && my < assetsY+24) ||
+				(mx >= loadX && mx < loadX+90 && my >= loadY && my < loadY+24) ||
+				(mx >= helpX && mx < helpX+60 && my >= helpY && my < helpY+24)
+			if !uiElementsClicked {
+				e.nameFocus = false
+			}
 		}
 	}
 	if e.status != "" {
@@ -2433,13 +2704,13 @@ func (e *editor) Draw(screen *ebiten.Image) {
 		if sy < sx {
 			s = sy
 		}
-		dw := int(float64(sw) * s)
-		dh := int(float64(sh) * s)
-		offX := (vw - dw) / 2
-		offY := topUIH + (vh-topUIH-dh)/2
-		if mx >= offX && mx < offX+dw && my >= offY && my < offY+dh {
-			nx := (float64(mx - offX)) / float64(dw)
-			ny := (float64(my - offY)) / float64(dh)
+		dispW = int(float64(sw) * s)
+		dispH := int(float64(sh) * s)
+		offX := (vw - dispW) / 2
+		offY := topUIH + (vh-topUIH-dispH)/2
+		if mx >= offX && mx < offX+dispW && my >= offY && my < offY+dispH {
+			nx := (float64(mx - offX)) / float64(dispW)
+			ny := (float64(my - offY)) / float64(dispH)
 			// Draw coordinates in bottom right corner
 			text.Draw(screen, fmt.Sprintf("(%.3f, %.3f)", nx, ny), basicfont.Face7x13, coordX, coordY, color.NRGBA{200, 200, 210, 255})
 		}
@@ -2997,6 +3268,10 @@ func main() {
 		cameraMinZoom:  0.1,
 		cameraMaxZoom:  2.0,
 		cameraDragging: false,
+		// Initialize scrollbars
+		scrollX:    0,
+		scrollY:    0,
+		scrollStep: 20,
 		// Initialize frame for map editor
 		frameX:        0.5,
 		frameY:        0.5,

@@ -155,10 +155,8 @@ func (g *Game) Update() error {
 		g.lobbyRequested = true
 		g.scr = screenHome
 
-		// Clear particle effects when transitioning to home screen
-		if g.particleSystem != nil {
-			g.particleSystem = NewParticleSystem()
-		}
+		// Clear particle effects when transitioning to home screen (but keep them for other screens)
+		// Particles are disabled on army tab
 
 	default:
 	}
@@ -247,11 +245,12 @@ afterMessages:
 				unit.AnimationData.UpdateAnimation(unit, 1.0/60.0)
 			}
 		}
+	}
 
-		// Update particle system
-		if g.particleSystem != nil {
-			g.particleSystem.Update(1.0 / 60.0) // Assuming 60 FPS
-		}
+	// Update particle system (always, regardless of pause state)
+	// This ensures particles animate during home screen and map tab
+	if g.particleSystem != nil {
+		g.particleSystem.Update(1.0 / 60.0) // Assuming 60 FPS
 	}
 
 	// Update timer countdown (every second)
@@ -511,6 +510,12 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		g.drawTopBarHome(screen)
 		g.drawBottomBar(screen)
 
+		// Draw social UI
+		if g.activeTab == tabSocial {
+			g.drawSocial(screen)
+		}
+
+		// Draw overlays last (on top of everything)
 		if g.showProfile {
 			g.drawProfileOverlay(screen)
 		}

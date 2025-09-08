@@ -4,19 +4,23 @@
   "width": 1920,
   "height": 1080,
   "bg": "colosseum.png",
+  "frameX": 0.4,
+  "frameY": 0.4,
+  "frameWidth": 1,
+  "frameHeight": 1,
   "deployZones": [
     {
-      "x": 0.249079754601227,
-      "y": 0.053678474114441425,
+      "x": -0.3,
+      "y": 0.6,
       "w": 0.6,
-      "h": 0.3,
-      "owner": "enemy"
+      "h": 0.2,
+      "owner": "player"
     },
     {
-      "x": 0.2081799591002045,
-      "y": 0.5079019073569481,
+      "x": -0.3,
+      "y": -0.2,
       "w": 0.6,
-      "h": 0.3,
+      "h": 0.2,
       "owner": "enemy"
     }
   ],
@@ -69,12 +73,12 @@
   ],
   "obstacles": null,
   "playerBase": {
-    "x": 0.42862985685071603,
-    "y": 0.6600817438692098
+    "x": 0.5,
+    "y": 0.75
   },
   "enemyBase": {
-    "x": 0,
-    "y": 1
+    "x": 0.5,
+    "y": -0.25
   },
   "timeLimit": 300,
   "isArena": true

@@ -1,14 +1,14 @@
 {
-  "playerId": 72485,
+  "playerId": 3567913,
   "name": "silvester",
   "army": [
     "Sorceress Glacia",
-    "Blizzard",
-    "Magma Goliath",
-    "Chain Lightning",
     "Arcane Blast",
+    "Chain Lightning",
+    "Magma Goliath",
     "Execute",
-    "Holy Nova"
+    "Holy Nova",
+    "Blizzard"
   ],
   "armies": {
     "Bloodmage Thalor": [
@@ -20,34 +20,34 @@
       "Corpse Catapult"
     ],
     "Sorceress Glacia": [
-      "Blizzard",
-      "Magma Goliath",
-      "Chain Lightning",
       "Arcane Blast",
+      "Chain Lightning",
+      "Magma Goliath",
       "Execute",
-      "Holy Nova"
+      "Holy Nova",
+      "Blizzard"
     ]
   },
   "gold": 0,
   "accountXp": 0,
   "unitXp": {
     "Aerie Guard": 1,
-    "Arcane Blast": 9,
+    "Arcane Blast": 12,
     "Blazebinder": 3,
-    "Blizzard": 4,
-    "Chain Lightning": 4,
-    "Execute": 6,
+    "Blizzard": 11,
+    "Chain Lightning": 10,
+    "Execute": 8,
     "Flesh Golem": 2,
-    "Holy Nova": 9,
+    "Holy Nova": 14,
     "Jungle Headhunter": 2,
-    "Magma Goliath": 11,
+    "Magma Goliath": 16,
     "Polymorph": 4,
-    "Sorceress Glacia": 32,
+    "Sorceress Glacia": 55,
     "Spirit Binder": 1,
     "Twin Wyrnn": 3
   },
   "pvp_rating": 1276,
   "pvp_rank": "Knight",
   "avatar": "male.png",
-  "guildId": "g-1756713614348685400"
+  "guildId": "g-1757237974642085700"
 }
