@@ -1,0 +1,34 @@
+{
+  "playerId": 13281661,
+  "name": "Minazz",
+  "army": [
+    "Bloodmage Thalor",
+    "Flesh Golem",
+    "Blazebinder",
+    "Redhand Thieves",
+    "Spirit Binder",
+    "Jungle Headhunter",
+    "Aerie Guard"
+  ],
+  "armies": {
+    "Bloodmage Thalor": [
+      "Flesh Golem",
+      "Blazebinder",
+      "Redhand Thieves",
+      "Spirit Binder",
+      "Jungle Headhunter",
+      "Aerie Guard"
+    ]
+  },
+  "gold": 0,
+  "accountXp": 0,
+  "unitXp": {
+    "Blazebinder": 1,
+    "Bloodmage Thalor": 2,
+    "Jungle Headhunter": 1,
+    "Redhand Thieves": 1
+  },
+  "pvp_rating": 1200,
+  "pvp_rank": "Knight",
+  "avatar": "default.png"
+}
