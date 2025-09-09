@@ -41,6 +41,147 @@ func (g *Game) updateBattle() {
 	if g.scr == screenBattle {
 		// Zoom disabled - battles maintain fixed 20% zoom level
 
+		// Keyboard camera controls (WASD and Arrow keys)
+		keyboardPanSpeed := 8.0
+		hasKeyboardInput := false
+
+		// Check individual keys
+		keyDirections := map[ebiten.Key]struct{ dx, dy float64 }{
+			ebiten.KeyW:          {0, 1},  // DOWN (positive dy to move background down)
+			ebiten.KeyA:          {1, 0},  // RIGHT (positive dx to move background right)
+			ebiten.KeyS:          {0, -1}, // UP (negative dy to move background up)
+			ebiten.KeyD:          {-1, 0}, // LEFT (negative dx to move background left)
+			ebiten.KeyArrowUp:    {0, -1}, // UP
+			ebiten.KeyArrowLeft:  {-1, 0}, // LEFT
+			ebiten.KeyArrowDown:  {0, 1},  // DOWN
+			ebiten.KeyArrowRight: {1, 0},  // RIGHT
+		}
+
+		for key, dir := range keyDirections {
+			duration := inpututil.KeyPressDuration(key)
+			if duration > 0 {
+				hasKeyboardInput = true
+				speed := keyboardPanSpeed * (1.0 + float64(duration)*0.02) // Accelerate with prolonged press
+				newCameraX := g.cameraX + dir.dx*speed
+				newCameraY := g.cameraY + dir.dy*speed
+				g.cameraX = newCameraX
+				g.cameraY = newCameraY
+			}
+		}
+
+		if hasKeyboardInput {
+
+			// Apply keyboard-controlled camera boundaries
+			var maxScrollX, maxScrollY float64
+
+			// Get current background image for boundary calculations
+			var bgImage *ebiten.Image
+			if g.currentArena != "" {
+				// Use bg from map definition if available, otherwise fall back to arena ID
+				bgName := g.currentArena
+				if g.currentMapDef != nil && g.currentMapDef.Bg != "" {
+					// Remove .png extension if present
+					if strings.HasSuffix(g.currentMapDef.Bg, ".png") {
+						bgName = strings.TrimSuffix(g.currentMapDef.Bg, ".png")
+					} else {
+						bgName = g.currentMapDef.Bg
+					}
+				}
+				bgImage = g.ensureBgForMap(bgName)
+			}
+
+			if bgImage != nil {
+				imgW, imgH := float64(bgImage.Bounds().Dx()), float64(bgImage.Bounds().Dy())
+				bottomUIHeight := battleHUDH
+				viewportHeight := float64(protocol.ScreenH - bottomUIHeight)
+				viewportWidth := float64(protocol.ScreenW)
+
+				// Declare variables at the top level
+				var scaledImgW, scaledImgH float64
+
+				if imgW > viewportWidth || imgH > viewportHeight {
+					maxScrollX = (imgW - viewportWidth) / 2
+					maxScrollY = (imgH - viewportHeight) / 2
+				} else {
+					// All maps now use scaled dimensions for boundary calculations
+					if g.currentMapDef != nil && g.currentMapDef.BgScale > 0 {
+						// Get the effective scaled size and position accounting for offset
+						scale := g.currentMapDef.BgScale
+						scaledImgW = float64(bgImage.Bounds().Dx()) * scale
+						scaledImgH = float64(bgImage.Bounds().Dy()) * scale
+					} else {
+						// Fallback for maps without BgScale - calculate based on displayed dimensions
+						// Get the scaled display dimensions that match what drawArenaBG uses
+						if imgW > viewportWidth || imgH > viewportHeight {
+							// Use natural size if larger than viewport
+							scaledImgW = imgW
+							scaledImgH = imgH
+						} else {
+							// Calculate fit-to-viewport scaling
+							sw := float64(viewportWidth) / float64(imgW)
+							sh := float64(viewportHeight) / float64(imgH)
+							scale := math.Min(sw, sh)
+							scaledImgW = imgW * scale
+							scaledImgH = imgH * scale
+						}
+					}
+
+					// Now calculate boundaries using the scaled dimensions
+					// Get effective position accounting for offset
+					var imgCenterX, imgCenterY float64
+					if g.currentMapDef != nil && g.currentMapDef.BgScale > 0 {
+						imgCenterX = (viewportWidth-scaledImgW)/2 + float64(g.currentMapDef.BgOffsetX)
+						imgCenterY = (viewportHeight-scaledImgH)/2 + float64(g.currentMapDef.BgOffsetY)
+					} else {
+						imgCenterX = (viewportWidth - scaledImgW) / 2
+						imgCenterY = (viewportHeight - scaledImgH) / 2
+					}
+
+					// Calculate distances needed to reach each edge
+					distToLeftEdge := imgCenterX + scaledImgW/2
+					distToRightEdge := viewportWidth - imgCenterX - scaledImgW/2
+					distToTopEdge := imgCenterY + scaledImgH/2
+					distToBottomEdge := viewportHeight - imgCenterY - scaledImgH/2
+
+					// Use the maximum distance needed to see all edges
+					maxScrollX = math.Max(distToLeftEdge, distToRightEdge)
+					maxScrollY = math.Max(distToTopEdge, distToBottomEdge)
+
+					if g.currentMapDef != nil && g.currentMapDef.FrameWidth > 0 && g.currentMapDef.FrameHeight > 0 {
+						frameCenterX := g.currentMapDef.FrameX * viewportWidth * g.cameraZoom
+						frameCenterY := g.currentMapDef.FrameY * viewportHeight * g.cameraZoom
+						frameWidth := g.currentMapDef.FrameWidth * viewportWidth * g.cameraZoom
+						frameHeight := g.currentMapDef.FrameHeight * viewportHeight * g.cameraZoom
+
+						frameScrollX := frameCenterX - frameWidth/2 + viewportWidth/2
+						frameScrollY := frameCenterY - frameHeight/2 + viewportHeight/2
+
+						if frameScrollX > maxScrollX {
+							maxScrollX = frameScrollX
+						}
+						if frameScrollY > maxScrollY {
+							maxScrollY = frameScrollY
+						}
+					}
+				}
+			} else {
+				maxScrollX = float64(protocol.ScreenW) * g.cameraZoom * 0.2
+				maxScrollY = float64(protocol.ScreenH) * g.cameraZoom * 0.2
+			}
+
+			// Clamp keyboard-controlled camera position within boundaries
+			if g.cameraX > maxScrollX {
+				g.cameraX = maxScrollX
+			} else if g.cameraX < -maxScrollX {
+				g.cameraX = -maxScrollX
+			}
+			if g.cameraY > maxScrollY {
+				g.cameraY = maxScrollY
+			} else if g.cameraY < -maxScrollY {
+				g.cameraY = -maxScrollY
+			}
+		}
+
 		// Pan with middle mouse button only (avoid conflict with right-click deployment)
 		if ebiten.IsMouseButtonPressed(ebiten.MouseButtonMiddle) {
 			if !g.cameraDragging {
@@ -54,34 +195,98 @@ func (g *Game) updateBattle() {
 				newCameraX := g.cameraDragInitialX + float64(deltaX)
 				newCameraY := g.cameraDragInitialY + float64(deltaY)
 
-				// Use frame boundaries from map definition for camera limits
-				mapWidth := float64(protocol.ScreenW) * g.cameraZoom
-				mapHeight := float64(protocol.ScreenH) * g.cameraZoom
+				// Calculate camera boundaries based on actual map/background image size
+				var maxScrollX, maxScrollY float64
 
-				// Default to 20% if no frame boundaries are defined
-				maxScrollX := mapWidth * 0.2
-				maxScrollY := mapHeight * 0.2
-
-				// Use saved frame boundaries if available
-				if g.currentMapDef != nil && g.currentMapDef.FrameWidth > 0 && g.currentMapDef.FrameHeight > 0 {
-					// Calculate frame boundaries in screen coordinates
-					frameCenterX := g.currentMapDef.FrameX * float64(protocol.ScreenW) * g.cameraZoom
-					frameCenterY := g.currentMapDef.FrameY * float64(protocol.ScreenH) * g.cameraZoom
-					frameWidth := g.currentMapDef.FrameWidth * float64(protocol.ScreenW) * g.cameraZoom
-					frameHeight := g.currentMapDef.FrameHeight * float64(protocol.ScreenH) * g.cameraZoom
-
-					// Calculate how much the camera can scroll while keeping the frame visible
-					// The camera can move so that the frame edge reaches the screen edge
-					maxScrollX = frameCenterX - frameWidth/2 + float64(protocol.ScreenW)/2
-					maxScrollY = frameCenterY - frameHeight/2 + float64(protocol.ScreenH)/2
-
-					// Ensure we don't exceed the original map boundaries
-					if maxScrollX > mapWidth*0.2 {
-						maxScrollX = mapWidth * 0.2
+				// Get current background image for boundary calculations (same logic as drawArenaBG)
+				var bgImage *ebiten.Image
+				if g.currentArena != "" {
+					// Use bg from map definition if available, otherwise fall back to arena ID
+					bgName := g.currentArena
+					if g.currentMapDef != nil && g.currentMapDef.Bg != "" {
+						// Remove .png extension if present
+						if strings.HasSuffix(g.currentMapDef.Bg, ".png") {
+							bgName = strings.TrimSuffix(g.currentMapDef.Bg, ".png")
+						} else {
+							bgName = g.currentMapDef.Bg
+						}
 					}
-					if maxScrollY > mapHeight*0.2 {
-						maxScrollY = mapHeight * 0.2
+					bgImage = g.ensureBgForMap(bgName)
+				}
+
+				if bgImage != nil {
+					// Use actual background image dimensions for camera boundaries
+					imgW, imgH := float64(bgImage.Bounds().Dx()), float64(bgImage.Bounds().Dy())
+
+					// Check if image is larger than viewport (natural size mode)
+					bottomUIHeight := battleHUDH
+					viewportHeight := float64(protocol.ScreenH - bottomUIHeight)
+					viewportWidth := float64(protocol.ScreenW)
+
+					// Use same boundary calculation as keyboard section
+					if imgW > viewportWidth || imgH > viewportHeight {
+						maxScrollX = (imgW - viewportWidth) / 2
+						maxScrollY = (imgH - viewportHeight) / 2
+					} else {
+						// Apply scaled dimensions calculation consistently
+						var scaledImgW, scaledImgH float64
+
+						if g.currentMapDef != nil && g.currentMapDef.BgScale > 0 {
+							scale := g.currentMapDef.BgScale
+							scaledImgW = float64(bgImage.Bounds().Dx()) * scale
+							scaledImgH = float64(bgImage.Bounds().Dy()) * scale
+						} else {
+							if imgW > viewportWidth || imgH > viewportHeight {
+								scaledImgW = imgW
+								scaledImgH = imgH
+							} else {
+								sw := float64(viewportWidth) / float64(imgW)
+								sh := float64(viewportHeight) / float64(imgH)
+								scale := math.Min(sw, sh)
+								scaledImgW = imgW * scale
+								scaledImgH = imgH * scale
+							}
+						}
+
+						// Calculate boundaries using scaled dimensions
+						var imgCenterX, imgCenterY float64
+						if g.currentMapDef != nil && g.currentMapDef.BgScale > 0 {
+							imgCenterX = (viewportWidth-scaledImgW)/2 + float64(g.currentMapDef.BgOffsetX)
+							imgCenterY = (viewportHeight-scaledImgH)/2 + float64(g.currentMapDef.BgOffsetY)
+						} else {
+							imgCenterX = (viewportWidth - scaledImgW) / 2
+							imgCenterY = (viewportHeight - scaledImgH) / 2
+						}
+
+						distToLeftEdge := imgCenterX + scaledImgW/2
+						distToRightEdge := viewportWidth - imgCenterX - scaledImgW/2
+						distToTopEdge := imgCenterY + scaledImgH/2
+						distToBottomEdge := viewportHeight - imgCenterY - scaledImgH/2
+
+						maxScrollX = math.Max(distToLeftEdge, distToRightEdge)
+						maxScrollY = math.Max(distToTopEdge, distToBottomEdge)
+
+						if g.currentMapDef != nil && g.currentMapDef.FrameWidth > 0 && g.currentMapDef.FrameHeight > 0 {
+							frameCenterX := g.currentMapDef.FrameX * viewportWidth * g.cameraZoom
+							frameCenterY := g.currentMapDef.FrameY * viewportHeight * g.cameraZoom
+							frameWidth := g.currentMapDef.FrameWidth * viewportWidth * g.cameraZoom
+							frameHeight := g.currentMapDef.FrameHeight * viewportHeight * g.cameraZoom
+
+							frameScrollX := frameCenterX - frameWidth/2 + viewportWidth/2
+							frameScrollY := frameCenterY - frameHeight/2 + viewportHeight/2
+
+							if frameScrollX > maxScrollX {
+								maxScrollX = frameScrollX
+							}
+							if frameScrollY > maxScrollY {
+								maxScrollY = frameScrollY
+							}
+						}
 					}
+				} else {
+					// Fallback to viewport-based boundaries if no background
+					maxScrollX = float64(protocol.ScreenW) * g.cameraZoom * 0.2
+					maxScrollY = float64(protocol.ScreenH) * g.cameraZoom * 0.2
 				}
 
 				// Clamp camera position within boundaries
@@ -116,34 +321,98 @@ func (g *Game) updateBattle() {
 				newCameraX := g.cameraLeftDragInitialX + float64(deltaX)
 				newCameraY := g.cameraLeftDragInitialY + float64(deltaY)
 
-				// Use frame boundaries from map definition for camera limits
-				mapWidth := float64(protocol.ScreenW) * g.cameraZoom
-				mapHeight := float64(protocol.ScreenH) * g.cameraZoom
+				// Use the same dynamic camera boundary calculation as middle mouse button
+				var maxScrollX, maxScrollY float64
 
-				// Default to 20% if no frame boundaries are defined
-				maxScrollX := mapWidth * 0.2
-				maxScrollY := mapHeight * 0.2
-
-				// Use saved frame boundaries if available
-				if g.currentMapDef != nil && g.currentMapDef.FrameWidth > 0 && g.currentMapDef.FrameHeight > 0 {
-					// Calculate frame boundaries in screen coordinates
-					frameCenterX := g.currentMapDef.FrameX * float64(protocol.ScreenW) * g.cameraZoom
-					frameCenterY := g.currentMapDef.FrameY * float64(protocol.ScreenH) * g.cameraZoom
-					frameWidth := g.currentMapDef.FrameWidth * float64(protocol.ScreenW) * g.cameraZoom
-					frameHeight := g.currentMapDef.FrameHeight * float64(protocol.ScreenH) * g.cameraZoom
-
-					// Calculate how much the camera can scroll while keeping the frame visible
-					// The camera can move so that the frame edge reaches the screen edge
-					maxScrollX = frameCenterX - frameWidth/2 + float64(protocol.ScreenW)/2
-					maxScrollY = frameCenterY - frameHeight/2 + float64(protocol.ScreenH)/2
-
-					// Ensure we don't exceed the original map boundaries
-					if maxScrollX > mapWidth*0.2 {
-						maxScrollX = mapWidth * 0.2
+				// Get current background image for boundary calculations
+				var bgImage *ebiten.Image
+				if g.currentArena != "" {
+					// Use bg from map definition if available, otherwise fall back to arena ID
+					bgName := g.currentArena
+					if g.currentMapDef != nil && g.currentMapDef.Bg != "" {
+						// Remove .png extension if present
+						if strings.HasSuffix(g.currentMapDef.Bg, ".png") {
+							bgName = strings.TrimSuffix(g.currentMapDef.Bg, ".png")
+						} else {
+							bgName = g.currentMapDef.Bg
+						}
 					}
-					if maxScrollY > mapHeight*0.2 {
-						maxScrollY = mapHeight * 0.2
+					bgImage = g.ensureBgForMap(bgName)
+				}
+
+				if bgImage != nil {
+					// Use actual background image dimensions for camera boundaries
+					imgW, imgH := float64(bgImage.Bounds().Dx()), float64(bgImage.Bounds().Dy())
+
+					// Check if image is larger than viewport (natural size mode)
+					bottomUIHeight := battleHUDH
+					viewportHeight := float64(protocol.ScreenH - bottomUIHeight)
+					viewportWidth := float64(protocol.ScreenW)
+
+					// Use consistent boundary calculation logic
+					if imgW > viewportWidth || imgH > viewportHeight {
+						maxScrollX = (imgW - viewportWidth) / 2
+						maxScrollY = (imgH - viewportHeight) / 2
+					} else {
+						// Apply scaled dimensions calculation consistently
+						var scaledImgW, scaledImgH float64
+
+						if g.currentMapDef != nil && g.currentMapDef.BgScale > 0 {
+							scale := g.currentMapDef.BgScale
+							scaledImgW = float64(bgImage.Bounds().Dx()) * scale
+							scaledImgH = float64(bgImage.Bounds().Dy()) * scale
+						} else {
+							if imgW > viewportWidth || imgH > viewportHeight {
+								scaledImgW = imgW
+								scaledImgH = imgH
+							} else {
+								sw := float64(viewportWidth) / float64(imgW)
+								sh := float64(viewportHeight) / float64(imgH)
+								scale := math.Min(sw, sh)
+								scaledImgW = imgW * scale
+								scaledImgH = imgH * scale
+							}
+						}
+
+						// Calculate boundaries using scaled dimensions
+						var imgCenterX, imgCenterY float64
+						if g.currentMapDef != nil && g.currentMapDef.BgScale > 0 {
+							imgCenterX = (viewportWidth-scaledImgW)/2 + float64(g.currentMapDef.BgOffsetX)
+							imgCenterY = (viewportHeight-scaledImgH)/2 + float64(g.currentMapDef.BgOffsetY)
+						} else {
+							imgCenterX = (viewportWidth - scaledImgW) / 2
+							imgCenterY = (viewportHeight - scaledImgH) / 2
+						}
+
+						distToLeftEdge := imgCenterX + scaledImgW/2
+						distToRightEdge := viewportWidth - imgCenterX - scaledImgW/2
+						distToTopEdge := imgCenterY + scaledImgH/2
+						distToBottomEdge := viewportHeight - imgCenterY - scaledImgH/2
+
+						maxScrollX = math.Max(distToLeftEdge, distToRightEdge)
+						maxScrollY = math.Max(distToTopEdge, distToBottomEdge)
+
+						if g.currentMapDef != nil && g.currentMapDef.FrameWidth > 0 && g.currentMapDef.FrameHeight > 0 {
+							frameCenterX := g.currentMapDef.FrameX * viewportWidth * g.cameraZoom
+							frameCenterY := g.currentMapDef.FrameY * viewportHeight * g.cameraZoom
+							frameWidth := g.currentMapDef.FrameWidth * viewportWidth * g.cameraZoom
+							frameHeight := g.currentMapDef.FrameHeight * viewportHeight * g.cameraZoom
+
+							frameScrollX := frameCenterX - frameWidth/2 + viewportWidth/2
+							frameScrollY := frameCenterY - frameHeight/2 + viewportHeight/2
+
+							if frameScrollX > maxScrollX {
+								maxScrollX = frameScrollX
+							}
+							if frameScrollY > maxScrollY {
+								maxScrollY = frameScrollY
+							}
+						}
 					}
+				} else {
+					// Fallback to viewport-based boundaries if no background
+					maxScrollX = float64(protocol.ScreenW) * g.cameraZoom * 0.2
+					maxScrollY = float64(protocol.ScreenH) * g.cameraZoom * 0.2
 				}
 
 				// Clamp camera position within boundaries
@@ -1031,21 +1300,20 @@ func (g *Game) updateBaseShooting() {
 	currentTime := time.Now().UnixMilli()
 
 	for baseID, base := range g.world.Bases {
-
 		// Check cooldown (2 seconds between shots)
 		lastShot, exists := g.baseLastShot[baseID]
 		if exists && currentTime-lastShot < 2000 {
 			continue
 		}
 
-		// Find closest enemy target within range 200
-		var closestTarget *RenderUnit
-		var closestDist float64 = 201 // Just over 200 to find targets within range
-
 		baseCenterX := float64(base.X + base.W/2)
 		baseCenterY := float64(base.Y + base.H/2)
 
-		// Check enemy units
+		// Find closest enemy target within range 200 (including range 0)
+		var closestTarget *RenderUnit
+		var closestDist float64 = 201 // Just over 200 to find targets within range
+
+		// Check enemy units - prioritize closest including those at exact base location
 		for _, unit := range g.world.Units {
 			if unit.OwnerID == base.OwnerID || unit.HP <= 0 {
 				continue
@@ -1082,7 +1350,7 @@ func (g *Game) updateBaseShooting() {
 			}
 		}
 
-		// If we found a target, shoot an arrow
+		// If we found a target, shoot an arrow (including targets at range 0)
 		if closestTarget != nil {
 			g.shootArrowFromBase(baseID, base, closestTarget)
 			g.baseLastShot[baseID] = currentTime
@@ -1125,4 +1393,61 @@ func (g *Game) shootArrowFromBase(baseID int64, base protocol.BaseState, target 
 
 	// Send to server (if needed for synchronization)
 	// For now, we'll handle this locally since it's a client-side feature
+}
+
+// calculateMapScale calculates scaling factors for coordinate transformation to match editor
+// Compensates for bottom UI offset while maintaining consistent in-game sizes
+func (g *Game) calculateMapScale(bgImage *ebiten.Image) (float64, float64, float64) {
+	if bgImage == nil {
+		return 1.0, 0.0, 0.0
+	}
+
+	imageW := float64(bgImage.Bounds().Dx())
+	imageH := float64(bgImage.Bounds().Dy())
+	vw := float64(protocol.ScreenW)
+
+	// Effective viewport height accounting for bottom UI (replaces previous vh calculation)
+	// This maintains the coordinate system normalization across editor/game
+	bottomUIHeightFloat := float64(battleHUDH)
+	effectiveViewHeight := float64(protocol.ScreenH) - bottomUIHeightFloat
+
+	// Calculate scaling ratio to compensate for UI offset
+	// Use full screen height in denominator to preserve proportions
+	scaleX := vw / imageW
+	scaleY := float64(protocol.ScreenH) / imageH
+
+	// UI compensation factor - adjusts for bottom UI while keeping scaling consistent
+	uiCompensationFactor := effectiveViewHeight / float64(protocol.ScreenH)
+	if scaleY < scaleX {
+		scaleX = scaleY * uiCompensationFactor
+	}
+	scale := scaleX / uiCompensationFactor
+
+	// Center offsets accounting for UI adjustment
+	offX := (vw - imageW*scale) / 2
+	offY := 80.0 + (effectiveViewHeight-120-imageH*scale)/2
+
+	return scale, offX, offY
+}
+
+// convertMapCoord converts JSON normalized coordinates (0-1) to screen coordinates
+// Ensures consistent mapping between editor and game renderer with UI compensation
+func (g *Game) convertMapCoord(x, y float64, bgImage *ebiten.Image) (float64, float64) {
+	scale, offX, offY := g.calculateMapScale(bgImage)
+	if bgImage == nil {
+		return x * float64(protocol.ScreenW), y * float64(protocol.ScreenH-battleHUDH)
+	}
+
+	imageW := float64(bgImage.Bounds().Dx())
+	imageH := float64(bgImage.Bounds().Dy())
+
+	// Convert normalized coordinates to screen coordinates with UI-adjusted scaling
+	screenX := offX + x*imageW*scale
+
+	// Apply bottom UI offset compensation to maintain y-coordinate consistency
+	bottomUIHeightFloat := float64(battleHUDH)
+	uiOffset := bottomUIHeightFloat * (imageH * scale / float64(protocol.ScreenH))
+	screenY := offY + y*imageH*scale + uiOffset*(1.0-y)
+
+	return screenX, screenY
 }

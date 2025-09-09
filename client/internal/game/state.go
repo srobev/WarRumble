@@ -220,6 +220,9 @@ type Game struct {
 	// --- Base shooting system ---
 	baseLastShot map[int64]int64 // baseID -> last shot timestamp (UnixMilli)
 
+	// --- Unit targeting system ---
+	// targetValidator *shared.UnitTargetValidator // Not used in client
+
 	//Avatars and profile
 	avatar      string
 	showProfile bool

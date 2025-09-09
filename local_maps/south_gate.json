@@ -1,0 +1,37 @@
+{
+  "id": "south_gate",
+  "name": "South Gate",
+  "width": 0,
+  "height": 0,
+  "bg": "map_upscaled_2250x1500.png",
+  "deployZones": [
+    {
+      "x": 0.48778838504375494,
+      "y": 0.8099840891010341,
+      "w": 0.1,
+      "h": 0.1,
+      "owner": "player"
+    }
+  ],
+  "meetingStones": null,
+  "goldMines": null,
+  "lanes": null,
+  "obstacles": [
+    {
+      "x": 0.5143794749403341,
+      "y": 0.6901949085123309,
+      "type": "",
+      "image": "tree.png",
+      "width": 0.05,
+      "height": 0.05
+    }
+  ],
+  "playerBase": {
+    "x": 0.4693715194908512,
+    "y": 0.96
+  },
+  "enemyBase": {
+    "x": 0.5250596658711217,
+    "y": 0.2569610182975338
+  }
+}

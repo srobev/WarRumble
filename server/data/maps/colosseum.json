@@ -4,6 +4,8 @@
   "width": 1920,
   "height": 1080,
   "bg": "colosseum.png",
+  "bgScale": 0.85,
+  "bgOffsetX": -90,
   "frameX": 0.4,
   "frameY": 0.4,
   "frameWidth": 1,

@@ -1,0 +1,55 @@
+{
+  "id": "east_gate",
+  "name": "East Gate",
+  "width": 0,
+  "height": 0,
+  "bg": "east_gate.png",
+  "deployZones": [
+    {
+      "x": 0.3804057279236277,
+      "y": 0.7519093078758949,
+      "w": 0.1,
+      "h": 0.1,
+      "owner": "player"
+    }
+  ],
+  "meetingStones": null,
+  "goldMines": null,
+  "lanes": null,
+  "obstacles": [
+    {
+      "x": 0.2325656324582339,
+      "y": 0.49767303102625293,
+      "type": "",
+      "image": "tree.png",
+      "width": 0.05,
+      "height": 0.05
+    }
+  ],
+  "decorativeElements": [
+    {
+      "x": 0.2785733227260675,
+      "y": 0.2215354017501989,
+      "image": "tree.png",
+      "width": 0.1,
+      "height": 0.1,
+      "layer": 1
+    },
+    {
+      "x": 0.19384778573322742,
+      "y": 0.3887271280827367,
+      "image": "tree.png",
+      "width": 0.1,
+      "height": 0.1,
+      "layer": 1
+    }
+  ],
+  "playerBase": {
+    "x": 0.5422434367541766,
+    "y": 0.8178202068416865
+  },
+  "enemyBase": {
+    "x": 0.15589498806682578,
+    "y": 0.11217183770883055
+  }
+}

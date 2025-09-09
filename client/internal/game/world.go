@@ -153,11 +153,12 @@ func (w *World) LerpPositions() {
 		alpha = 1
 	}
 	for _, u := range w.Units {
-		// Calculate new position
+		// Calculate new position with smooth interpolation
 		newX := u.PrevX + (u.TargetX-u.PrevX)*alpha
 		newY := u.PrevY + (u.TargetY-u.PrevY)*alpha
 
 		// Apply collision avoidance (only for units vs bases)
+		// Removed real-time obstacle avoidance to prevent jerky movement
 		newX, newY = w.applyBaseCollisionAvoidance(u.ID, newX, newY)
 
 		u.X = newX
@@ -265,8 +266,288 @@ func (w *World) FindLanePath(startX, startY, targetX, targetY float64) (float64,
 		return targetX, targetY
 	}
 
-	// Path is blocked, find closest lane point to target
+	// Path is blocked, use smart obstacle avoidance
+	return w.FindSmartObstaclePath(startX, startY, targetX, targetY)
+}
+
+// FindSmartObstaclePath implements intelligent pathfinding around obstacles
+// considering the direction toward the target to choose the optimal side
+func (w *World) FindSmartObstaclePath(startX, startY, targetX, targetY float64) (float64, float64) {
+	// Calculate the main direction vector from start to target
+	dx := targetX - startX
+	dy := targetY - startY
+	distToTarget := math.Sqrt(dx*dx + dy*dy)
+
+	if distToTarget == 0 {
+		return targetX, targetY // Already at target
+	}
+
+	// Normalize the direction vector
+	dx /= distToTarget
+	dy /= distToTarget
+
+	// Find obstacles that might block the direct path
+	blockingObstacles := w.findBlockingObstacles(startX, startY, targetX, targetY)
+
+	if len(blockingObstacles) == 0 {
+		// No blocking obstacles, return direct path
+		return targetX, targetY
+	}
+
+	// For each blocking obstacle, evaluate both sides and choose the best
+	var bestPathX, bestPathY float64
+	bestScore := float64(-999999)
+
+	for _, obstacle := range blockingObstacles {
+		// Get obstacle center in screen coordinates
+		obsCenterX := obstacle.X*float64(protocol.ScreenW) + (obstacle.Width*float64(protocol.ScreenW))/2
+		obsCenterY := obstacle.Y*float64(protocol.ScreenH) + (obstacle.Height*float64(protocol.ScreenH))/2
+
+		// Calculate vectors from start to obstacle center
+		obsDx := obsCenterX - startX
+		obsDy := obsCenterY - startY
+		distToObstacle := math.Sqrt(obsDx*obsDx + obsDy*obsDy)
+
+		if distToObstacle == 0 {
+			continue // Skip if exactly at obstacle center
+		}
+
+		// Normalize obstacle direction
+		obsDx /= distToObstacle
+		obsDy /= distToObstacle
+
+		// Calculate perpendicular vector (90 degrees rotation)
+		perpDx := -obsDy
+		perpDy := obsDx
+
+		// Calculate detour points on both sides of the obstacle
+		// Use obstacle radius plus some buffer
+		obstacleRadius := math.Max(obstacle.Width*float64(protocol.ScreenW), obstacle.Height*float64(protocol.ScreenH)) / 2
+		detourDistance := obstacleRadius + 30 // 30 pixel buffer
+
+		// Left side detour (relative to movement direction)
+		leftDetourX := obsCenterX + perpDx*detourDistance
+		leftDetourY := obsCenterY + perpDy*detourDistance
+
+		// Right side detour (opposite side)
+		rightDetourX := obsCenterX - perpDx*detourDistance
+		rightDetourY := obsCenterY - perpDy*detourDistance
+
+		// Evaluate both detour options
+		for _, detourPoint := range []struct{ x, y float64 }{
+			{leftDetourX, leftDetourY},
+			{rightDetourX, rightDetourY},
+		} {
+			// Check if detour point is valid (not in another obstacle)
+			if w.IsPointInObstacle(detourPoint.x, detourPoint.y) {
+				continue
+			}
+
+			// Calculate path: start -> detour -> target
+			pathDist := w.calculatePathDistance(startX, startY, detourPoint.x, detourPoint.y, targetX, targetY)
+
+			// Calculate how well this path aligns with target direction
+			detourDx := detourPoint.x - startX
+			detourDy := detourPoint.y - startY
+			detourDist := math.Sqrt(detourDx*detourDx + detourDy*detourDy)
+
+			if detourDist > 0 {
+				detourDx /= detourDist
+				detourDy /= detourDist
+
+				// Dot product measures alignment with target direction
+				alignment := detourDx*dx + detourDy*dy
+
+				// Score combines path efficiency and directional alignment
+				score := alignment*100 - pathDist*0.1
+
+				if score > bestScore {
+					bestScore = score
+					bestPathX = detourPoint.x
+					bestPathY = detourPoint.y
+				}
+			}
+		}
+	}
+
+	// If we found a good detour path, return it
+	if bestScore > -999999 {
+		return bestPathX, bestPathY
+	}
+
+	// Fallback to closest lane point if smart pathfinding fails
 	return w.FindClosestLanePoint(targetX, targetY)
+}
+
+// findBlockingObstacles finds obstacles that block the direct path from start to target
+func (w *World) findBlockingObstacles(startX, startY, targetX, targetY float64) []protocol.Obstacle {
+	var blocking []protocol.Obstacle
+
+	// Calculate line segment from start to target
+	dx := targetX - startX
+	dy := targetY - startY
+	dist := math.Sqrt(dx*dx + dy*dy)
+
+	if dist == 0 {
+		return blocking
+	}
+
+	// Check points along the path
+	steps := int(dist / 10) // Check every 10 pixels
+	if steps < 3 {
+		steps = 3
+	}
+
+	for i := 0; i <= steps; i++ {
+		t := float64(i) / float64(steps)
+		checkX := startX + dx*t
+		checkY := startY + dy*t
+
+		// Check if this point is inside any obstacle
+		for _, obstacle := range w.Obstacles {
+			obsX := obstacle.X * float64(protocol.ScreenW)
+			obsY := obstacle.Y * float64(protocol.ScreenH)
+			obsW := obstacle.Width * float64(protocol.ScreenW)
+			obsH := obstacle.Height * float64(protocol.ScreenH)
+
+			if checkX >= obsX && checkX <= obsX+obsW &&
+				checkY >= obsY && checkY <= obsY+obsH {
+				// Check if this obstacle is already in our list
+				alreadyAdded := false
+				for _, existing := range blocking {
+					if existing.X == obstacle.X && existing.Y == obstacle.Y {
+						alreadyAdded = true
+						break
+					}
+				}
+				if !alreadyAdded {
+					blocking = append(blocking, obstacle)
+				}
+			}
+		}
+	}
+
+	return blocking
+}
+
+// calculatePathDistance calculates the total distance of a path: start -> waypoint -> target
+func (w *World) calculatePathDistance(startX, startY, waypointX, waypointY, targetX, targetY float64) float64 {
+	dist1 := math.Sqrt((waypointX-startX)*(waypointX-startX) + (waypointY-startY)*(waypointY-startY))
+	dist2 := math.Sqrt((targetX-waypointX)*(targetX-waypointX) + (targetY-waypointY)*(targetY-waypointY))
+	return dist1 + dist2
+}
+
+// applySmartObstacleAvoidance applies real-time obstacle avoidance during unit movement
+func (w *World) applySmartObstacleAvoidance(unit *RenderUnit, newX, newY float64) (float64, float64) {
+	// Check if the new position would collide with an obstacle
+	if !w.IsPointInObstacle(newX, newY) {
+		return newX, newY // No collision, return original position
+	}
+
+	// Calculate the unit's movement direction toward its target
+	targetDx := unit.TargetX - unit.X
+	targetDy := unit.TargetY - unit.Y
+	distToTarget := math.Sqrt(targetDx*targetDx + targetDy*targetDy)
+
+	if distToTarget == 0 {
+		return newX, newY // No movement direction, can't determine which way to steer
+	}
+
+	// Normalize target direction
+	targetDx /= distToTarget
+	targetDy /= distToTarget
+
+	// Find the closest obstacle that's blocking the path
+	var closestObstacle *protocol.Obstacle
+	minDist := float64(999999)
+
+	for _, obstacle := range w.Obstacles {
+		obsX := obstacle.X * float64(protocol.ScreenW)
+		obsY := obstacle.Y * float64(protocol.ScreenH)
+		obsW := obstacle.Width * float64(protocol.ScreenW)
+		obsH := obstacle.Height * float64(protocol.ScreenH)
+
+		// Check if new position is inside this obstacle
+		if newX >= obsX && newX <= obsX+obsW && newY >= obsY && newY <= obsY+obsH {
+			// Calculate distance from unit's current position to obstacle center
+			obsCenterX := obsX + obsW/2
+			obsCenterY := obsY + obsH/2
+			dist := math.Sqrt((obsCenterX-unit.X)*(obsCenterX-unit.X) + (obsCenterY-unit.Y)*(obsCenterY-unit.Y))
+
+			if dist < minDist {
+				minDist = dist
+				obs := obstacle // Create a copy to avoid reference issues
+				closestObstacle = &obs
+			}
+		}
+	}
+
+	if closestObstacle == nil {
+		return newX, newY // No blocking obstacle found
+	}
+
+	// Calculate obstacle center
+	obsCenterX := closestObstacle.X*float64(protocol.ScreenW) + (closestObstacle.Width*float64(protocol.ScreenW))/2
+	obsCenterY := closestObstacle.Y*float64(protocol.ScreenH) + (closestObstacle.Height*float64(protocol.ScreenH))/2
+
+	// Calculate vector from unit to obstacle center
+	obsDx := obsCenterX - unit.X
+	obsDy := obsCenterY - unit.Y
+	distToObsCenter := math.Sqrt(obsDx*obsDx + obsDy*obsDy)
+
+	if distToObsCenter == 0 {
+		return newX, newY // Exactly at obstacle center, can't determine direction
+	}
+
+	// Normalize obstacle direction
+	obsDx /= distToObsCenter
+	obsDy /= distToObsCenter
+
+	// Calculate perpendicular vector (90 degrees rotation) for steering
+	perpDx := -obsDy
+	perpDy := obsDx
+
+	// Determine which side to steer based on target direction
+	// Dot product with perpendicular vector determines which side aligns better with target
+	dotProduct := targetDx*perpDx + targetDy*perpDy
+
+	// Choose steering direction: positive dot product means steer in perp direction,
+	// negative means steer in opposite direction
+	steerDx := perpDx
+	steerDy := perpDy
+	if dotProduct < 0 {
+		steerDx = -perpDx
+		steerDy = -perpDy
+	}
+
+	// Calculate steering force based on distance to obstacle
+	obstacleRadius := math.Max(closestObstacle.Width*float64(protocol.ScreenW), closestObstacle.Height*float64(protocol.ScreenH)) / 2
+	distToObstacle := distToObsCenter - obstacleRadius
+
+	// Steering strength decreases as we get farther from obstacle
+	steerStrength := 1.0
+	if distToObstacle > 20 {
+		steerStrength = math.Max(0, 1.0-(distToObstacle-20)/30) // Fade out steering over 30 pixels
+	}
+
+	// Apply steering to the new position
+	steerAmount := 25.0 * steerStrength // Maximum steering distance per frame
+	newX += steerDx * steerAmount
+	newY += steerDy * steerAmount
+
+	// Ensure the steered position doesn't put us in another obstacle
+	if w.IsPointInObstacle(newX, newY) {
+		// If steering put us in another obstacle, try the opposite direction
+		newX = unit.X + (-steerDx)*steerAmount
+		newY = unit.Y + (-steerDy)*steerAmount
+
+		// If that also fails, don't steer at all
+		if w.IsPointInObstacle(newX, newY) {
+			return unit.X, unit.Y // Stay in place rather than move into obstacle
+		}
+	}
+
+	return newX, newY
 }
 
 // Update unit target position to avoid obstacles using lane pathfinding

@@ -3,6 +3,7 @@ package srv
 import (
 	"encoding/json"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -163,6 +164,7 @@ func loadMapDef(id string) (protocol.MapDef, error) {
 		if def.IsArena {
 			def = mirrorArenaMap(def)
 		}
+		log.Printf("SYSTEM: Loaded map from arenas/%s.json", id)
 		return def, nil
 	}
 
@@ -185,6 +187,7 @@ func loadMapDef(id string) (protocol.MapDef, error) {
 		if def.IsArena {
 			def = mirrorArenaMap(def)
 		}
+		log.Printf("SYSTEM: Loaded map from duels/%s.json", id)
 		return def, nil
 	}
 
@@ -204,6 +207,7 @@ func loadMapDef(id string) (protocol.MapDef, error) {
 	if strings.TrimSpace(def.Name) == "" {
 		def.Name = id
 	}
+	log.Printf("SYSTEM: Loaded map from maps/%s.json", id)
 	return def, nil
 }
 

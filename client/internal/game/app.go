@@ -293,24 +293,11 @@ afterMessages:
 				g.particleSystem.CreateHealingEffect(float64(mouseX), float64(mouseY))
 			}
 		}
-		if inpututil.IsKeyJustPressed(ebiten.KeyA) {
-			// Create aura effect at mouse position
-			if g.particleSystem != nil {
-				g.particleSystem.CreateAuraEffect(float64(mouseX), float64(mouseY), "buff")
-			}
-		}
-
-		// New ability effect shortcuts
+		// WASD particle shortcuts removed - now used for camera control
 		if inpututil.IsKeyJustPressed(ebiten.KeyQ) {
 			// Healing ability at mouse position
 			if g.particleSystem != nil {
 				g.particleSystem.CreateUnitAbilityEffect(float64(mouseX), float64(mouseY), "heal")
-			}
-		}
-		if inpututil.IsKeyJustPressed(ebiten.KeyW) {
-			// Stun ability at mouse position
-			if g.particleSystem != nil {
-				g.particleSystem.CreateUnitAbilityEffect(float64(mouseX), float64(mouseY), "stun")
 			}
 		}
 		if inpututil.IsKeyJustPressed(ebiten.KeyR) {
@@ -1045,6 +1032,17 @@ func (g *Game) drawProjectiles(screen *ebiten.Image, shouldMirror bool, mirrorY 
 
 			// Draw projectile as a single flying bolt at current position
 			g.drawProjectileByType(screen, renderX, renderY, renderTX, renderTY, proj.ProjectileType, g.cameraZoom)
+
+			// Draw straight line for voodoo hex projectiles
+			if proj.ProjectileType == "voodoo_hex" && g.particleSystem != nil {
+				// Convert screen coordinates back to world coordinates for the line drawing
+				unitWorldX := (renderX - g.cameraX) / g.cameraZoom
+				unitWorldY := (renderY - g.cameraY) / g.cameraZoom
+				targetWorldX := (renderTX - g.cameraX) / g.cameraZoom
+				targetWorldY := (renderTY - g.cameraY) / g.cameraZoom
+
+				g.particleSystem.DrawVoodooHexxerLine(screen, unitWorldX, unitWorldY, targetWorldX, targetWorldY, g.cameraX, g.cameraY, g.cameraZoom)
+			}
 		}
 	}
 
@@ -1155,6 +1153,20 @@ func (g *Game) drawProjectileByType(screen *ebiten.Image, currentX, currentY, ta
 	trailSize := 2 * zoom      // Trail particles
 
 	switch projectileType {
+	case "voodoo_hex":
+		// Voodoo Hexer channeling effect - create continuous red glowing beam
+		if g.particleSystem != nil {
+			// Convert screen coordinates back to world coordinates for particle system
+			// Reverse camera transformation: world = (screen - camera) / zoom
+			unitWorldX := (currentX - g.cameraX) / g.cameraZoom
+			unitWorldY := (currentY - g.cameraY) / g.cameraZoom
+			targetWorldX := (targetX - g.cameraX) / g.cameraZoom
+			targetWorldY := (targetY - g.cameraY) / g.cameraZoom
+
+			// Create the voodoo hex channeling effect
+			g.particleSystem.CreateVoodooHexxerEffect(unitWorldX, unitWorldY, targetWorldX, targetWorldY)
+		}
+		return // Don't draw a flying projectile for voodoo hex
 	case "fire":
 		// FIREBALL - Realistic flaming projectile
 		// Outer flame layer (orange-red)
@@ -1393,7 +1405,7 @@ func (g *Game) drawProjectileByType(screen *ebiten.Image, currentX, currentY, ta
 		}
 
 	case "arrow":
-		// ARROW - Simple arrow projectile
+		// CROSSBOW BOLT - Thick, heavy projectile like a big crossbow arrow
 		// Calculate direction vector
 		dx := targetX - currentX
 		dy := targetY - currentY
@@ -1403,33 +1415,81 @@ func (g *Game) drawProjectileByType(screen *ebiten.Image, currentX, currentY, ta
 			dy /= dist
 		}
 
-		// Arrow shaft (elongated rectangle)
-		arrowLength := projectileSize * 4.5
+		// Bolt shaft (much thicker and shorter than arrow)
+		boltLength := projectileSize * 3.0 // Shorter but thicker
+		boltWidth := projectileSize * 0.8  // Thick shaft
 
-		// Draw arrow shaft as a line
-		endX := currentX + dx*arrowLength
-		endY := currentY + dy*arrowLength
-		ebitenutil.DrawLine(screen, currentX, currentY, endX, endY, color.NRGBA{139, 69, 19, 255}) // Brown shaft
+		// Draw bolt shaft as thick rectangle (multiple lines for thickness)
+		endX := currentX + dx*boltLength
+		endY := currentY + dy*boltLength
 
-		// Arrow head (triangle)
-		headSize := projectileSize * 0.8
+		// Perpendicular vector for thickness
+		perpX := -dy * boltWidth * 0.5
+		perpY := dx * boltWidth * 0.5
 
-		// Draw arrow head as small triangle
-		perpX := -dy * headSize * 0.3
-		perpY := dx * headSize * 0.3
+		// Draw thick shaft using filled rectangle
+		shaftStartX1 := currentX + perpX
+		shaftStartY1 := currentY + perpY
+		shaftStartX2 := currentX - perpX
+		shaftStartY2 := currentY - perpY
 
-		// Arrow head points
-		p1x := endX
-		p1y := endY
-		p2x := endX - dx*headSize*0.5 + perpX
-		p2y := endY - dy*headSize*0.5 + perpY
-		p3x := endX - dx*headSize*0.5 - perpX
-		p3y := endY - dy*headSize*0.5 - perpY
+		// Draw shaft as filled rectangle (dark brown)
+		ebitenutil.DrawRect(screen, shaftStartX1, shaftStartY1, boltWidth, boltLength, color.NRGBA{101, 67, 33, 255})
+		ebitenutil.DrawRect(screen, shaftStartX1+1, shaftStartY1+1, boltWidth-2, boltLength-2, color.NRGBA{139, 90, 43, 255})
 
-		// Draw arrow head triangle
-		ebitenutil.DrawLine(screen, p1x, p1y, p2x, p2y, color.NRGBA{100, 100, 100, 255})
-		ebitenutil.DrawLine(screen, p1x, p1y, p3x, p3y, color.NRGBA{100, 100, 100, 255})
-		ebitenutil.DrawLine(screen, p2x, p2y, p3x, p3y, color.NRGBA{100, 100, 100, 255})
+		// Bolt head (larger, more substantial than arrow head)
+		headSize := projectileSize * 1.2
+		headWidth := projectileSize * 0.6
+
+		// Draw bolt head as filled triangle (steel gray)
+		headBaseX := endX - dx*headSize*0.3
+		headBaseY := endY - dy*headSize*0.3
+
+		headTipX := endX + dx*headSize*0.4
+		headTipY := endY + dy*headSize*0.4
+
+		headPerpX := -dy * headWidth * 0.5
+		headPerpY := dx * headWidth * 0.5
+
+		headLeftX := headBaseX + headPerpX
+		headLeftY := headBaseY + headPerpY
+		headRightX := headBaseX - headPerpX
+		headRightY := headBaseY - headPerpY
+
+		// Draw bolt head as filled triangle using lines (since DrawTriangle doesn't exist)
+		// Fill the triangle by drawing multiple lines
+		for i := 0; i < 8; i++ {
+			t := float64(i) / 7.0
+			leftX := headLeftX + (headTipX-headLeftX)*t
+			leftY := headLeftY + (headTipY-headLeftY)*t
+			rightX := headRightX + (headTipX-headRightX)*t
+			rightY := headRightY + (headTipY-headRightY)*t
+			ebitenutil.DrawLine(screen, leftX, leftY, rightX, rightY, color.NRGBA{169, 169, 169, 255})
+		}
+		// Add darker outline
+		ebitenutil.DrawLine(screen, headTipX, headTipY, headLeftX, headLeftY, color.NRGBA{105, 105, 105, 255})
+		ebitenutil.DrawLine(screen, headTipX, headTipY, headRightX, headRightY, color.NRGBA{105, 105, 105, 255})
+		ebitenutil.DrawLine(screen, headLeftX, headLeftY, headRightX, headRightY, color.NRGBA{105, 105, 105, 255})
+
+		// Add fletching (feathers) at the back for crossbow bolt appearance
+		fletchSize := projectileSize * 0.6
+		fletchPerpX := -dy * fletchSize
+		fletchPerpY := dx * fletchSize
+
+		// Left fletch
+		fletchLeftX := currentX + fletchPerpX*0.7
+		fletchLeftY := currentY + fletchPerpY*0.7
+		ebitenutil.DrawLine(screen, currentX, currentY, fletchLeftX, fletchLeftY, color.NRGBA{100, 100, 100, 200})
+
+		// Right fletch
+		fletchRightX := currentX - fletchPerpX*0.7
+		fletchRightY := currentY - fletchPerpY*0.7
+		ebitenutil.DrawLine(screen, currentX, currentY, fletchRightX, fletchRightY, color.NRGBA{100, 100, 100, 200})
+
+		// Add metallic shine effect on the bolt head
+		shaftCenterX := (shaftStartX1 + shaftStartX2) / 2
+		shaftCenterY := (shaftStartY1 + shaftStartY2) / 2
+		ebitenutil.DrawCircle(screen, shaftCenterX, shaftCenterY, boltWidth*0.3, color.NRGBA{200, 200, 200, 150})
 
 	default:
 		// ENERGY BOLT - Generic magical projectile

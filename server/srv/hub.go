@@ -942,8 +942,7 @@ func (c *client) reader(h *Hub) {
 			// Load map definition fresh each time (no caching)
 			if mapDef, err := loadMapDef(m.MapID); err == nil {
 				r.g.mapDef = &mapDef
-				logWithAccount(c.name, "Loaded map "+m.MapID+" for PvE: playerBase="+fmt.Sprintf("%.2f,%.2f enemyBase=%.2f,%.2f",
-					mapDef.PlayerBase.X, mapDef.PlayerBase.Y, mapDef.EnemyBase.X, mapDef.EnemyBase.Y))
+				logWithAccount(c.name, fmt.Sprintf("SYSTEM: Player started PVE battle - loaded map %s.json", m.MapID))
 			} else {
 				logWithAccount(c.name, "Failed to load map "+m.MapID+" for PvE: "+err.Error())
 			}

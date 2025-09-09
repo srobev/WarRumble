@@ -125,7 +125,8 @@
     "class": "melee",
     "role": "mini",
     "cost": 3,
-    "speed": 1
+    "speed": 1,
+    "spawn_count": 2
   },
   {
     "name": "Redhand Thieves",
@@ -135,7 +136,8 @@
     "class": "melee",
     "role": "mini",
     "cost": 3,
-    "speed": 2
+    "speed": 2,
+    "spawn_count": 2
   },
   {
     "name": "Firedrake",
@@ -213,8 +215,9 @@
     "dmg": 220,
     "hp": 530,
     "portrait": "obsidian_bat.png",
-    "class": "range",
+    "class": "melee",
     "subclass": "air-vs-base",
+    "features": ["siege"],
     "role": "mini",
     "cost": 3,
     "speed": 2,
@@ -255,7 +258,8 @@
     "cost": 3,
     "speed": 4,
     "range": 200,
-    "particle": "projectile"
+    "particle": "projectile",
+    "spawn_count": 3
   },
   {
     "name": "Warg Lord",
@@ -352,7 +356,8 @@
     "hp": 500,
     "portrait": "corpse_catapult.png",
     "class": "range",
-    "subclass": "siege-vs-base",
+    "subclass": "range-vs-ground",
+    "features": ["siege"],
     "role": "mini",
     "cost": 3,
     "speed": 1,

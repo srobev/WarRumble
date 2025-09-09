@@ -4,6 +4,8 @@
   "width": 1920,
   "height": 1080,
   "bg": "friendly_duel.png",
+  "bgScale": 0.5666666666666667,
+  "bgOffsetX": -147,
   "deployZones": [
     {
       "x": 0.4290286975717441,

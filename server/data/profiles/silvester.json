@@ -1,22 +1,30 @@
 {
-  "playerId": 3567913,
+  "playerId": 4258140,
   "name": "silvester",
   "army": [
-    "Sorceress Glacia",
-    "Arcane Blast",
-    "Chain Lightning",
-    "Magma Goliath",
-    "Execute",
-    "Holy Nova",
-    "Blizzard"
+    "Warg Lord",
+    "Magma Beasts",
+    "Corpse Catapult",
+    "Obsidian Bat",
+    "Redhand Thieves",
+    "Voodoo Hexer",
+    "Winged Screechers"
   ],
   "armies": {
-    "Bloodmage Thalor": [
-      "Flesh Golem",
-      "Foulwing Rider",
-      "Twin Wyrnn",
+    "Aethelion Ragestorm": [
+      "Magma Beasts",
+      "Obsidian Bat",
+      "Jungle Headhunter",
+      "Winged Screechers",
       "Spirit Binder",
-      "Mana Wyrm",
+      "Blazebinder"
+    ],
+    "Bloodmage Thalor": [
+      "Whelp Eggs",
+      "Foulwing Rider",
+      "Winged Screechers",
+      "Spirit Binder",
+      "Magma Beasts",
       "Corpse Catapult"
     ],
     "Sorceress Glacia": [
@@ -26,25 +34,44 @@
       "Execute",
       "Holy Nova",
       "Blizzard"
+    ],
+    "Warg Lord": [
+      "Magma Beasts",
+      "Corpse Catapult",
+      "Obsidian Bat",
+      "Redhand Thieves",
+      "Voodoo Hexer",
+      "Winged Screechers"
     ]
   },
   "gold": 0,
   "accountXp": 0,
   "unitXp": {
-    "Aerie Guard": 1,
-    "Arcane Blast": 12,
-    "Blazebinder": 3,
-    "Blizzard": 11,
-    "Chain Lightning": 10,
-    "Execute": 8,
-    "Flesh Golem": 2,
+    "Aerie Guard": 2,
+    "Aethelion Ragestorm": 1,
+    "Arcane Blast": 16,
+    "Blazebinder": 6,
+    "Blizzard": 13,
+    "Bloodmage Thalor": 5,
+    "Chain Lightning": 14,
+    "Corpse Catapult": 7,
+    "Execute": 11,
+    "Flesh Golem": 3,
+    "Foulwing Rider": 3,
     "Holy Nova": 14,
     "Jungle Headhunter": 2,
-    "Magma Goliath": 16,
+    "Magma Beasts": 10,
+    "Magma Goliath": 18,
+    "Obsidian Bat": 7,
     "Polymorph": 4,
-    "Sorceress Glacia": 55,
-    "Spirit Binder": 1,
-    "Twin Wyrnn": 3
+    "Redhand Thieves": 10,
+    "Sorceress Glacia": 70,
+    "Spirit Binder": 4,
+    "Twin Wyrnn": 3,
+    "Voodoo Hexer": 9,
+    "Warg Lord": 29,
+    "Whelp Eggs": 1,
+    "Winged Screechers": 13
   },
   "pvp_rating": 1276,
   "pvp_rank": "Knight",

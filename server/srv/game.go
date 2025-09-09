@@ -11,25 +11,28 @@ import (
 	"strings"
 	"time"
 
+	"rumble/shared"
 	"rumble/shared/protocol"
 )
 
 type MiniCard struct {
-	Name        string  `json:"name"`
-	DMG         int     `json:"dmg"`
-	HP          int     `json:"hp"`
-	Heal        int     `json:"heal"`
-	Hps         int     `json:"hps"`
-	Portrait    string  `json:"portrait"`
-	Class       string  `json:"class"`
-	SubClass    string  `json:"subclass"`
-	Role        string  `json:"role"`
-	Cost        int     `json:"cost"`
-	Speed       float64 `json:"speed"`
-	Range       int     `json:"range"`
-	Particle    string  `json:"particle"`
-	Cooldown    float64 `json:"cooldown,omitempty"`     // Attack cooldown in seconds
-	AttackSpeed float64 `json:"attack_speed,omitempty"` // Attacks per second (alternative to cooldown)
+	Name        string   `json:"name"`
+	DMG         int      `json:"dmg"`
+	HP          int      `json:"hp"`
+	Heal        int      `json:"heal"`
+	Hps         int      `json:"hps"`
+	Portrait    string   `json:"portrait"`
+	Class       string   `json:"class"`
+	SubClass    string   `json:"subclass"`
+	Role        string   `json:"role"`
+	Cost        int      `json:"cost"`
+	Speed       float64  `json:"speed"`
+	Range       int      `json:"range"`
+	Particle    string   `json:"particle"`
+	Cooldown    float64  `json:"cooldown,omitempty"`     // Attack cooldown in seconds
+	AttackSpeed float64  `json:"attack_speed,omitempty"` // Attacks per second (alternative to cooldown)
+	SpawnCount  int      `json:"spawn_count,omitempty"`  // Number of units to spawn (default: 1)
+	Features    []string `json:"features,omitempty"`     // Special features like "siege"
 }
 
 type Player struct {
@@ -72,6 +75,7 @@ type Unit struct {
 	HealCD         float64
 	AttackCooldown float64           // Configurable attack cooldown duration
 	SpeedDebuffs   map[int64]float64 // Active speed debuffs (blizzardID -> speedMultiplier)
+	Features       []string          // Special features like "siege"
 }
 
 type Projectile struct {
@@ -123,6 +127,9 @@ type Game struct {
 	matchEnded    bool
 	timerWinnerID int64 // winner when timer expires
 
+	// Unit targeting system
+	targetValidator *shared.UnitTargetValidator
+
 	// Event broadcasting callback
 	broadcastEvent func(eventType string, event interface{})
 }
@@ -138,6 +145,14 @@ func NewGame() *Game {
 		// init maps, players, etc.
 	}
 	g.loadMinis()
+
+	// Initialize unit targeting system
+	if validator, err := shared.NewUnitTargetValidator(); err != nil {
+		log.Printf("Failed to initialize unit target validator: %v", err)
+	} else {
+		g.targetValidator = validator
+	}
+
 	return g
 }
 
@@ -653,10 +668,123 @@ func (g *Game) Step(dt float64) protocol.StateDelta {
 				u.CD = u.AttackCooldown
 			}
 		} else if dist > 0 {
+			// Calculate movement toward target
 			nx, ny := dx/dist, dy/dist
+			desiredX := u.X + nx*u.Speed*dt
+			desiredY := u.Y + ny*u.Speed*dt
+
+			// Declare variables for final position
+			var newX, newY float64
+
+			// Debug: Check map definition and obstacles
+			if g.mapDef == nil {
+				log.Printf("DEBUG: Unit %s - No map definition loaded", u.Name)
+			} else if len(g.mapDef.Obstacles) == 0 {
+				log.Printf("DEBUG: Unit %s - No obstacles in map", u.Name)
+			} else {
+				log.Printf("DEBUG: Unit %s at (%.1f,%.1f) moving to (%.1f,%.1f), %d obstacles",
+					u.Name, u.X, u.Y, desiredX, desiredY, len(g.mapDef.Obstacles))
+			}
+
+			// Check if desired position would collide with obstacle (with safety margin)
+			if g.isPointNearObstacle(desiredX, desiredY, 25) { // 25 pixel safety margin for proactive avoidance
+				log.Printf("DEBUG: Unit %s - COLLISION DETECTED at (%.1f,%.1f)", u.Name, desiredX, desiredY)
+
+				// First try: Move directly toward target but stop before obstacle
+				obsCenterX, obsCenterY := g.getObstacleCenter(desiredX, desiredY)
+				if obsCenterX != -1 && obsCenterY != -1 {
+					// Calculate vector from current position to obstacle center
+					obsDx := obsCenterX - u.X
+					obsDy := obsCenterY - u.Y
+					distToObs := math.Hypot(obsDx, obsDy)
+
+					if distToObs > 0 {
+						// Normalize
+						obsDx /= distToObs
+						obsDy /= distToObs
+
+						// Calculate safe distance (stop before entering obstacle)
+
+						// Calculate a position along the path to target, but stopping before obstacle
+						// Instead of moving away from obstacle center, move toward target but stop early
+						targetDx := tx - u.X
+						targetDy := ty - u.Y
+						distToTarget := math.Hypot(targetDx, targetDy)
+
+						if distToTarget > 0 {
+							// Normalize target direction
+							targetDx /= distToTarget
+							targetDy /= distToTarget
+
+							// Calculate how far we can safely move toward target
+							maxSafeDist := u.Speed * dt
+							safeDist := maxSafeDist
+
+							// Check if moving the full distance would hit obstacle
+							testX := u.X + targetDx*maxSafeDist
+							testY := u.Y + targetDy*maxSafeDist
+
+							if g.isPointNearObstacle(testX, testY, 5) { // 5 pixel safety margin for binary search
+								// Find the maximum distance we can move without hitting obstacle
+								// Use binary search to find safe distance
+								minDist := 0.0
+								maxDist := maxSafeDist
+								bestDist := 0.0
+
+								for i := 0; i < 8; i++ { // 8 iterations for good precision
+									midDist := (minDist + maxDist) / 2
+									testX := u.X + targetDx*midDist
+									testY := u.Y + targetDy*midDist
+
+									if g.isPointInObstacle(testX, testY) {
+										maxDist = midDist
+									} else {
+										minDist = midDist
+										bestDist = midDist
+									}
+								}
+
+								safeDist = bestDist * 0.9 // Use 90% of safe distance for extra margin
+							}
+
+							// Calculate final safe position
+							safeX := u.X + targetDx*safeDist
+							safeY := u.Y + targetDy*safeDist
+
+							// Ensure we moved at least a minimum distance to avoid getting stuck
+							minMoveDist := u.Speed * dt * 0.005 // At least 0.5% of max movement (very lenient)
+							actualDist := math.Hypot(safeX-u.X, safeY-u.Y)
+
+							if actualDist >= minMoveDist && !g.isPointNearObstacle(safeX, safeY, 2) { // 2 pixel safety margin for final check
+								log.Printf("DEBUG: Unit %s - Using progressive safe approach: (%.1f,%.1f) dist=%.3f", u.Name, safeX, safeY, actualDist)
+								newX, newY = safeX, safeY
+							} else {
+								log.Printf("DEBUG: Unit %s - Progressive approach too short (%.3f < %.3f), trying back-away strategy", u.Name, actualDist, minMoveDist)
+								// Try to back away from obstacle first, then try perpendicular
+								newX, newY = g.tryBackAwayStrategy(u, obsCenterX, obsCenterY, dt)
+								if newX == u.X && newY == u.Y {
+									// Back away failed, try perpendicular
+									newX, newY = g.tryPerpendicularMovement(u, obsCenterX, obsCenterY, dt)
+								}
+							}
+						} else {
+							newX, newY = g.tryPerpendicularMovement(u, obsCenterX, obsCenterY, dt)
+						}
+					} else {
+						newX, newY = g.tryPerpendicularMovement(u, obsCenterX, obsCenterY, dt)
+					}
+				} else {
+					log.Printf("DEBUG: Unit %s - Could not find obstacle center", u.Name)
+					newX, newY = desiredX, desiredY // Fallback to original desired position
+				}
+			} else {
+				newX, newY = desiredX, desiredY
+			}
+
+			// Update position and facing
 			u.Facing = math.Atan2(ny, nx)
-			u.X += nx * u.Speed * dt
-			u.Y += ny * u.Speed * dt
+			u.X = newX
+			u.Y = newY
 		}
 		if u.CD > 0 {
 			u.CD -= dt
@@ -745,11 +873,27 @@ func (g *Game) FullSnapshot() protocol.FullSnapshot {
 }
 
 func (g *Game) findTarget(u *Unit) (float64, float64) {
+	// Special case: air-vs-base units always target the enemy base directly
+	if strings.ToLower(u.SubClass) == "air-vs-base" {
+		for _, p := range g.players {
+			if p.ID != u.OwnerID {
+				return float64(p.Base.X + p.Base.W/2), float64(p.Base.Y + p.Base.H/2)
+			}
+		}
+	}
+
 	var best *Unit
 	bestDist := math.MaxFloat64
 	for _, v := range g.units {
 		if v.OwnerID == u.OwnerID || v.HP <= 0 {
 			continue
+		}
+		// Check if attacker can target this unit
+		if g.targetValidator != nil {
+			canAttack := g.targetValidator.CanAttackTarget(u.Class, u.SubClass, "unit", v.Class, v.SubClass)
+			if !canAttack {
+				continue
+			}
 		}
 		if d := hypot(u.X, u.Y, v.X, v.Y); d < bestDist {
 			bestDist, best = d, v
@@ -758,13 +902,648 @@ func (g *Game) findTarget(u *Unit) (float64, float64) {
 	if best != nil {
 		return best.X, best.Y
 	}
-	// enemy base
-	for _, p := range g.players {
-		if p.ID != u.OwnerID {
-			return float64(p.Base.X + p.Base.W/2), float64(p.Base.Y + p.Base.H/2)
+	// enemy base - check if attacker can target bases
+	if g.targetValidator != nil {
+		canAttack := g.targetValidator.CanAttackTarget(u.Class, u.SubClass, "base", "base", "")
+		if canAttack {
+			for _, p := range g.players {
+				if p.ID != u.OwnerID {
+					return float64(p.Base.X + p.Base.W/2), float64(p.Base.Y + p.Base.H/2)
+				}
+			}
+		}
+	} else {
+		// Fallback if no validator
+		for _, p := range g.players {
+			if p.ID != u.OwnerID {
+				return float64(p.Base.X + p.Base.W/2), float64(p.Base.Y + p.Base.H/2)
+			}
 		}
 	}
 	return float64(g.width / 2), float64(g.height / 2)
+}
+
+// calculateObstacleAvoidingTarget calculates a pathfinding-adjusted target that avoids obstacles
+func (g *Game) calculateObstacleAvoidingTarget(u *Unit, targetX, targetY float64) (float64, float64) {
+	// If no map definition with obstacles, return direct target
+	if g.mapDef == nil {
+		log.Printf("DEBUG: No map definition loaded")
+		return targetX, targetY
+	}
+
+	if len(g.mapDef.Obstacles) == 0 {
+		log.Printf("DEBUG: No obstacles in map definition")
+		return targetX, targetY
+	}
+
+	log.Printf("DEBUG: Unit at (%.1f, %.1f) targeting (%.1f, %.1f), %d obstacles", u.X, u.Y, targetX, targetY, len(g.mapDef.Obstacles))
+
+	// Check if the direct path is clear
+	if g.isDirectPathClear(u.X, u.Y, targetX, targetY) {
+		return targetX, targetY
+	}
+
+	// Path is blocked, find obstacle-avoiding path
+	return g.findObstacleAvoidingPath(u.X, u.Y, targetX, targetY)
+}
+
+// isDirectPathClear checks if the direct path from start to target is clear of obstacles
+func (g *Game) isDirectPathClear(startX, startY, targetX, targetY float64) bool {
+	if g.mapDef == nil {
+		return true
+	}
+
+	dx := targetX - startX
+	dy := targetY - startY
+	dist := math.Hypot(dx, dy)
+
+	if dist == 0 {
+		return true
+	}
+
+	// Check points along the path
+	steps := int(dist / 10) // Check every 10 pixels
+	if steps < 3 {
+		steps = 3
+	}
+
+	for i := 0; i <= steps; i++ {
+		t := float64(i) / float64(steps)
+		checkX := startX + dx*t
+		checkY := startY + dy*t
+
+		// Check if this point collides with any obstacle
+		for _, obstacle := range g.mapDef.Obstacles {
+			obsX := obstacle.X * float64(g.width)
+			obsY := obstacle.Y * float64(g.height)
+			obsW := obstacle.Width * float64(g.width)
+			obsH := obstacle.Height * float64(g.height)
+
+			if checkX >= obsX && checkX <= obsX+obsW &&
+				checkY >= obsY && checkY <= obsY+obsH {
+				return false // Path is blocked
+			}
+		}
+	}
+
+	return true // Path is clear
+}
+
+// findObstacleAvoidingPath finds a path around obstacles using simple detour logic
+func (g *Game) findObstacleAvoidingPath(startX, startY, targetX, targetY float64) (float64, float64) {
+	if g.mapDef == nil {
+		return targetX, targetY
+	}
+
+	// Calculate the main direction vector
+	dx := targetX - startX
+	dy := targetY - startY
+	distToTarget := math.Hypot(dx, dy)
+
+	if distToTarget == 0 {
+		return targetX, targetY
+	}
+
+	// Normalize direction
+	dx /= distToTarget
+	dy /= distToTarget
+
+	// Find the closest blocking obstacle
+	var closestObstacle *protocol.Obstacle
+	minDist := float64(999999)
+
+	for _, obstacle := range g.mapDef.Obstacles {
+		obsX := obstacle.X * float64(g.width)
+		obsY := obstacle.Y * float64(g.height)
+		obsW := obstacle.Width * float64(g.width)
+		obsH := obstacle.Height * float64(g.height)
+
+		// Calculate distance from start to obstacle center
+		obsCenterX := obsX + obsW/2
+		obsCenterY := obsY + obsH/2
+		dist := math.Hypot(obsCenterX-startX, obsCenterY-startY)
+
+		if dist < minDist {
+			minDist = dist
+			obs := obstacle // Copy to avoid reference issues
+			closestObstacle = &obs
+		}
+	}
+
+	if closestObstacle == nil {
+		return targetX, targetY
+	}
+
+	// Calculate obstacle center
+	obsCenterX := closestObstacle.X*float64(g.width) + (closestObstacle.Width*float64(g.width))/2
+	obsCenterY := closestObstacle.Y*float64(g.height) + (closestObstacle.Height*float64(g.height))/2
+
+	// Calculate perpendicular vector for steering
+	obsDx := obsCenterX - startX
+	obsDy := obsCenterY - startY
+	distToObs := math.Hypot(obsDx, obsDy)
+
+	if distToObs == 0 {
+		return targetX, targetY
+	}
+
+	// Normalize obstacle direction
+	obsDx /= distToObs
+	obsDy /= distToObs
+
+	// Calculate perpendicular vector (90 degrees rotation)
+	perpDx := -obsDy
+	perpDy := obsDx
+
+	// Choose detour direction based on target alignment
+	dotProduct := dx*perpDx + dy*perpDy
+	steerDx := perpDx
+	steerDy := perpDy
+	if dotProduct < 0 {
+		steerDx = -perpDx
+		steerDy = -perpDy
+	}
+
+	// Calculate detour point
+	obstacleRadius := math.Max(closestObstacle.Width*float64(g.width), closestObstacle.Height*float64(g.height)) / 2
+	detourDistance := obstacleRadius + 60 // 60 pixel buffer for more distance
+	detourX := obsCenterX + steerDx*detourDistance
+	detourY := obsCenterY + steerDy*detourDistance
+
+	// Ensure detour point is not in another obstacle
+	if !g.isPointInObstacle(detourX, detourY) {
+		return detourX, detourY
+	}
+
+	// If detour point is blocked, try the opposite direction
+	detourX = obsCenterX - steerDx*detourDistance
+	detourY = obsCenterY - steerDy*detourDistance
+
+	if !g.isPointInObstacle(detourX, detourY) {
+		return detourX, detourY
+	}
+
+	// If both directions are blocked, return original target
+	return targetX, targetY
+}
+
+// isPointInObstacle checks if a point collides with any obstacle (with safety margin)
+func (g *Game) isPointInObstacle(x, y float64) bool {
+	return g.isPointNearObstacle(x, y, 0) // 0 pixel safety margin for exact collision
+}
+
+// isPointNearObstacle checks if a point is near any obstacle within a safety margin
+func (g *Game) isPointNearObstacle(x, y float64, safetyMargin float64) bool {
+	if g.mapDef == nil {
+		return false
+	}
+
+	for _, obstacle := range g.mapDef.Obstacles {
+		obsX := obstacle.X * float64(g.width)
+		obsY := obstacle.Y * float64(g.height)
+		obsW := obstacle.Width * float64(g.width)
+		obsH := obstacle.Height * float64(g.height)
+
+		// Add safety margin around obstacle
+		safeObsX := obsX - safetyMargin
+		safeObsY := obsY - safetyMargin
+		safeObsW := obsW + 2*safetyMargin
+		safeObsH := obsH + 2*safetyMargin
+
+		if x >= safeObsX && x <= safeObsX+safeObsW && y >= safeObsY && y <= safeObsY+safeObsH {
+			return true
+		}
+	}
+	return false
+}
+
+// isDetourPathSafe checks if the path from start to detour point is clear of obstacles
+func (g *Game) isDetourPathSafe(startX, startY, detourX, detourY float64) bool {
+	if g.mapDef == nil {
+		return true
+	}
+
+	// Check if detour point itself is safe
+	if g.isPointNearObstacle(detourX, detourY, 15) { // 15 pixel safety margin for detour points
+		return false
+	}
+
+	// Check points along the path from start to detour
+	dx := detourX - startX
+	dy := detourY - startY
+	dist := math.Hypot(dx, dy)
+
+	if dist == 0 {
+		return true
+	}
+
+	// Check every 8 pixels along the path
+	steps := int(dist / 8)
+	if steps < 2 {
+		steps = 2
+	}
+
+	for i := 0; i <= steps; i++ {
+		t := float64(i) / float64(steps)
+		checkX := startX + dx*t
+		checkY := startY + dy*t
+
+		// Check if this point on the path collides with any obstacle
+		if g.isPointNearObstacle(checkX, checkY, 10) { // 10 pixel safety margin for path checking
+			return false
+		}
+	}
+
+	return true // Path is clear
+}
+
+// getObstacleCenter finds the center of the obstacle that contains the given point
+func (g *Game) getObstacleCenter(x, y float64) (float64, float64) {
+	if g.mapDef == nil {
+		return -1, -1
+	}
+
+	for _, obstacle := range g.mapDef.Obstacles {
+		obsX := obstacle.X * float64(g.width)
+		obsY := obstacle.Y * float64(g.height)
+		obsW := obstacle.Width * float64(g.width)
+		obsH := obstacle.Height * float64(g.height)
+
+		if x >= obsX && x <= obsX+obsW && y >= obsY && y <= obsY+obsH {
+			// Return the center of this obstacle
+			centerX := obsX + obsW/2
+			centerY := obsY + obsH/2
+			return centerX, centerY
+		}
+	}
+	return -1, -1 // No obstacle found
+}
+
+// getObstacleRadius returns the radius of the obstacle that contains the given point
+func (g *Game) getObstacleRadius(x, y float64) float64 {
+	if g.mapDef == nil {
+		return 0
+	}
+
+	for _, obstacle := range g.mapDef.Obstacles {
+		obsX := obstacle.X * float64(g.width)
+		obsY := obstacle.Y * float64(g.height)
+		obsW := obstacle.Width * float64(g.width)
+		obsH := obstacle.Height * float64(g.height)
+
+		if x >= obsX && x <= obsX+obsW && y >= obsY && y <= obsY+obsH {
+			// Return the radius (half the diagonal)
+			return math.Hypot(obsW, obsH) / 2
+		}
+	}
+	return 0
+}
+
+// tryBackAwayStrategy tries to move away from the obstacle first, then tries perpendicular movement
+func (g *Game) tryBackAwayStrategy(u *Unit, obsCenterX, obsCenterY float64, dt float64) (float64, float64) {
+	// Calculate vector from obstacle center to unit (opposite of normal)
+	awayDx := u.X - obsCenterX
+	awayDy := u.Y - obsCenterY
+	distFromObs := math.Hypot(awayDx, awayDy)
+
+	if distFromObs == 0 {
+		// Unit is exactly at obstacle center, try perpendicular instead
+		return g.tryPerpendicularMovement(u, obsCenterX, obsCenterY, dt)
+	}
+
+	// Normalize away direction
+	awayDx /= distFromObs
+	awayDy /= distFromObs
+
+	maxMove := u.Speed * dt
+
+	// Try to move away from obstacle
+	awayX := u.X + awayDx*maxMove
+	awayY := u.Y + awayDy*maxMove
+
+	// Check if moving away is safe
+	if !g.isPointNearObstacle(awayX, awayY, 15) { // 15 pixel safety margin for back-away
+		log.Printf("DEBUG: Unit %s - Using back-away strategy: (%.1f,%.1f)", u.Name, awayX, awayY)
+		return awayX, awayY
+	}
+
+	// If moving directly away is blocked, try perpendicular movement
+	log.Printf("DEBUG: Unit %s - Back-away blocked, trying perpendicular", u.Name)
+	return g.tryPerpendicularMovement(u, obsCenterX, obsCenterY, dt)
+}
+
+// tryPerpendicularMovement attempts to move perpendicular to the obstacle when direct movement fails
+func (g *Game) tryPerpendicularMovement(u *Unit, obsCenterX, obsCenterY float64, dt float64) (float64, float64) {
+	// Calculate vector from current position to obstacle center
+	obsDx := obsCenterX - u.X
+	obsDy := obsCenterY - u.Y
+	distToObs := math.Hypot(obsDx, obsDy)
+
+	if distToObs == 0 {
+		return u.X, u.Y
+	}
+
+	// Normalize obstacle direction
+	obsDx /= distToObs
+	obsDy /= distToObs
+
+	// Calculate perpendicular vector (90 degrees rotation)
+	perpDx := -obsDy
+	perpDy := obsDx
+
+	// Try both perpendicular directions
+	maxMove := u.Speed * dt
+	testX1 := u.X + perpDx*maxMove
+	testY1 := u.Y + perpDy*maxMove
+	testX2 := u.X - perpDx*maxMove
+	testY2 := u.Y - perpDy*maxMove
+
+	log.Printf("DEBUG: Unit %s - Testing perpendicular: (%.1f,%.1f) and (%.1f,%.1f)",
+		u.Name, testX1, testY1, testX2, testY2)
+
+	// Choose the direction that's not blocked
+	if !g.isPointNearObstacle(testX1, testY1, 12) { // 12 pixel safety margin for perpendicular movement
+		log.Printf("DEBUG: Unit %s - Using perpendicular direction 1", u.Name)
+		return testX1, testY1
+	} else if !g.isPointNearObstacle(testX2, testY2, 12) { // 12 pixel safety margin for perpendicular movement
+		log.Printf("DEBUG: Unit %s - Using perpendicular direction 2", u.Name)
+		return testX2, testY2
+	} else {
+		log.Printf("DEBUG: Unit %s - Both perpendicular directions blocked, trying detour pathfinding", u.Name)
+		// If both perpendicular directions are blocked, try a more sophisticated detour
+		return g.findDetourPath(u, dt)
+	}
+}
+
+// findDetourPath finds a path around obstacles using a simple detour algorithm
+func (g *Game) findDetourPath(u *Unit, dt float64) (float64, float64) {
+	// Find target position
+	tx, ty := g.findTarget(u)
+
+	// Calculate direct path to target
+	targetDx := tx - u.X
+	targetDy := ty - u.Y
+	distToTarget := math.Hypot(targetDx, targetDy)
+
+	if distToTarget == 0 {
+		return u.X, u.Y
+	}
+
+	// Normalize target direction
+	targetDx /= distToTarget
+	targetDy /= distToTarget
+
+	maxMove := u.Speed * dt
+
+	// Try different detour strategies
+	detourStrategies := []struct {
+		name        string
+		getPosition func() (float64, float64)
+	}{
+		{
+			name: "wide_detour_left",
+			getPosition: func() (float64, float64) {
+				// Move perpendicular to target direction, then toward target
+				perpDx := -targetDy
+				perpDy := targetDx
+				detourX := u.X + perpDx*maxMove*0.7 + targetDx*maxMove*0.3
+				detourY := u.Y + perpDy*maxMove*0.7 + targetDy*maxMove*0.3
+				return detourX, detourY
+			},
+		},
+		{
+			name: "wide_detour_right",
+			getPosition: func() (float64, float64) {
+				// Move perpendicular to target direction (opposite), then toward target
+				perpDx := targetDy
+				perpDy := -targetDx
+				detourX := u.X + perpDx*maxMove*0.7 + targetDx*maxMove*0.3
+				detourY := u.Y + perpDy*maxMove*0.7 + targetDy*maxMove*0.3
+				return detourX, detourY
+			},
+		},
+		{
+			name: "zigzag_left",
+			getPosition: func() (float64, float64) {
+				// Pure perpendicular movement
+				perpDx := -targetDy
+				perpDy := targetDx
+				return u.X + perpDx*maxMove, u.Y + perpDy*maxMove
+			},
+		},
+		{
+			name: "zigzag_right",
+			getPosition: func() (float64, float64) {
+				// Pure perpendicular movement (opposite)
+				perpDx := targetDy
+				perpDy := -targetDx
+				return u.X + perpDx*maxMove, u.Y + perpDy*maxMove
+			},
+		},
+		{
+			name: "diagonal_escape",
+			getPosition: func() (float64, float64) {
+				// Try diagonal movement
+				return u.X + targetDx*maxMove*0.5 + (math.Sin(float64(u.ID)) * maxMove * 0.5),
+					u.Y + targetDy*maxMove*0.5 + (math.Cos(float64(u.ID)) * maxMove * 0.5)
+			},
+		},
+	}
+
+	// Try each detour strategy with enhanced validation
+	for _, strategy := range detourStrategies {
+		detourX, detourY := strategy.getPosition()
+
+		// Enhanced validation: check if detour point is safe and path to it is clear
+		if g.isDetourPathSafe(u.X, u.Y, detourX, detourY) {
+			distFromStart := math.Hypot(detourX-u.X, detourY-u.Y)
+			if distFromStart <= maxMove*1.2 { // Allow slight overshoot for better pathfinding
+				log.Printf("DEBUG: Unit %s - Using detour strategy: %s -> (%.1f,%.1f)",
+					u.Name, strategy.name, detourX, detourY)
+				return detourX, detourY
+			}
+		}
+	}
+
+	// If all detour strategies fail, try a simple random walk away from obstacles
+	log.Printf("DEBUG: Unit %s - All detour strategies failed, trying random walk", u.Name)
+
+	// Try random directions
+	for attempt := 0; attempt < 8; attempt++ {
+		angle := float64(attempt) * math.Pi / 4 // Try 8 different directions
+		randomX := u.X + math.Cos(angle)*maxMove*0.5
+		randomY := u.Y + math.Sin(angle)*maxMove*0.5
+
+		if !g.isPointInObstacle(randomX, randomY) {
+			log.Printf("DEBUG: Unit %s - Using random walk: (%.1f,%.1f)", u.Name, randomX, randomY)
+			return randomX, randomY
+		}
+	}
+
+	// If everything fails, try to move directly toward target with reduced speed
+	reducedMove := maxMove * 0.3
+	reducedX := u.X + targetDx*reducedMove
+	reducedY := u.Y + targetDy*reducedMove
+
+	if !g.isPointInObstacle(reducedX, reducedY) {
+		log.Printf("DEBUG: Unit %s - Using reduced speed movement: (%.1f,%.1f)", u.Name, reducedX, reducedY)
+		return reducedX, reducedY
+	}
+
+	// Last resort: stay put but log the issue
+	log.Printf("DEBUG: Unit %s - All movement options blocked, staying put", u.Name)
+	return u.X, u.Y
+}
+
+// findSafePositionAroundObstacle finds a safe position around an obstacle when direct movement is blocked
+func (g *Game) findSafePositionAroundObstacle(currentX, currentY, desiredX, desiredY, targetX, targetY, maxDistance float64) (float64, float64) {
+	if g.mapDef == nil {
+		return desiredX, desiredY
+	}
+
+	// Find the obstacle that's blocking the path
+	var blockingObstacle *protocol.Obstacle
+	minDist := float64(999999)
+
+	for _, obstacle := range g.mapDef.Obstacles {
+		obsX := obstacle.X * float64(g.width)
+		obsY := obstacle.Y * float64(g.height)
+		obsW := obstacle.Width * float64(g.width)
+		obsH := obstacle.Height * float64(g.height)
+
+		// Check if desired position is inside this obstacle
+		if desiredX >= obsX && desiredX <= obsX+obsW && desiredY >= obsY && desiredY <= obsY+obsH {
+			// Calculate distance from current position to obstacle center
+			obsCenterX := obsX + obsW/2
+			obsCenterY := obsY + obsH/2
+			distToObs := math.Hypot(obsCenterX-currentX, obsCenterY-currentY)
+
+			if distToObs < minDist {
+				minDist = distToObs
+				obs := obstacle // Copy to avoid reference issues
+				blockingObstacle = &obs
+			}
+		}
+	}
+
+	if blockingObstacle == nil {
+		return desiredX, desiredY
+	}
+
+	// Calculate obstacle center
+	obsCenterX := blockingObstacle.X*float64(g.width) + (blockingObstacle.Width*float64(g.width))/2
+	obsCenterY := blockingObstacle.Y*float64(g.height) + (blockingObstacle.Height*float64(g.height))/2
+
+	// Calculate vector from current position to obstacle center
+	obsDx := obsCenterX - currentX
+	obsDy := obsCenterY - currentY
+	distToObs := math.Hypot(obsDx, obsDy)
+
+	if distToObs == 0 {
+		return desiredX, desiredY
+	}
+
+	// Normalize obstacle direction
+	obsDx /= distToObs
+	obsDy /= distToObs
+
+	// Calculate perpendicular vector (90 degrees rotation) - this gives us the two possible detour directions
+	perpDx := -obsDy
+	perpDy := obsDx
+
+	// Evaluate both detour directions and choose the one with shorter total path
+	obstacleRadius := math.Max(blockingObstacle.Width*float64(g.width), blockingObstacle.Height*float64(g.height)) / 2
+	detourDistances := []float64{obstacleRadius + 30, obstacleRadius + 15} // Try larger detour first, then smaller
+
+	var bestDetourX, bestDetourY float64
+	bestPathLength := float64(999999)
+	foundValidDetour := false
+
+	// Try both detour directions
+	for _, baseDetourDist := range detourDistances {
+		for _, direction := range []struct{ dx, dy float64 }{
+			{perpDx, perpDy},   // One direction
+			{-perpDx, -perpDy}, // Opposite direction
+		} {
+			detourX := obsCenterX + direction.dx*baseDetourDist
+			detourY := obsCenterY + direction.dy*baseDetourDist
+
+			// Check if detour point is valid (not in another obstacle)
+			if !g.isPointInObstacle(detourX, detourY) {
+				// Calculate distance from current position to detour point
+				detourDx := detourX - currentX
+				detourDy := detourY - currentY
+				distToDetour := math.Hypot(detourDx, detourDy)
+
+				// Only consider detours within movement range
+				if distToDetour <= maxDistance {
+					// Calculate total path length: current -> detour -> target
+					distDetourToTarget := math.Hypot(targetX-detourX, targetY-detourY)
+					totalPathLength := distToDetour + distDetourToTarget
+
+					// Choose the detour with shortest total path
+					if totalPathLength < bestPathLength {
+						bestPathLength = totalPathLength
+						bestDetourX = detourX
+						bestDetourY = detourY
+						foundValidDetour = true
+					}
+				} else {
+					// Detour is too far, but we can scale it to fit within movement range
+					if distToDetour > 0 {
+						scale := maxDistance / distToDetour
+						scaledDetourX := currentX + (detourX-currentX)*scale
+						scaledDetourY := currentY + (detourY-currentY)*scale
+
+						// Make sure scaled position is still safe
+						if !g.isPointInObstacle(scaledDetourX, scaledDetourY) {
+							// Calculate total path length for scaled detour
+							distScaledToTarget := math.Hypot(targetX-scaledDetourX, targetY-scaledDetourY)
+							totalPathLength := maxDistance + distScaledToTarget
+
+							if totalPathLength < bestPathLength {
+								bestPathLength = totalPathLength
+								bestDetourX = scaledDetourX
+								bestDetourY = scaledDetourY
+								foundValidDetour = true
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	// If we found a valid detour, return it
+	if foundValidDetour {
+		return bestDetourX, bestDetourY
+	}
+
+	// If no detour works, try to move directly toward target but stop before obstacle
+	// Calculate a position that's closer to target but doesn't enter obstacle
+	safeDistance := obstacleRadius + 5 // 5 pixel safety margin
+	safeX := obsCenterX - obsDx*safeDistance
+	safeY := obsCenterY - obsDy*safeDistance
+
+	// Ensure this safe position is within movement range
+	safeDx := safeX - currentX
+	safeDy := safeY - currentY
+	safeDist := math.Hypot(safeDx, safeDy)
+
+	if safeDist <= maxDistance && !g.isPointInObstacle(safeX, safeY) {
+		return safeX, safeY
+	} else if safeDist > 0 {
+		// Scale to fit within movement range
+		scale := maxDistance / safeDist
+		safeX = currentX + safeDx*scale
+		safeY = currentY + safeDy*scale
+		if !g.isPointNearObstacle(safeX, safeY, 3) { // 3 pixel safety margin for final position validation
+			return safeX, safeY
+		}
+	}
+
+	// If all attempts fail, return current position (unit stops moving)
+	return currentX, currentY
 }
 
 func (g *Game) damageAt(u *Unit, tx, ty float64, dmg int) {
@@ -777,6 +1556,14 @@ func (g *Game) damageAt(u *Unit, tx, ty float64, dmg int) {
 			continue
 		}
 		if hypot(tx, ty, v.X, v.Y) <= 30 {
+			// Check if attacker can target this unit
+			if g.targetValidator != nil {
+				canAttack := g.targetValidator.CanAttackTarget(u.Class, u.SubClass, "unit", v.Class, v.SubClass)
+				if !canAttack {
+					// Cannot attack this target, skip
+					continue
+				}
+			}
 			// Create projectile targeting this unit
 			g.createProjectile(u.X, u.Y, v.X, v.Y, dmg, u.OwnerID, v.ID, 0, 0, projectileType)
 			return
@@ -791,6 +1578,14 @@ func (g *Game) damageAt(u *Unit, tx, ty float64, dmg int) {
 		bx := float64(p.Base.X + p.Base.W/2)
 		by := float64(p.Base.Y + p.Base.H/2)
 		if hypot(tx, ty, bx, by) <= 40 {
+			// Check if attacker can target bases
+			if g.targetValidator != nil {
+				canAttack := g.targetValidator.CanAttackTarget(u.Class, u.SubClass, "base", "base", "")
+				if !canAttack {
+					// Cannot attack bases, skip
+					continue
+				}
+			}
 			// Create projectile targeting this base
 			g.createProjectile(u.X, u.Y, bx, by, dmg, u.OwnerID, 0, bx, by, projectileType)
 			return
@@ -801,6 +1596,11 @@ func (g *Game) damageAt(u *Unit, tx, ty float64, dmg int) {
 // determineProjectileType analyzes unit name to determine elemental projectile type
 func (g *Game) determineProjectileType(unitName string) string {
 	name := strings.ToLower(unitName)
+
+	// Special case: Voodoo Hexer uses channeling beam effect
+	if strings.Contains(name, "voodoo") || strings.Contains(name, "hex") {
+		return "voodoo_hex"
+	}
 
 	// Fire-themed projectiles
 	if strings.Contains(name, "blaze") || strings.Contains(name, "fire") ||
@@ -936,14 +1736,35 @@ func (g *Game) applyProjectileDamage(proj *Projectile) {
 		// Apply AoE damage for certain projectile types
 		g.applyAoEDamage(proj)
 	} else {
-		// Damage base
+		// Damage base - check for siege damage
 		for _, p := range g.players {
 			if p.ID != proj.OwnerID {
 				bx := float64(p.Base.X + p.Base.W/2)
 				by := float64(p.Base.Y + p.Base.H/2)
 				if math.Hypot(proj.X-bx, proj.Y-by) <= 50 {
 					originalHP := p.Base.HP
-					p.Base.HP -= proj.Damage
+
+					// Find the attacking unit to check for siege feature
+					var attackerUnit *Unit
+					for _, unit := range g.units {
+						if unit.OwnerID == proj.OwnerID {
+							attackerUnit = unit
+							break
+						}
+					}
+
+					damage := proj.Damage
+					// Apply siege damage multiplier if attacker has siege feature
+					if attackerUnit != nil {
+						for _, feature := range attackerUnit.Features {
+							if feature == "siege" {
+								damage *= 2 // Double damage to base
+								break
+							}
+						}
+					}
+
+					p.Base.HP -= damage
 					if p.Base.HP < 0 {
 						p.Base.HP = 0
 					}
@@ -1042,38 +1863,60 @@ func (g *Game) HandleDeploy(pid int64, d protocol.DeployMiniAt) {
 		attackCooldown = 1.0 / card.AttackSpeed
 	}
 
-	u := &Unit{
-		ID:   protocol.NewID(),
-		Name: card.Name,
-		X:    d.X, Y: d.Y,
-		HP: max1(card.HP, 1), MaxHP: max1(card.HP, 1),
-		DMG:            card.DMG,
-		Heal:           card.Heal,
-		Hps:            card.Hps,
-		Speed:          speedPx(card.Speed),
-		BaseSpeed:      speedPx(card.Speed),
-		OwnerID:        pid,
-		Class:          card.Class,
-		SubClass:       card.SubClass,
-		Range:          card.Range,
-		Particle:       card.Particle,
-		AttackCooldown: attackCooldown,
-		SpeedDebuffs:   make(map[int64]float64),
+	// Determine spawn count (default to 1 if not specified)
+	spawnCount := 1
+	if card.SpawnCount > 0 {
+		spawnCount = card.SpawnCount
 	}
-	g.units[u.ID] = u
 
-	// Broadcast unit spawn event for visual effects
-	if g.broadcastEvent != nil {
-		spawnEvent := protocol.UnitSpawnEvent{
-			UnitID:       u.ID,
-			UnitX:        u.X,
-			UnitY:        u.Y,
-			UnitName:     u.Name,
-			UnitClass:    u.Class,
-			UnitSubclass: u.SubClass,
-			OwnerID:      u.OwnerID,
+	// Spawn multiple units
+	for i := 0; i < spawnCount; i++ {
+		// Calculate position offset for multiple units
+		offsetX := 0.0
+		offsetY := 0.0
+
+		if spawnCount > 1 {
+			// Spread units out in a circle pattern
+			angle := 2 * math.Pi * float64(i) / float64(spawnCount)
+			distance := 25.0 // pixels between units
+			offsetX = math.Cos(angle) * distance
+			offsetY = math.Sin(angle) * distance
 		}
-		g.broadcastEvent("UnitSpawnEvent", spawnEvent)
+
+		u := &Unit{
+			ID:   protocol.NewID(),
+			Name: card.Name,
+			X:    d.X + offsetX, Y: d.Y + offsetY,
+			HP: max1(card.HP, 1), MaxHP: max1(card.HP, 1),
+			DMG:            card.DMG,
+			Heal:           card.Heal,
+			Hps:            card.Hps,
+			Speed:          speedPx(card.Speed),
+			BaseSpeed:      speedPx(card.Speed),
+			OwnerID:        pid,
+			Class:          card.Class,
+			SubClass:       card.SubClass,
+			Range:          card.Range,
+			Particle:       card.Particle,
+			AttackCooldown: attackCooldown,
+			SpeedDebuffs:   make(map[int64]float64),
+			Features:       card.Features,
+		}
+		g.units[u.ID] = u
+
+		// Broadcast unit spawn event for visual effects
+		if g.broadcastEvent != nil {
+			spawnEvent := protocol.UnitSpawnEvent{
+				UnitID:       u.ID,
+				UnitX:        u.X,
+				UnitY:        u.Y,
+				UnitName:     u.Name,
+				UnitClass:    u.Class,
+				UnitSubclass: u.SubClass,
+				OwnerID:      u.OwnerID,
+			}
+			g.broadcastEvent("UnitSpawnEvent", spawnEvent)
+		}
 	}
 
 	// rotate handnow i see bases and enemy attacks mine but i still cannot place units

@@ -188,25 +188,36 @@ func (g *Game) drawArenaBG(screen *ebiten.Image) {
 	var s float64
 
 	if g.scr == screenBattle {
-		// Battle-specific positioning: center in available area between UI elements
-		const topUIHeight = 50 // Approximate height of top UI (HP bars, timer)
+		// Battle-specific positioning: use full available area (HP bars overlay on map)
 		bottomUIHeight := battleHUDH
-		availableHeight := protocol.ScreenH - topUIHeight - bottomUIHeight
+		availableHeight := protocol.ScreenH - bottomUIHeight // Full height minus bottom UI only
 		availableWidth := protocol.ScreenW
 
 		iw, ih := bg.Bounds().Dx(), bg.Bounds().Dy()
 		if iw == 0 || ih == 0 {
-			offX, offY, dispW, dispH, s = 0, topUIHeight, availableWidth, availableHeight, 1
+			offX, offY, dispW, dispH, s = 0, 0, availableWidth, availableHeight, 1
 		} else {
-			// Use saved background scaling and position from map definition if available
-			if g.currentMapDef != nil && g.currentMapDef.BgScale > 0 {
+			// Check if we should use natural map size (no scaling) for large maps
+			useNaturalSize := iw > availableWidth || ih > availableHeight
+
+			if useNaturalSize {
+				// Use natural size for maps larger than viewport - enable free scrolling
+				s = 1.0 // No scaling
+				dispW = iw
+				dispH = ih
+				// Center the map initially, but allow full scrolling to edges
+				offX = (availableWidth - dispW) / 2
+				offY = (availableHeight - dispH) / 2
+			} else if g.currentMapDef != nil && g.currentMapDef.BgScale > 0 {
+				// Use saved background scaling for smaller maps
 				s = g.currentMapDef.BgScale
 				dispW = int(float64(iw) * s)
 				dispH = int(float64(ih) * s)
-				offX = (availableWidth-dispW)/2 + int(g.currentMapDef.BgOffsetX)
-				offY = topUIHeight + (availableHeight-dispH)/2 + int(g.currentMapDef.BgOffsetY)
+				// Perfect centering: remove BgOffsetX/BgOffsetY to center all maps
+				offX = (availableWidth - dispW) / 2  // Comment out: + int(g.currentMapDef.BgOffsetX)
+				offY = (availableHeight - dispH) / 2 // Comment out: + int(g.currentMapDef.BgOffsetY)
 			} else {
-				// Fallback to automatic scaling
+				// Fallback to fit-to-viewport scaling for small maps
 				sw := float64(availableWidth) / float64(iw)
 				sh := float64(availableHeight) / float64(ih)
 				if sw < sh {
@@ -217,7 +228,7 @@ func (g *Game) drawArenaBG(screen *ebiten.Image) {
 				dispW = int(float64(iw) * s)
 				dispH = int(float64(ih) * s)
 				offX = (availableWidth - dispW) / 2
-				offY = topUIHeight + (availableHeight-dispH)/2
+				offY = (availableHeight - dispH) / 2
 			}
 		}
 	} else {
@@ -229,25 +240,57 @@ func (g *Game) drawArenaBG(screen *ebiten.Image) {
 	col := color.NRGBA{0, 0, 0, 255}
 
 	// Draw dark gray letterbox bars to cover entire screen outside map
-	// Top bar
-	if offY > 0 {
-		ebitenutil.DrawRect(screen, 0, 0, float64(protocol.ScreenW), float64(offY), col)
+	// These bars must account for camera position to prevent them from covering visible map content
+	transformedImageTop := float64(offY) + g.cameraY
+	transformedImageBottom := float64(offY+dispH) + g.cameraY
+	transformedImageLeft := float64(offX) + g.cameraX
+	transformedImageRight := float64(offX+dispW) + g.cameraX
+
+	// Top bar - covers area above transformed image
+	if transformedImageTop > 0 {
+		ebitenutil.DrawRect(screen, 0, 0, float64(protocol.ScreenW), transformedImageTop, col)
 	}
-	// Bottom bar
-	bottomBarY := float64(offY + dispH)
-	if bottomBarY < float64(protocol.ScreenH) {
-		ebitenutil.DrawRect(screen, 0, bottomBarY,
-			float64(protocol.ScreenW), float64(protocol.ScreenH)-bottomBarY, col)
+
+	// Bottom bar - covers area below transformed image
+	if transformedImageBottom < float64(protocol.ScreenH) {
+		barHeight := float64(protocol.ScreenH) - transformedImageBottom
+		ebitenutil.DrawRect(screen, 0, transformedImageBottom,
+			float64(protocol.ScreenW), barHeight, col)
 	}
-	// Left bar
-	if offX > 0 {
-		ebitenutil.DrawRect(screen, 0, float64(offY), float64(offX), float64(dispH), col)
+
+	// Left bar - covers area to the left of transformed image
+	if transformedImageLeft > 0 {
+		barWidth := transformedImageLeft
+		barHeight := float64(dispH) * s * g.cameraZoom // Match scaled image height
+		// Start Y should align with transformed image Y position
+		startY := transformedImageTop
+		if startY < 0 {
+			barHeight += startY // Adjust height if image starts above screen
+			startY = 0
+		}
+		if startY+barHeight > float64(protocol.ScreenH) {
+			barHeight = float64(protocol.ScreenH) - startY // Cap at screen bottom
+		}
+		ebitenutil.DrawRect(screen, 0, startY, barWidth, barHeight, col)
 	}
-	// Right bar
-	rightBarX := float64(offX + dispW)
-	if rightBarX < float64(protocol.ScreenW) {
-		ebitenutil.DrawRect(screen, rightBarX, float64(offY),
-			float64(protocol.ScreenW)-rightBarX, float64(dispH), col)
+
+	// Right bar - covers area to the right of transformed image
+	if transformedImageRight < float64(protocol.ScreenW) {
+		barWidth := float64(protocol.ScreenW) - transformedImageRight
+		barHeight := float64(dispH) * s * g.cameraZoom // Match scaled image height
+		barX := transformedImageRight
+		// Start Y should align with transformed image Y position
+		startY := transformedImageTop
+		if startY < 0 {
+			barHeight += startY // Adjust height if image starts above screen
+			startY = 0
+		}
+		if startY+barHeight > float64(protocol.ScreenH) {
+			barHeight = float64(protocol.ScreenH) - startY // Cap at screen bottom
+		}
+		if barWidth > 0 && barHeight > 0 {
+			ebitenutil.DrawRect(screen, barX, startY, barWidth, barHeight, col)
+		}
 	}
 
 	op := &ebiten.DrawImageOptions{}

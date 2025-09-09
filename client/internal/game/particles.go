@@ -2174,6 +2174,86 @@ func (e *ParticleEmitter) drawStarWithoutOffset(screen *ebiten.Image, x, y, size
 	}
 }
 
+// CreateVoodooHexxerEffect creates a red glowing channeling line from unit to enemy
+func (ps *ParticleSystem) CreateVoodooHexxerEffect(unitX, unitY, targetX, targetY float64) {
+	// Calculate distance and direction to target
+	dx := targetX - unitX
+	dy := targetY - unitY
+	distance := math.Sqrt(dx*dx + dy*dy)
+
+	if distance == 0 {
+		return // No effect if unit and target are at same position
+	}
+
+	// Normalize direction
+	dx /= distance
+	dy /= distance
+
+	// Create particles along the line from unit to target
+	numParticles := int(distance / 8) // One particle every 8 pixels
+	if numParticles < 2 {
+		numParticles = 2 // Minimum 2 particles for line effect
+	}
+
+	for i := 0; i < numParticles; i++ {
+		// Position particle along the line
+		t := float64(i) / float64(numParticles-1)
+		particleX := unitX + dx*distance*t
+		particleY := unitY + dy*distance*t
+
+		emitter := NewParticleEmitter(particleX, particleY, 3)
+		emitter.StartColor = color.NRGBA{255, 50, 50, 180} // Bright red glow
+		emitter.EndColor = color.NRGBA{255, 0, 0, 0}       // Red to transparent
+		emitter.Shape = "circle"
+		emitter.Spread = 2 * math.Pi
+		emitter.Speed = 20
+		emitter.SpeedVariance = 10
+		emitter.Life = 0.3 // Short life for continuous effect
+		emitter.LifeVariance = 0.1
+		emitter.Size = 3
+		emitter.SizeVariance = 1
+		emitter.EmissionRate = 30
+		emitter.Duration = 0.1 // Very short duration for immediate fade
+		emitter.Gravity = 0
+		emitter.Drag = 0.95
+		ps.AddEmitter(emitter)
+	}
+
+	// Add glowing effect at the target location
+	targetEmitter := NewParticleEmitter(targetX, targetY, 5)
+	targetEmitter.StartColor = color.NRGBA{255, 100, 100, 200} // Lighter red glow
+	targetEmitter.EndColor = color.NRGBA{255, 50, 50, 0}       // Red to transparent
+	targetEmitter.Shape = "circle"
+	targetEmitter.Spread = 2 * math.Pi
+	targetEmitter.Speed = 30
+	targetEmitter.SpeedVariance = 15
+	targetEmitter.Life = 0.4
+	targetEmitter.LifeVariance = 0.15
+	targetEmitter.Size = 4
+	targetEmitter.SizeVariance = 1.5
+	targetEmitter.EmissionRate = 40
+	targetEmitter.Duration = 0.15
+	targetEmitter.Gravity = 0
+	targetEmitter.Drag = 0.9
+	ps.AddEmitter(targetEmitter)
+}
+
+// DrawVoodooHexxerLine draws a straight thin red line from unit to target
+func (ps *ParticleSystem) DrawVoodooHexxerLine(screen *ebiten.Image, unitX, unitY, targetX, targetY float64, cameraX, cameraY, cameraZoom float64) {
+	// Apply camera transformations to coordinates
+	screenUnitX := unitX*cameraZoom + cameraX
+	screenUnitY := unitY*cameraZoom + cameraY
+	screenTargetX := targetX*cameraZoom + cameraX
+	screenTargetY := targetY*cameraZoom + cameraY
+
+	// Draw the straight line with a glowing red color
+	vector.StrokeLine(screen, float32(screenUnitX), float32(screenUnitY), float32(screenTargetX), float32(screenTargetY), 2, color.NRGBA{255, 0, 0, 255}, true)
+
+	// Add a subtle glow effect by drawing slightly thicker lines with lower opacity
+	vector.StrokeLine(screen, float32(screenUnitX), float32(screenUnitY), float32(screenTargetX), float32(screenTargetY), 4, color.NRGBA{255, 50, 50, 150}, true)
+	vector.StrokeLine(screen, float32(screenUnitX), float32(screenUnitY), float32(screenTargetX), float32(screenTargetY), 6, color.NRGBA{255, 100, 100, 100}, true)
+}
+
 // CreateSpellCastEffect creates spell casting visual effects
 func (ps *ParticleSystem) CreateSpellCastEffect(x, y float64, spellEffect string) {
 	switch spellEffect {

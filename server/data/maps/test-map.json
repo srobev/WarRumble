@@ -1,0 +1,26 @@
+{
+  "id": "test-map",
+  "name": "test map",
+  "width": 0,
+  "height": 0,
+  "bgScale": 0.818359375,
+  "bgOffsetX": 980,
+  "bgOffsetY": 241,
+  "frameX": 0.5499999999999996,
+  "frameY": 0.6900000000000002,
+  "frameWidth": 1,
+  "frameHeight": 1,
+  "deployZones": null,
+  "meetingStones": null,
+  "goldMines": null,
+  "lanes": null,
+  "obstacles": null,
+  "playerBase": {
+    "x": 0,
+    "y": 0
+  },
+  "enemyBase": {
+    "x": 0,
+    "y": 0
+  }
+}

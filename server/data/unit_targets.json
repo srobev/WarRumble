@@ -1,0 +1,196 @@
+{
+  "mappings": [
+    {
+      "attacker_class": "melee",
+      "attacker_subclass": "",
+      "target_type": "unit",
+      "target_class": "melee",
+      "target_subclass": "",
+      "can_attack": true
+    },
+    {
+      "attacker_class": "melee",
+      "attacker_subclass": "",
+      "target_type": "unit",
+      "target_class": "range",
+      "target_subclass": "",
+      "can_attack": true
+    },
+    {
+      "attacker_class": "melee",
+      "attacker_subclass": "",
+      "target_type": "unit",
+      "target_class": "melee",
+      "target_subclass": "air-*",
+      "can_attack": false
+    },
+    {
+      "attacker_class": "melee",
+      "attacker_subclass": "",
+      "target_type": "unit",
+      "target_class": "range",
+      "target_subclass": "air-*",
+      "can_attack": false
+    },
+    {
+      "attacker_class": "range",
+      "attacker_subclass": "",
+      "target_type": "unit",
+      "target_class": "melee",
+      "target_subclass": "",
+      "can_attack": true
+    },
+    {
+      "attacker_class": "range",
+      "attacker_subclass": "",
+      "target_type": "unit",
+      "target_class": "range",
+      "target_subclass": "",
+      "can_attack": true
+    },
+    {
+      "attacker_class": "range",
+      "attacker_subclass": "",
+      "target_type": "unit",
+      "target_class": "melee",
+      "target_subclass": "air-*",
+      "can_attack": true
+    },
+    {
+      "attacker_class": "range",
+      "attacker_subclass": "",
+      "target_type": "unit",
+      "target_class": "range",
+      "target_subclass": "air-*",
+      "can_attack": true
+    },
+    {
+      "attacker_class": "melee",
+      "attacker_subclass": "air-vs-ground",
+      "target_type": "unit",
+      "target_class": "melee",
+      "target_subclass": "",
+      "can_attack": true
+    },
+    {
+      "attacker_class": "melee",
+      "attacker_subclass": "air-vs-ground",
+      "target_type": "unit",
+      "target_class": "range",
+      "target_subclass": "",
+      "can_attack": true
+    },
+    {
+      "attacker_class": "melee",
+      "attacker_subclass": "air-vs-ground",
+      "target_type": "unit",
+      "target_class": "melee",
+      "target_subclass": "air-*",
+      "can_attack": false
+    },
+    {
+      "attacker_class": "melee",
+      "attacker_subclass": "air-vs-ground",
+      "target_type": "unit",
+      "target_class": "range",
+      "target_subclass": "air-*",
+      "can_attack": false
+    },
+    {
+      "attacker_class": "melee",
+      "attacker_subclass": "air-vs-all",
+      "target_type": "unit",
+      "target_class": "melee",
+      "target_subclass": "",
+      "can_attack": true
+    },
+    {
+      "attacker_class": "melee",
+      "attacker_subclass": "air-vs-all",
+      "target_type": "unit",
+      "target_class": "range",
+      "target_subclass": "",
+      "can_attack": true
+    },
+    {
+      "attacker_class": "melee",
+      "attacker_subclass": "air-vs-all",
+      "target_type": "unit",
+      "target_class": "melee",
+      "target_subclass": "air-*",
+      "can_attack": true
+    },
+    {
+      "attacker_class": "melee",
+      "attacker_subclass": "air-vs-all",
+      "target_type": "unit",
+      "target_class": "range",
+      "target_subclass": "air-*",
+      "can_attack": true
+    },
+    {
+      "attacker_class": "range",
+      "attacker_subclass": "range-vs-ground",
+      "target_type": "unit",
+      "target_class": "melee",
+      "target_subclass": "",
+      "can_attack": true
+    },
+    {
+      "attacker_class": "range",
+      "attacker_subclass": "range-vs-ground",
+      "target_type": "unit",
+      "target_class": "range",
+      "target_subclass": "",
+      "can_attack": true
+    },
+    {
+      "attacker_class": "range",
+      "attacker_subclass": "range-vs-ground",
+      "target_type": "unit",
+      "target_class": "melee",
+      "target_subclass": "air-*",
+      "can_attack": false
+    },
+    {
+      "attacker_class": "range",
+      "attacker_subclass": "range-vs-ground",
+      "target_type": "unit",
+      "target_class": "range",
+      "target_subclass": "air-*",
+      "can_attack": false
+    },
+    {
+      "attacker_class": "melee",
+      "attacker_subclass": "air-vs-base",
+      "target_type": "base",
+      "target_class": "base",
+      "target_subclass": "",
+      "can_attack": true
+    },
+    {
+      "attacker_class": "range",
+      "attacker_subclass": "air-vs-base",
+      "target_type": "base",
+      "target_class": "base",
+      "target_subclass": "",
+      "can_attack": true
+    },
+    {
+      "attacker_class": "melee",
+      "attacker_subclass": "",
+      "target_type": "base",
+      "target_class": "base",
+      "target_subclass": "",
+      "can_attack": true
+    },
+    {
+      "attacker_class": "range",
+      "attacker_subclass": "",
+      "target_type": "base",
+      "target_class": "base",
+      "target_subclass": "",
+      "can_attack": true
+    }
+  ]
+}

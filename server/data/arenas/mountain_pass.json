@@ -4,28 +4,68 @@
   "width": 1920,
   "height": 1080,
   "bg": "mountain_pass.png",
-  "isArena": true,
+  "bgScale": 0.5666666666666667,
+  "bgOffsetX": -147,
   "deployZones": [
-    {"x": 0.1, "y": 0.7, "w": 0.8, "h": 0.2, "owner": "player"},
-    {"x": 0.1, "y": 0.1, "w": 0.8, "h": 0.2, "owner": "enemy"}
+    {
+      "x": 0.1,
+      "y": 0.7,
+      "w": 0.8,
+      "h": 0.2,
+      "owner": "player"
+    },
+    {
+      "x": 0.1,
+      "y": 0.1,
+      "w": 0.8,
+      "h": 0.2,
+      "owner": "enemy"
+    }
   ],
   "meetingStones": [
-    {"x": 0.5, "y": 0.5}
+    {
+      "x": 0.5,
+      "y": 0.5
+    }
   ],
   "goldMines": [
-    {"x": 0.3, "y": 0.35},
-    {"x": 0.7, "y": 0.65}
+    {
+      "x": 0.3,
+      "y": 0.35
+    },
+    {
+      "x": 0.7,
+      "y": 0.65
+    }
   ],
   "lanes": [
     {
       "points": [
-        {"x": 0.5, "y": 0.1},
-        {"x": 0.5, "y": 0.5},
-        {"x": 0.5, "y": 0.9}
+        {
+          "x": 0.5,
+          "y": 0.1
+        },
+        {
+          "x": 0.5,
+          "y": 0.5
+        },
+        {
+          "x": 0.5,
+          "y": 0.9
+        }
       ],
       "dir": 1
     }
   ],
-"playerBase": {"x": 0.4, "y": 0.25},
-  "timeLimit": 180
+  "obstacles": null,
+  "playerBase": {
+    "x": 0.4,
+    "y": 0.25
+  },
+  "enemyBase": {
+    "x": 0,
+    "y": 0
+  },
+  "timeLimit": 180,
+  "isArena": true
 }
