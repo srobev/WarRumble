@@ -31,6 +31,8 @@ func (g *Game) handle(env Msg) {
 		g.pvpRank = p.PvPRank
 		g.avatar = p.Avatar
 		g.unitXP = p.UnitXP
+		// Synchronize account gold from profile on login
+		g.accountGold = int64(p.Gold)
 
 		g.send("ListMinis", protocol.ListMinis{})
 		g.send("ListMaps", protocol.ListMaps{})
@@ -235,6 +237,11 @@ func (g *Game) handle(env Msg) {
 		if m.PlayerID == g.playerID {
 			g.gold = m.Gold
 		}
+
+	case "GoldSynced":
+		var m protocol.GoldSynced
+		json.Unmarshal(env.Data, &m)
+		g.accountGold = m.Gold
 
 	case "StateDelta":
 		var d protocol.StateDelta

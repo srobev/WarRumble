@@ -1,0 +1,28 @@
+{
+  "id": "mid_bridge",
+  "name": "Mid Bridge",
+  "width": 0,
+  "height": 0,
+  "bg": "mid_bridge.png",
+  "deployZones": [
+    {
+      "x": 0.3714582583194989,
+      "y": 0.6230310262529832,
+      "w": 0.1,
+      "h": 0.1,
+      "owner": "player"
+    }
+  ],
+  "meetingStones": null,
+  "goldMines": null,
+  "lanes": null,
+  "obstacles": null,
+  "playerBase": {
+    "x": 0.418824144205002,
+    "y": 0.7923627684964201
+  },
+  "enemyBase": {
+    "x": 0.4193509670279014,
+    "y": 0.0588703261734288
+  }
+}

@@ -78,6 +78,18 @@ type SetReady struct {
 	Ready bool `json:"ready"`
 }
 
+// Currency operations (Gold)
+type GrantGold struct {
+	Amount int64  `json:"amount"`
+	Reason string `json:"reason"`
+}
+
+type SpendGold struct {
+	Amount int64  `json:"amount"`
+	Reason string `json:"reason"`
+	Nonce  string `json:"nonce"` // For deduplication
+}
+
 // ================= S -> C =================
 
 type MiniCardView struct {
@@ -257,6 +269,16 @@ type RoomJoined struct {
 }
 
 type ErrorMsg struct {
+	Message string `json:"message"`
+}
+
+// Currency events
+type GoldSynced struct {
+	Gold int64 `json:"gold"`
+}
+
+type Error struct {
+	Code    string `json:"code"`
 	Message string `json:"message"`
 }
 

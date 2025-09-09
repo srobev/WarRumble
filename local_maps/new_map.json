@@ -3,66 +3,17 @@
   "name": "New Map",
   "width": 0,
   "height": 0,
-  "deployZones": [
-    {
-      "x": 0.5984327764518695,
-      "y": 0.7519093078758949,
-      "w": 0.1,
-      "h": 0.1,
-      "owner": "player"
-    }
-  ],
+  "deployZones": null,
   "meetingStones": null,
   "goldMines": null,
   "lanes": null,
-  "obstacles": [
-    {
-      "x": 0.30599443118536196,
-      "y": 0.4340294351630867,
-      "type": "",
-      "image": "tree.png",
-      "width": 0.05,
-      "height": 0.05
-    },
-    {
-      "x": 0.2269172633253779,
-      "y": 0.5143794749403341,
-      "type": "",
-      "image": "tree.png",
-      "width": 0.05,
-      "height": 0.05
-    },
-    {
-      "x": 0.5104653937947494,
-      "y": 0.44675815433571997,
-      "type": "",
-      "image": "tree.png",
-      "width": 0.05,
-      "height": 0.05
-    },
-    {
-      "x": 0.513854415274463,
-      "y": 0.3210620525059666,
-      "type": "",
-      "image": "tree.png",
-      "width": 0.05,
-      "height": 0.05
-    },
-    {
-      "x": 0.5262808273667462,
-      "y": 0.5748408910103421,
-      "type": "",
-      "image": "tree.png",
-      "width": 0.05,
-      "height": 0.05
-    }
-  ],
+  "obstacles": null,
   "playerBase": {
-    "x": 0.7388066825775657,
-    "y": 0.8329355608591885
+    "x": 0,
+    "y": 0
   },
   "enemyBase": {
-    "x": 0.11522673031026254,
-    "y": 0.08671439936356404
+    "x": 0,
+    "y": 0
   }
 }

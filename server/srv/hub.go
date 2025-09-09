@@ -11,6 +11,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"rumble/server/currency"
 	"rumble/shared/protocol"
 	"sort"
 	"strings"
@@ -1064,6 +1065,51 @@ func (c *client) reader(h *Hub) {
 			if c.room != nil {
 				c.room.HandleSpellCast(c, m)
 			}
+
+		// ---------- Currency Operations ----------
+		case "GrantGold":
+			var m protocol.GrantGold
+			_ = json.Unmarshal(env.Data, &m)
+			h.mu.Lock()
+			s := h.sessions[c]
+			if s != nil {
+				ctx := currency.SessionCtx{AccountID: fmt.Sprintf("%d", s.PlayerID)}
+				if err := currency.HandleGrantGold(&ctx, m); err != nil {
+					if currencyErr, ok := err.(*currency.CurrencyError); ok {
+						sendJSON(c, "Error", protocol.Error{Code: currencyErr.Code, Message: currencyErr.Message})
+					} else {
+						sendJSON(c, "Error", protocol.ErrorMsg{Message: err.Error()})
+					}
+				} else {
+					// If successful, push updated gold to client
+					if err := currency.PushGoldSynced(&ctx, 0); err != nil {
+						log.Printf("push gold sync failed: %v", err)
+					}
+				}
+			}
+			h.mu.Unlock()
+
+		case "SpendGold":
+			var m protocol.SpendGold
+			_ = json.Unmarshal(env.Data, &m)
+			h.mu.Lock()
+			s := h.sessions[c]
+			if s != nil {
+				ctx := currency.SessionCtx{AccountID: fmt.Sprintf("%d", s.PlayerID)}
+				if err := currency.HandleSpendGold(&ctx, m); err != nil {
+					if currencyErr, ok := err.(*currency.CurrencyError); ok {
+						sendJSON(c, "Error", protocol.Error{Code: currencyErr.Code, Message: currencyErr.Message})
+					} else {
+						sendJSON(c, "Error", protocol.ErrorMsg{Message: err.Error()})
+					}
+				} else {
+					// If successful, push updated gold to client
+					if err := currency.PushGoldSynced(&ctx, 0); err != nil {
+						log.Printf("push gold sync failed: %v", err)
+					}
+				}
+			}
+			h.mu.Unlock()
 
 		case "Ready":
 			if c.room != nil {

@@ -1,5 +1,8 @@
 package protocol
 
+// PerkID alias to avoid circular import (same as types.PerkID)
+type PerkID = string
+
 type Profile struct {
 	PlayerID  int64               `json:"playerId"`
 	Name      string              `json:"name"`
@@ -33,4 +36,28 @@ type CastSpell struct {
 	X         float64 `json:"x"`
 	Y         float64 `json:"y"`
 	ClientTs  int64   `json:"clientTs"`
+}
+
+// Unit Progression messages
+type UnitProgressUpdate struct {
+	UnitID      string `json:"unitId"`
+	DeltaShards int    `json:"deltaShards"`
+}
+
+type UnitProgressSynced struct {
+	UnitID                string `json:"unitId"`
+	Rank                  int    `json:"rank"`
+	ShardsOwned           int    `json:"shardsOwned"`
+	PerkSlotsUnlocked     int    `json:"perkSlotsUnlocked"`
+	LegendaryPerkUnlocked bool   `json:"legendaryPerkUnlocked"`
+}
+
+type SetActivePerk struct {
+	UnitID string `json:"unitId"`
+	PerkID PerkID `json:"perkId"`
+}
+
+type ActivePerkChanged struct {
+	UnitID     string  `json:"unitId"`
+	ActivePerk *PerkID `json:"activePerk"`
 }

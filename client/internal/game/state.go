@@ -69,8 +69,8 @@ type Game struct {
 	roomID      string
 	startBtn    rect
 	// --- Top bar (Home only) ---
-	accountGold int  // separate "meta" currency (not battle gold)
-	userBtn     rect // clickable later for profile/statistics
+	accountGold int64 // separate "meta" currency (not battle gold)
+	userBtn     rect  // clickable later for profile/statistics
 	titleArea   rect
 	goldArea    rect
 	topBarBg    *ebiten.Image

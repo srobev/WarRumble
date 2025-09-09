@@ -1,5 +1,5 @@
 {
-  "playerId": 4258140,
+  "playerId": 163103,
   "name": "silvester",
   "army": [
     "Warg Lord",
@@ -44,7 +44,7 @@
       "Winged Screechers"
     ]
   },
-  "gold": 0,
+  "gold": 555,
   "accountXp": 0,
   "unitXp": {
     "Aerie Guard": 2,
@@ -64,14 +64,14 @@
     "Magma Goliath": 18,
     "Obsidian Bat": 7,
     "Polymorph": 4,
-    "Redhand Thieves": 10,
+    "Redhand Thieves": 11,
     "Sorceress Glacia": 70,
     "Spirit Binder": 4,
     "Twin Wyrnn": 3,
     "Voodoo Hexer": 9,
-    "Warg Lord": 29,
+    "Warg Lord": 30,
     "Whelp Eggs": 1,
-    "Winged Screechers": 13
+    "Winged Screechers": 14
   },
   "pvp_rating": 1276,
   "pvp_rank": "Knight",
