@@ -78,9 +78,15 @@ func TestTickPerkAuras_GlaciaChillAura(t *testing.T) {
 	}
 
 	TickPerkAuras(w, time.Millisecond*200)
-	assert.Len(t, w.slowCalls, 1, "Should apply slow to enemy within radius")
-	assert.Equal(t, "perk_aura_slow", w.slowCalls[0].tag)
-	assert.Equal(t, 0.20, w.slowCalls[0].slowPct)
+	if len(w.slowCalls) != 1 {
+		t.Errorf("Should apply slow to enemy within radius, got %d calls", len(w.slowCalls))
+	}
+	if w.slowCalls[0].tag != "perk_aura_slow" {
+		t.Errorf("Expected tag 'perk_aura_slow', got %s", w.slowCalls[0].tag)
+	}
+	if w.slowCalls[0].slowPct != 0.20 {
+		t.Errorf("Expected slowPct 0.20, got %f", w.slowCalls[0].slowPct)
+	}
 }
 
 func TestTickPerkAuras_SwordsmanInspireAlly(t *testing.T) {
@@ -94,9 +100,17 @@ func TestTickPerkAuras_SwordsmanInspireAlly(t *testing.T) {
 	}
 
 	TickPerkAuras(w, time.Millisecond*200)
-	assert.Len(t, w.buffCalls, 1, "Should buff ally within radius")
-	assert.Equal(t, "perk_ally_dmg", w.buffCalls[0].tag)
-	assert.Equal(t, 1.10, w.buffCalls[0].fields["atk_mult"])
+	if len(w.buffCalls) != 1 {
+		t.Errorf("Should buff ally within radius, got %d calls", len(w.buffCalls))
+	}
+	if len(w.buffCalls) > 0 {
+		if w.buffCalls[0].tag != "perk_ally_dmg" {
+			t.Errorf("Expected tag 'perk_ally_dmg', got %s", w.buffCalls[0].tag)
+		}
+		if w.buffCalls[0].fields["atk_mult"] != 1.10 {
+			t.Errorf("Expected atk_mult 1.10, got %f", w.buffCalls[0].fields["atk_mult"])
+		}
+	}
 }
 
 func TestOnAttackDamageMultiplier_GlaciaIceSpike(t *testing.T) {
@@ -106,14 +120,19 @@ func TestOnAttackDamageMultiplier_GlaciaIceSpike(t *testing.T) {
 		},
 		AttackMultiplier: 1.0,
 		PerkState: struct {
-			AttackCount int
+			AttackCount  int
+			LastTargetID int64
 		}{AttackCount: 3}, // 4th attack should trigger bonus
 	}
 	target := &UnitRuntime{}
 
 	mult := OnAttackDamageMultiplier(attacker, target)
-	assert.Equal(t, 1.40, mult, "4th attack should have 40% bonus")
-	assert.Equal(t, 0, attacker.PerkState.AttackCount, "Attack count should reset after 4th attack")
+	if mult != 1.40 {
+		t.Errorf("4th attack should have 40%% bonus, got %f", mult)
+	}
+	if attacker.PerkState.AttackCount != 0 {
+		t.Errorf("Attack count should reset after 4th attack, got %d", attacker.PerkState.AttackCount)
+	}
 }
 
 func TestOnDamageTakenMultiplier_SwordsmanShieldWall(t *testing.T) {
@@ -135,7 +154,9 @@ func TestOnDamageTakenMultiplier_SwordsmanShieldWall(t *testing.T) {
 	attacker := &UnitRuntime{TeamID: "red"}
 
 	mult := OnDamageTakenMultiplier(target, attacker)
-	assert.Equal(t, 0.85, mult, "Should grant 15% damage reduction with ally nearby")
+	if mult != 0.85 {
+		t.Errorf("Should grant 15%% damage reduction with ally nearby, got %f", mult)
+	}
 }
 
 func TestOnDamageTakenMultiplier_SwordsmanLastStand(t *testing.T) {
@@ -150,7 +171,9 @@ func TestOnDamageTakenMultiplier_SwordsmanLastStand(t *testing.T) {
 	attacker := &UnitRuntime{}
 
 	mult := OnDamageTakenMultiplier(target, attacker)
-	assert.Equal(t, 0.75, mult, "Should grant 25% damage reduction below 30% HP")
+	if mult != 0.75 {
+		t.Errorf("Should grant 25%% damage reduction below 30%% HP, got %f", mult)
+	}
 }
 
 func TestOnUnitDeath_GlaciaFrozenVeil(t *testing.T) {
@@ -163,33 +186,71 @@ func TestOnUnitDeath_GlaciaFrozenVeil(t *testing.T) {
 	}
 
 	OnUnitDeath(u, w)
-	assert.Len(t, w.slowCalls, 1, "Should apply AOE slow on death")
-	assert.Equal(t, "perk_frozen_veil", w.slowCalls[0].tag)
-	assert.Equal(t, 0.50, w.slowCalls[0].slowPct)
-	assert.Equal(t, time.Duration(2000)*time.Millisecond, w.slowCalls[0].dur)
+	if len(w.slowCalls) != 1 {
+		t.Errorf("Should apply AOE slow on death, got %d calls", len(w.slowCalls))
+	}
+	if len(w.slowCalls) > 0 {
+		if w.slowCalls[0].tag != "perk_frozen_veil" {
+			t.Errorf("Expected tag 'perk_frozen_veil', got %s", w.slowCalls[0].tag)
+		}
+		if w.slowCalls[0].slowPct != 0.50 {
+			t.Errorf("Expected slowPct 0.50, got %f", w.slowCalls[0].slowPct)
+		}
+		if w.slowCalls[0].dur != time.Duration(2000)*time.Millisecond {
+			t.Errorf("Expected duration %v, got %v", time.Duration(2000)*time.Millisecond, w.slowCalls[0].dur)
+		}
+	}
 }
 
 func TestLoadUnitPerk_Glacia(t *testing.T) {
 	perk := LoadUnitPerk("Sorceress Glacia", "glacia_chill_aura")
-	assert.NotNil(t, perk)
-	assert.Equal(t, "glacia_chill_aura", perk.ID)
-	assert.Equal(t, "Chill Aura", perk.Name)
-	assert.Equal(t, "aura_slow", perk.Effects.Type)
-	assert.Equal(t, 160.0, perk.Effects.Radius)
-	assert.Equal(t, 0.10, perk.Effects.SlowPct)
+	if perk == nil {
+		t.Error("Expected perk to be not nil")
+		return
+	}
+	if perk.ID != "glacia_chill_aura" {
+		t.Errorf("Expected ID 'glacia_chill_aura', got %s", perk.ID)
+	}
+	if perk.Name != "Chill Aura" {
+		t.Errorf("Expected Name 'Chill Aura', got %s", perk.Name)
+	}
+	if perk.Effects.Type != "aura_slow" {
+		t.Errorf("Expected Type 'aura_slow', got %s", perk.Effects.Type)
+	}
+	if perk.Effects.Radius != 160.0 {
+		t.Errorf("Expected Radius 160.0, got %f", perk.Effects.Radius)
+	}
+	if perk.Effects.SlowPct != 0.10 {
+		t.Errorf("Expected SlowPct 0.10, got %f", perk.Effects.SlowPct)
+	}
 }
 
 func TestLoadUnitPerk_Swordsman(t *testing.T) {
 	perk := LoadUnitPerk("Swordsman", "sword_shield_wall")
-	assert.NotNil(t, perk)
-	assert.Equal(t, "sword_shield_wall", perk.ID)
-	assert.Equal(t, "Shield Wall", perk.Name)
-	assert.Equal(t, "conditional_dr_near_ally", perk.Effects.Type)
-	assert.Equal(t, 0.15, perk.Effects.DrPct)
-	assert.Equal(t, 140.0, perk.Effects.AllyRadius)
+	if perk == nil {
+		t.Error("Expected perk to be not nil")
+		return
+	}
+	if perk.ID != "sword_shield_wall" {
+		t.Errorf("Expected ID 'sword_shield_wall', got %s", perk.ID)
+	}
+	if perk.Name != "Shield Wall" {
+		t.Errorf("Expected Name 'Shield Wall', got %s", perk.Name)
+	}
+	if perk.Effects.Type != "conditional_dr_near_ally" {
+		t.Errorf("Expected Type 'conditional_dr_near_ally', got %s", perk.Effects.Type)
+	}
+	if perk.Effects.DrPct != 0.15 {
+		t.Errorf("Expected DrPct 0.15, got %f", perk.Effects.DrPct)
+	}
+	if perk.Effects.AllyRadius != 140.0 {
+		t.Errorf("Expected AllyRadius 140.0, got %f", perk.Effects.AllyRadius)
+	}
 }
 
 func TestLoadUnitPerk_Invalid(t *testing.T) {
 	perk := LoadUnitPerk("Invalid Unit", "invalid_perk")
-	assert.Nil(t, perk)
+	if perk != nil {
+		t.Error("Expected perk to be nil for invalid unit/perk")
+	}
 }

@@ -43,8 +43,12 @@ type UnitRuntime struct {
 	Alive      bool
 	ActivePerk *Perk
 	PerkState  struct {
-		AttackCount int
+		AttackCount  int
+		LastTargetID int64 // Track target switches for nth-attack reset
 	}
+	// Squad mechanics (for Swordsman spawn_count=4)
+	SquadID       int64
+	IsSquadLeader bool
 	// Combat bonuses
 	SpeedModifier         float64
 	AttackMultiplier      float64
