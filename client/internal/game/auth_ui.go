@@ -190,9 +190,9 @@ type AuthUI struct {
 }
 
 func NewAuthUI(apiBase string, onSuccess func(username string)) *AuthUI {
-	titleFace := fonts.Face(18) // custom font for title - reduced more
-	uiFace := fonts.Face(12)    // custom font for UI elements - reduced a bit more
-	inpFace := fonts.Face(12)   // same size as UI for input fields
+	titleFace := fonts.Title(18) // custom font for title - reduced more
+	uiFace := fonts.Title(12)    // custom font for UI elements - reduced a bit more
+	inpFace := fonts.Title(12)   // same size as UI for input fields
 
 	a := &AuthUI{
 		mode:      AuthLogin,
