@@ -951,7 +951,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				}
 			}
 			// Unit name as title
-			text.Draw(screen, g.miniOverlayName, basicfont.Face7x13, x+170, y+24, color.NRGBA{255, 215, 0, 255}) // Gold color for title
+			text.Draw(screen, g.miniOverlayName, fonts.Title(18), x+170, y+24, color.NRGBA{255, 215, 0, 255}) // Gold color for title
 			// Stats block (right side)
 			if info, ok := g.nameToMini[g.miniOverlayName]; ok {
 				sy := y + 50
