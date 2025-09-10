@@ -1,78 +1,10 @@
 {
-  "id": "",
+  "playerId": 683138,
   "name": "silvester",
+  "army": null,
   "gold": 3343421653,
   "accountXp": 0,
-  "shop": {
-    "roll": [
-      {
-        "slot": 0,
-        "unitId": "Magma Goliath",
-        "isChampion": false,
-        "priceGold": 90,
-        "sold": false
-      },
-      {
-        "slot": 1,
-        "unitId": "Nightfang",
-        "isChampion": false,
-        "priceGold": 90,
-        "sold": false
-      },
-      {
-        "slot": 2,
-        "unitId": "Lord of Flame",
-        "isChampion": true,
-        "priceGold": 120,
-        "sold": false
-      },
-      {
-        "slot": 3,
-        "unitId": "Kamikaze Aviator",
-        "isChampion": false,
-        "priceGold": 90,
-        "sold": false
-      },
-      {
-        "slot": 4,
-        "unitId": "Earth and Moon",
-        "isChampion": false,
-        "priceGold": 90,
-        "sold": false
-      },
-      {
-        "slot": 5,
-        "unitId": "Magma Goliath",
-        "isChampion": false,
-        "priceGold": 90,
-        "sold": false
-      },
-      {
-        "slot": 6,
-        "unitId": "Spirit Binder",
-        "isChampion": false,
-        "priceGold": 90,
-        "sold": false
-      },
-      {
-        "slot": 7,
-        "unitId": "Aethelion Ragestorm",
-        "isChampion": true,
-        "priceGold": 120,
-        "sold": false
-      },
-      {
-        "slot": 8,
-        "unitId": "Voodoo Hexer",
-        "isChampion": false,
-        "priceGold": 90,
-        "sold": false
-      }
-    ],
-    "lastReroll": 1757491504,
-    "sold": {},
-    "nonceSeen": {},
-    "version": 1
-  },
-  "progress": {}
+  "pvp_rating": 1200,
+  "pvp_rank": "Knight",
+  "avatar": "default.png"
 }

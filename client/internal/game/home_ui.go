@@ -312,7 +312,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 						levelW := len(levelStr) * 7
 						vector.DrawFilledRect(screen, float32(levelBadgeX-4), float32(levelBadgeY-2), float32(levelW+8), 14, color.NRGBA{138, 43, 226, 200}, true)
 						vector.StrokeRect(screen, float32(levelBadgeX-4), float32(levelBadgeY-2), float32(levelW+8), 14, 1, color.NRGBA{100, 20, 150, 255}, true)
-						text.Draw(screen, levelStr, basicfont.Face7x13, levelBadgeX, levelBadgeY+10, color.NRGBA{255, 255, 255, 255})
+						text.Draw(screen, levelStr, fonts.UI(12), levelBadgeX, levelBadgeY+10, color.NRGBA{255, 255, 255, 255})
 					}
 
 					// XP bar next to level badge (centered vertically with level badge)
@@ -345,8 +345,8 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 							"", []string{"Empty slot"})
 					} else {
 						ebitenutil.DrawRect(screen, float64(r.x), float64(r.y), float64(r.w), float64(r.h), color.NRGBA{0x26, 0x26, 0x35, 0xff})
-						text.Draw(screen, "Mini", basicfont.Face7x13, r.x+6, r.y+14, color.NRGBA{200, 200, 200, 255})
-						text.Draw(screen, "(empty)", basicfont.Face7x13, r.x+6, r.y+r.h-6, color.NRGBA{160, 160, 160, 255})
+						text.Draw(screen, "Mini", fonts.UI(12), r.x+6, r.y+14, color.NRGBA{200, 200, 200, 255})
+						text.Draw(screen, "(empty)", fonts.UI(12), r.x+6, r.y+r.h-6, color.NRGBA{160, 160, 160, 255})
 					}
 				}
 				k++
@@ -359,7 +359,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				cnt++
 			}
 		}
-		text.Draw(screen, fmt.Sprintf("Minis: %d/6", cnt), basicfont.Face7x13, gridX, gridY-6, color.White)
+		text.Draw(screen, fmt.Sprintf("Minis: %d/6", cnt), fonts.UI(14), gridX, gridY-6, color.White)
 
 		gridTop := topY + bigH + 16
 		// Center the collection grid rows
@@ -447,7 +447,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				levelW := len(levelStr) * 7
 				vector.DrawFilledRect(screen, float32(levelBadgeX-4), float32(levelBadgeY-2), float32(levelW+8), 14, color.NRGBA{138, 43, 226, 200}, true)
 				vector.StrokeRect(screen, float32(levelBadgeX-4), float32(levelBadgeY-2), float32(levelW+8), 14, 1, color.NRGBA{100, 20, 150, 255}, true)
-				text.Draw(screen, levelStr, basicfont.Face7x13, levelBadgeX, levelBadgeY+10, color.NRGBA{255, 255, 255, 255})
+				text.Draw(screen, levelStr, fonts.UI(12), levelBadgeX, levelBadgeY+10, color.NRGBA{255, 255, 255, 255})
 			}
 
 			// XP bar at bottom-center (adjusted for level badge)
