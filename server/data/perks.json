@@ -1,0 +1,42 @@
+{
+  "Sorceress Glacia": [
+    {
+      "id": "glacia_chill_aura",
+      "name": "Chill Aura",
+      "desc": "Enemies in range move 10% slower.",
+      "effects": { "type": "aura_slow", "radius": 160, "slow_pct": 0.10 }
+    },
+    {
+      "id": "glacia_ice_spike",
+      "name": "Ice Spike",
+      "desc": "Every 4th attack deals +40% damage.",
+      "effects": { "type": "nth_attack_bonus", "nth": 4, "bonus_dmg_pct": 0.40 }
+    },
+    {
+      "id": "glacia_frozen_veil",
+      "name": "Frozen Veil",
+      "desc": "On death, slows nearby enemies by 50% for 3s.",
+      "effects": { "type": "ondeath_aoe_slow", "radius": 140, "slow_pct": 0.50, "duration_ms": 3000 }
+    }
+  ],
+  "Swordsman": [
+    {
+      "id": "sword_shield_wall",
+      "name": "Shield Wall",
+      "desc": "Takes 15% less damage while an ally is nearby.",
+      "effects": { "type": "conditional_dr_near_ally", "dr_pct": 0.15, "ally_radius": 140 }
+    },
+    {
+      "id": "sword_last_stand",
+      "name": "Last Stand",
+      "desc": "Gain +25% Armor below 30% HP.",
+      "effects": { "type": "low_hp_armor", "armor_bonus_pct": 0.25, "hp_threshold_pct": 0.30 }
+    },
+    {
+      "id": "sword_inspire",
+      "name": "Inspiring Presence",
+      "desc": "Allies in range deal +5% damage.",
+      "effects": { "type": "aura_ally_dmg", "radius": 140, "ally_dmg_pct": 0.05 }
+    }
+  ]
+}

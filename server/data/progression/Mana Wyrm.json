@@ -1,8 +1,8 @@
 {
-  "UnitID": "The Warden",
+  "UnitID": "Mana Wyrm",
   "rarity": 2,
   "rank": 1,
-  "shardsOwned": 5,
+  "shardsOwned": 4,
   "perksUnlocked": [],
   "activePerk": null
 }

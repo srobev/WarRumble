@@ -6,6 +6,10 @@ type ShopSlot struct {
 	IsChampion bool   `json:"isChampion"`
 	PriceGold  int64  `json:"priceGold"`
 	Sold       bool   `json:"sold"`
+
+	// For perk offers
+	OfferType string `json:"offerType,omitempty"` // "unit" (default) or "perk"
+	PerkID    string `json:"perkId,omitempty"`
 }
 
 type ShopRoll struct {

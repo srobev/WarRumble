@@ -81,6 +81,13 @@ func main() {
 	shopService := shop.NewService(progService)
 	hub.SetShopService(shopService)
 
+	// Load static perks data
+	if err := LoadPerks("./data"); err != nil {
+		log.Printf("Failed to load perks: %v", err)
+	} else {
+		shopService.PerkCatalogFunc = GetPerksForUnit // set the func
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", wsHandler(hub, authz))
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, r *http.Request) { _, _ = w.Write([]byte("ok")) })

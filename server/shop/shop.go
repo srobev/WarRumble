@@ -17,6 +17,8 @@ const SLOT_COUNT = 9
 type Service struct {
 	progressionService *progression.Service
 	unitCatalog        func() ([]types.UnitMeta, []types.UnitMeta)
+	perkCatalog        func() []string           // list of units that have perks
+	PerkCatalogFunc    func(string) []types.Perk // get perks for unit
 }
 
 func NewService(progressionService *progression.Service) *Service {
@@ -24,6 +26,15 @@ func NewService(progressionService *progression.Service) *Service {
 		progressionService: progressionService,
 		unitCatalog: func() ([]types.UnitMeta, []types.UnitMeta) {
 			return types.ListMinis(), types.ListChampions()
+		},
+		perkCatalog: func() []string {
+			// Units with perks
+			return []string{"Sorceress Glacia", "Swordsman"}
+		},
+		PerkCatalogFunc: func(unitID string) []types.Perk {
+			// Since different package, stub for now
+			// Will be set later
+			return []types.Perk{}
 		},
 	}
 }
@@ -107,6 +118,90 @@ func (s *Service) getOrCreateRoll(playerID string, account *account.Account) (ty
 	return roll, nil
 }
 
+// addPerkOffers adds up to 2 perk offers for units with available slots
+func (s *Service) addPerkOffers(roll *types.ShopRoll, account *account.Account) {
+	perkUnits := s.perkCatalog()
+	var candidates []string
+
+	for _, unitID := range perkUnits {
+		progress, exists := account.Progress[unitID]
+		if !exists {
+			continue
+		}
+		if progress.Rarity == 0 {
+			continue // Common has 0 slots
+		}
+		// Check if has purchased perks less than slots
+		if len(progress.PerksUnlocked) < int(progress.Rarity) {
+			candidates = append(candidates, unitID)
+		}
+	}
+
+	if len(candidates) == 0 {
+		return // no perks available
+	}
+
+	// Add up to 2 perk offers, replacing random unit offers if any
+	r := rand.New(rand.NewSource(time.Now().Unix()))
+	maxPerks := 2
+	if maxPerks > len(candidates) {
+		maxPerks = len(candidates)
+	}
+
+	for i := 0; i < maxPerks; i++ {
+		unitID := candidates[r.Intn(len(candidates))]
+		candidates = remove(candidates, unitID)
+
+		// Find a unit slot to replace or add at end if possible
+		var slotIdx int = -1
+		for j := range roll.Slots {
+			if roll.Slots[j].OfferType == "" { // unit offer
+				slotIdx = j
+				break
+			}
+		}
+		if slotIdx == -1 {
+			continue // no unit slot to replace
+		}
+
+		// Pick random unpurchased perk
+		availablePerks := []string{}
+		for _, u := range s.PerkCatalogFunc(unitID) {
+			found := false
+			for _, pur := range account.Progress[unitID].PerksUnlocked {
+				if string(pur) == string(u.ID) {
+					found = true
+					break
+				}
+			}
+			if !found {
+				availablePerks = append(availablePerks, string(u.ID))
+			}
+		}
+		if len(availablePerks) == 0 {
+			continue
+		}
+		perkID := availablePerks[r.Intn(len(availablePerks))]
+
+		// Replace slot
+		roll.Slots[slotIdx].OfferType = "perk"
+		roll.Slots[slotIdx].UnitID = unitID
+		roll.Slots[slotIdx].PerkID = perkID
+		roll.Slots[slotIdx].PriceGold = 250
+		roll.Slots[slotIdx].IsChampion = false // perks are not champions
+	}
+}
+
+// remove helper
+func remove(slice []string, item string) []string {
+	for i, v := range slice {
+		if v == item {
+			return append(slice[:i], slice[i+1:]...)
+		}
+	}
+	return slice
+}
+
 // HandleGetShopRoll processes shop roll requests
 func (s *Service) HandleGetShopRoll(playerID string, broadcaster func(eventType string, event interface{})) error {
 	acc, err := account.LoadAccount(playerID)
@@ -118,6 +213,12 @@ func (s *Service) HandleGetShopRoll(playerID string, broadcaster func(eventType 
 	if err != nil {
 		return err
 	}
+
+	// Add perk offers if eligible
+	s.addPerkOffers(&roll, acc)
+
+	// Update account with the new roll including perks
+	acc.Shop.Roll = roll.Slots
 
 	// Save account with new roll if needed
 	if err := account.SaveAccount(acc); err != nil {
@@ -154,6 +255,9 @@ func (s *Service) HandleRerollShop(playerID string, req types.RerollShopReq, bro
 	seed := GenerateRollSeed(playerID, now+1) // Different seed
 
 	roll := GenerateRoll81(seed, minis, champs)
+
+	// Add perk offers if eligible
+	s.addPerkOffers(&roll, acc)
 
 	// Update account
 	acc.Shop.Roll = roll.Slots
@@ -241,44 +345,105 @@ func (s *Service) HandleBuyShopSlot(playerID string, req types.BuyShopSlotReq, b
 		return fmt.Errorf("insufficient funds: has %d, needs %d", acc.Gold, slot.PriceGold)
 	}
 
-	// Get unit progress
-	meta := types.GetUnitMeta(slot.UnitID)
-	if meta == nil {
-		return fmt.Errorf("unit not found: %s", slot.UnitID)
-	}
+	var progress *types.UnitProgress
+	var costPerRank int
+	var rankUps int
 
-	// Load/create progress
-	progress, err := s.progressionService.LoadUnitProgress(slot.UnitID)
-	if err != nil {
-		return fmt.Errorf("failed to load progress: %w", err)
-	}
+	// Handle perk purchase
+	if slot.OfferType == "perk" {
+		// Load unit progress
+		var err error
+		progress, err = s.progressionService.LoadUnitProgress(slot.UnitID)
+		if err != nil {
+			return fmt.Errorf("failed to load progress for perk unit: %w", err)
+		}
 
-	// Set rarity from meta
-	progress.Rarity = meta.Rarity
+		// Check if perk is eligible (slots available)
+		if len(progress.PerksUnlocked) >= int(progress.Rarity) {
+			return fmt.Errorf("no available perk slots for unit %s", slot.UnitID)
+		}
 
-	// Calculate shard cost for next rank
-	costPerRank := meta.Rarity.ShardsPerRank()
+		// Check if perk already purchased
+		for _, perk := range progress.PerksUnlocked {
+			if string(perk) == slot.PerkID {
+				return fmt.Errorf("perk %s already purchased", slot.PerkID)
+			}
+		}
 
-	// Add one shard
-	rankUps := progression.AddShards(progress, 1)
+		// Add perk
+		progress.PerksUnlocked = append(progress.PerksUnlocked, types.PerkID(slot.PerkID))
 
-	// Deduct gold
-	acc.Gold -= slot.PriceGold
+		// Grant +1 level (but since rank also gives level, but task says +1 level per perk owned)
+		// Since level = base + shardLevels + perkCount, save as is.
 
-	// Mark as sold
-	slot.Sold = true
-	acc.Shop.Sold[req.Slot] = true
-	acc.Shop.NonceSeen[req.Nonce] = true
+		// Deduct gold
+		acc.Gold -= slot.PriceGold
 
-	// Initialize progress map if needed
-	if acc.Progress == nil {
-		acc.Progress = make(map[string]*types.UnitProgress)
-	}
-	acc.Progress[slot.UnitID] = progress
+		// Mark as sold
+		slot.Sold = true
+		acc.Shop.Sold[req.Slot] = true
+		acc.Shop.NonceSeen[req.Nonce] = true
 
-	// Save progress
-	if err := s.progressionService.SaveUnitProgress(progress); err != nil {
-		return fmt.Errorf("failed to save progress: %w", err)
+		// Save progress
+		if err := s.progressionService.SaveUnitProgress(progress); err != nil {
+			return fmt.Errorf("failed to save progress: %w", err)
+		}
+
+		costPerRank = 0
+		rankUps = 0
+
+		if broadcaster != nil {
+			// Inform about +1 level.toast "Perk purchased (+1 Level)".
+			s.progressionService.BroadcastUnitProgress(slot.UnitID, progress, broadcaster)
+		}
+	} else {
+		// Unit purchase logic
+		// Get unit progress
+		meta := types.GetUnitMeta(slot.UnitID)
+		if meta == nil {
+			return fmt.Errorf("unit not found: %s", slot.UnitID)
+		}
+
+		// Load/create progress
+		var err error
+		progress, err = s.progressionService.LoadUnitProgress(slot.UnitID)
+		if err != nil {
+			return fmt.Errorf("failed to load progress: %w", err)
+		}
+
+		// Set rarity from meta
+		progress.Rarity = meta.Rarity
+
+		// Calculate shard cost for next rank
+		costPerRank = meta.Rarity.ShardsPerRank()
+
+		// Add one shard
+		rankUps = progression.AddShards(progress, 1)
+
+		// Deduct gold
+		acc.Gold -= slot.PriceGold
+
+		// Mark as sold
+		slot.Sold = true
+		acc.Shop.Sold[req.Slot] = true
+		acc.Shop.NonceSeen[req.Nonce] = true
+
+		// Initialize progress map if needed
+		if acc.Progress == nil {
+			acc.Progress = make(map[string]*types.UnitProgress)
+		}
+		acc.Progress[slot.UnitID] = progress
+
+		// Save progress
+		if err := s.progressionService.SaveUnitProgress(progress); err != nil {
+			return fmt.Errorf("failed to save progress: %w", err)
+		}
+
+		if broadcaster != nil {
+			if rankUps > 0 {
+				s.progressionService.BroadcastUnitProgress(slot.UnitID, progress, broadcaster)
+			}
+		}
 	}
 
 	// Save account

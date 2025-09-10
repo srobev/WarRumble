@@ -11,14 +11,6 @@ import (
 	"rumble/shared/protocol"
 )
 
-// Perk unlock gates for each rarity
-var perkUnlocks = map[types.Rarity][]int{
-	types.RarityCommon:    {2},
-	types.RarityRare:      {2, 4},
-	types.RarityEpic:      {2, 4, 5},
-	types.RarityLegendary: {2, 4, 6, 10},
-}
-
 // AddShards adds shards to unit progress and calculates rank ups
 func AddShards(p *types.UnitProgress, add int) (rankUps int) {
 	if add <= 0 {
@@ -34,48 +26,22 @@ func AddShards(p *types.UnitProgress, add int) (rankUps int) {
 	return
 }
 
-// PerkSlotsUnlocked returns the number of perk slots unlocked for the unit's current rank
+// PerkSlotsUnlocked returns the number of perk slots unlocked for the unit's rarity
 func PerkSlotsUnlocked(p *types.UnitProgress) int {
-	slots := 0
-	for _, gate := range perkUnlocks[p.Rarity] {
-		if gate <= p.Rank && gate != 10 {
-			slots++
-		}
-	}
-	return slots
-}
-
-// LegendaryPerkUnlocked checks if the legendary perk is unlocked for legendary units
-func LegendaryPerkUnlocked(p *types.UnitProgress) bool {
-	if p.Rarity != types.RarityLegendary {
-		return false
-	}
-	for _, gate := range perkUnlocks[p.Rarity] {
-		if gate == 10 && p.Rank >= 10 {
-			return true
-		}
-	}
-	return false
+	return int(p.Rarity)
 }
 
 // SetActivePerk sets the active perk for a unit (choose one at a time)
 func SetActivePerk(p *types.UnitProgress, perkID types.PerkID, available []types.Perk) bool {
-	var target *types.Perk
-	for i := range available {
-		if available[i].ID == perkID {
-			target = &available[i]
+	// Check if perk is purchased
+	hasPerk := false
+	for _, unlocked := range p.PerksUnlocked {
+		if unlocked == perkID {
+			hasPerk = true
 			break
 		}
 	}
-	if target == nil {
-		return false
-	}
-	// Validate legendary perk requirements
-	if target.Legendary && !LegendaryPerkUnlocked(p) {
-		return false
-	}
-	// Validate regular perk slot availability
-	if !target.Legendary && PerkSlotsUnlocked(p) < 1 {
+	if !hasPerk {
 		return false
 	}
 	p.ActivePerk = &perkID
@@ -153,14 +119,13 @@ func (s *Service) SaveUnitProgress(progress *types.UnitProgress) error {
 func (s *Service) BroadcastUnitProgress(unitID string, progress *types.UnitProgress, broadcaster func(eventType string, event interface{})) {
 	if broadcaster != nil {
 		unlocked := PerkSlotsUnlocked(progress)
-		legendary := LegendaryPerkUnlocked(progress)
 
 		event := protocol.UnitProgressSynced{
 			UnitID:                unitID,
 			Rank:                  progress.Rank,
 			ShardsOwned:           progress.ShardsOwned,
 			PerkSlotsUnlocked:     unlocked,
-			LegendaryPerkUnlocked: legendary,
+			LegendaryPerkUnlocked: false, // No legendary perk for now
 		}
 		broadcaster("UnitProgressSynced", event)
 	}

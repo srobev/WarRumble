@@ -4,6 +4,7 @@ type Rarity int
 
 const (
 	RarityCommon Rarity = iota
+	RarityUncommon
 	RarityRare
 	RarityEpic
 	RarityLegendary
@@ -11,7 +12,7 @@ const (
 
 func (r Rarity) ShardsPerRank() int {
 	switch r {
-	case RarityCommon:
+	case RarityCommon, RarityUncommon:
 		return 3
 	case RarityRare:
 		return 10

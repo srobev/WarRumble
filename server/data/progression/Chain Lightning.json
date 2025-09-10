@@ -1,8 +1,8 @@
 {
   "UnitID": "Chain Lightning",
-  "Rarity": 2,
+  "Rarity": 3,
   "Rank": 1,
-  "ShardsOwned": 2,
+  "ShardsOwned": 4,
   "PerksUnlocked": [],
   "ActivePerk": null
 }

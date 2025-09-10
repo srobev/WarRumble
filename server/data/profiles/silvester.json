@@ -1,6 +1,144 @@
 {
-  "playerId": 6561856,
+  "id": "",
   "name": "silvester",
+  "gold": 3343417813,
+  "accountXp": 0,
+  "shop": {
+    "roll": [
+      {
+        "slot": 0,
+        "unitId": "Bone Revenants",
+        "isChampion": false,
+        "priceGold": 90,
+        "sold": false
+      },
+      {
+        "slot": 1,
+        "unitId": "The Warden",
+        "isChampion": true,
+        "priceGold": 120,
+        "sold": false
+      },
+      {
+        "slot": 2,
+        "unitId": "Smoke Bomb",
+        "isChampion": false,
+        "priceGold": 90,
+        "sold": false
+      },
+      {
+        "slot": 3,
+        "unitId": "Lord of Flame",
+        "isChampion": true,
+        "priceGold": 120,
+        "sold": false
+      },
+      {
+        "slot": 4,
+        "unitId": "Smoke Bomb",
+        "isChampion": false,
+        "priceGold": 90,
+        "sold": false
+      },
+      {
+        "slot": 5,
+        "unitId": "Obsidian Bat",
+        "isChampion": false,
+        "priceGold": 90,
+        "sold": false
+      },
+      {
+        "slot": 6,
+        "unitId": "Mana Wyrm",
+        "isChampion": false,
+        "priceGold": 90,
+        "sold": false
+      },
+      {
+        "slot": 7,
+        "unitId": "Chain Lightning",
+        "isChampion": false,
+        "priceGold": 90,
+        "sold": false
+      },
+      {
+        "slot": 8,
+        "unitId": "Lord of Flame",
+        "isChampion": true,
+        "priceGold": 120,
+        "sold": false
+      }
+    ],
+    "lastReroll": 1757519304,
+    "sold": {},
+    "nonceSeen": {
+      "buy-1-1757519250853": true,
+      "buy-2-1757519251020": true,
+      "buy-3-1757519249087": true,
+      "buy-4-1757519248649": true,
+      "buy-4-1757519250652": true,
+      "buy-5-1757519248169": true,
+      "buy-5-1757519251188": true,
+      "buy-5-1757519292131": true,
+      "buy-5-1757519294252": true,
+      "buy-5-1757519295935": true,
+      "buy-5-1757519297103": true,
+      "buy-5-1757519303869": true,
+      "buy-6-1757519249386": true,
+      "buy-6-1757519251500": true,
+      "reroll-1757519246737": true,
+      "reroll-1757519249985": true,
+      "reroll-1757519252251": true,
+      "reroll-1757519292785": true,
+      "reroll-1757519295518": true,
+      "reroll-1757519296616": true,
+      "reroll-1757519297784": true,
+      "reroll-1757519304968": true
+    },
+    "version": 1
+  },
+  "progress": {
+    "Lord of Flame": {
+      "UnitID": "Lord of Flame",
+      "rarity": 4,
+      "rank": 1,
+      "shardsOwned": 8,
+      "perksUnlocked": [],
+      "activePerk": null
+    },
+    "Mana Wyrm": {
+      "UnitID": "Mana Wyrm",
+      "rarity": 2,
+      "rank": 1,
+      "shardsOwned": 4,
+      "perksUnlocked": [],
+      "activePerk": null
+    },
+    "Obsidian Bat": {
+      "UnitID": "Obsidian Bat",
+      "rarity": 0,
+      "rank": 4,
+      "shardsOwned": 0,
+      "perksUnlocked": [],
+      "activePerk": null
+    },
+    "Smoke Bomb": {
+      "UnitID": "Smoke Bomb",
+      "rarity": 0,
+      "rank": 3,
+      "shardsOwned": 2,
+      "perksUnlocked": [],
+      "activePerk": null
+    },
+    "The Warden": {
+      "UnitID": "The Warden",
+      "rarity": 2,
+      "rank": 1,
+      "shardsOwned": 5,
+      "perksUnlocked": [],
+      "activePerk": null
+    }
+  },
   "army": [
     "Sorceress Glacia",
     "Flesh Golem",
@@ -19,15 +157,5 @@
       "Blizzard",
       "Rampager"
     ]
-  },
-  "gold": 3343420963,
-  "accountXp": 0,
-  "unitXp": {
-    "Blizzard": 1,
-    "Rampager": 1,
-    "Sorceress Glacia": 1
-  },
-  "pvp_rating": 1200,
-  "pvp_rank": "Knight",
-  "avatar": "default.png"
+  }
 }
