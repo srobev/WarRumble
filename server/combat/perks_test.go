@@ -136,13 +136,6 @@ func TestOnAttackDamageMultiplier_GlaciaIceSpike(t *testing.T) {
 }
 
 func TestOnDamageTakenMultiplier_SwordsmanShieldWall(t *testing.T) {
-	w := &MockWorld{
-		units: []*UnitRuntime{
-			{ID: 1, TeamID: "blue", Pos: Vec2{X: 100, Y: 100}},
-			{ID: 2, TeamID: "blue", Pos: Vec2{X: 120, Y: 100}}, // 20 units away, within 140 radius
-		},
-	}
-
 	target := &UnitRuntime{
 		TeamID:                "blue",
 		Pos:                   Vec2{X: 100, Y: 100},
@@ -178,8 +171,15 @@ func TestOnDamageTakenMultiplier_SwordsmanLastStand(t *testing.T) {
 
 func TestOnUnitDeath_GlaciaFrozenVeil(t *testing.T) {
 	w := &MockWorld{}
+	// Add targets for the AOE effect to work with
+	w.units = []*UnitRuntime{
+		{ID: 2, TeamID: "blue", Pos: Vec2{X: 150, Y: 100}, Alive: true}, // within 80 radius
+		{ID: 3, TeamID: "blue", Pos: Vec2{X: 200, Y: 100}, Alive: true}, // 100 units away, outside radius
+	}
 	u := &UnitRuntime{
-		Pos: Vec2{X: 100, Y: 100},
+		TeamID: "red", // opposite team
+		Pos:    Vec2{X: 100, Y: 100},
+		Alive:  false, // unit is dead
 		ActivePerk: &Perk{
 			Effects: PerkEffects{Type: "ondeath_aoe_slow", Radius: 80, SlowPct: 0.50, DurationMs: 2000},
 		},

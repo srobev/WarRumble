@@ -1,7 +1,7 @@
 {
   "id": "",
   "name": "silvester",
-  "gold": 3343417813,
+  "gold": 3343417633,
   "accountXp": 0,
   "shop": {
     "roll": [
@@ -59,7 +59,7 @@
         "unitId": "Winged Screechers",
         "isChampion": false,
         "priceGold": 90,
-        "sold": false
+        "sold": true
       },
       {
         "slot": 8,
@@ -69,12 +69,27 @@
         "sold": false
       }
     ],
-    "lastReroll": 1757522382,
-    "sold": {},
-    "nonceSeen": {},
+    "lastReroll": 1757522728,
+    "sold": {
+      "7": true
+    },
+    "nonceSeen": {
+      "buy-7-1757522728129": true,
+      "buy-7-1757522734520": true,
+      "reroll-1757522728826": true
+    },
     "version": 1
   },
-  "progress": {},
+  "progress": {
+    "Winged Screechers": {
+      "UnitID": "Winged Screechers",
+      "rarity": 0,
+      "rank": 2,
+      "shardsOwned": 0,
+      "perksUnlocked": [],
+      "activePerk": null
+    }
+  },
   "army": [
     "Sorceress Glacia",
     "Flesh Golem",

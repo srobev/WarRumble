@@ -1,8 +1,8 @@
 {
   "UnitID": "Winged Screechers",
-  "Rarity": 0,
-  "Rank": 1,
-  "ShardsOwned": 1,
-  "PerksUnlocked": [],
-  "ActivePerk": null
+  "rarity": 0,
+  "rank": 2,
+  "shardsOwned": 0,
+  "perksUnlocked": [],
+  "activePerk": null
 }
