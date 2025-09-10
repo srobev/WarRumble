@@ -34,18 +34,19 @@ type SetName struct {
 type ListMinis struct{}
 
 type MiniInfo struct {
-	Name        string  `json:"name"`
-	Class       string  `json:"class"`
-	SubClass    string  `json:"subclass,omitempty"`
-	Role        string  `json:"role"`
-	Cost        int     `json:"cost"`
-	Portrait    string  `json:"portrait,omitempty"`
-	Dmg         int     `json:"dmg,omitempty"`
-	Hp          int     `json:"hp,omitempty"`
-	Heal        int     `json:"heal,omitempty"`
-	Hps         int     `json:"hps,omitempty"`
-	Speed       int     `json:"speed,omitempty"`        // 1=slow,2=medium,3=mid-fast,4=fast
-	AttackSpeed float64 `json:"attack_speed,omitempty"` // attacks per second
+	Name        string   `json:"name"`
+	Class       string   `json:"class"`
+	SubClass    string   `json:"subclass,omitempty"`
+	Role        string   `json:"role"`
+	Cost        int      `json:"cost"`
+	Portrait    string   `json:"portrait,omitempty"`
+	Dmg         int      `json:"dmg,omitempty"`
+	Hp          int      `json:"hp,omitempty"`
+	Heal        int      `json:"heal,omitempty"`
+	Hps         int      `json:"hps,omitempty"`
+	Speed       int      `json:"speed,omitempty"`        // 1=slow,2=medium,3=mid-fast,4=fast
+	AttackSpeed float64  `json:"attack_speed,omitempty"` // attacks per second
+	Features    []string `json:"features,omitempty"`     // Special features like "siege"
 }
 type Minis struct {
 	Items []MiniInfo `json:"items"`

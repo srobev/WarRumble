@@ -7,7 +7,8 @@
     "class": "melee",
     "role": "mini",
     "cost": 6,
-    "speed": 1
+    "speed": 1,
+    "features": ["melee","tank"]
   },
   {
     "name": "Arcane Blast",
@@ -21,7 +22,9 @@
     "spell_type": "damage",
     "target_type": "single",
     "instant_cast": true,
-    "spell_effect": "arcane_blast"
+    "spell_effect": "arcane_blast",
+    "features": ["spell"],
+    "features": ["spell", "aoe"]
   },
   {
     "name": "Wraith",
@@ -31,7 +34,8 @@
     "class": "melee",
     "role": "mini",
     "cost": 3,
-    "speed": 1
+    "speed": 1,
+    "features": ["melee"]
   },
   {
     "name": "Foulwing Rider",
@@ -44,7 +48,8 @@
     "cost": 3,
     "speed": 2,
     "range": 150,
-    "particle": "projectile"
+    "particle": "projectile",
+    "features": ["ranged", "flying", "cycle"]
   },
   {
     "name": "Blazebinder",
@@ -57,7 +62,8 @@
     "cost": 3,
     "speed": 1,
     "range": 200,
-    "particle": "projectile"
+    "particle": "projectile",
+    "features": ["ranged"]
   },
   {
     "name": "Bloodmage Thalor",
@@ -70,7 +76,8 @@
     "cost": 3,
     "speed": 1,
     "range": 200,
-    "particle": "projectile"
+    "particle": "projectile",
+    "features": ["ranged", "aoe"]
   },
   {
     "name": "Blizzard",
@@ -85,7 +92,8 @@
     "target_type": "area",
     "effect_range": 80,
     "instant_cast": true,
-    "spell_effect": "blizzard"
+    "spell_effect": "blizzard",
+    "features": ["spell", "aoe"]
   },
   {
     "name": "Chain Lightning",
@@ -101,7 +109,8 @@
     "chain_targets": 3,
     "chain_damage_reduction": 0.6,
     "instant_cast": true,
-    "spell_effect": "chain_lightning"
+    "spell_effect": "chain_lightning",
+    "features": ["spell"]
   },
   {
     "name": "Twin Wyrnn",
@@ -115,7 +124,8 @@
     "speed": 2,
     "range": 200,
     "cooldown": 3.0,
-    "particle": "projectile"
+    "particle": "projectile",
+    "features": ["ranged", "flying", "aoe"]
   },
   {
     "name": "Magma Beasts",
@@ -126,7 +136,8 @@
     "role": "mini",
     "cost": 3,
     "speed": 1,
-    "spawn_count": 2
+    "spawn_count": 2,
+    "features": ["squad", "melee"]
   },
   {
     "name": "Redhand Thieves",
@@ -137,7 +148,8 @@
     "role": "mini",
     "cost": 3,
     "speed": 2,
-    "spawn_count": 2
+    "spawn_count": 2,
+    "features": ["squad", "melee", "stealth"]
   },
   {
     "name": "Firedrake",
@@ -151,7 +163,8 @@
     "speed": 2,
     "range": 200,
     "cooldown": 2.5,
-    "particle": "projectile"
+    "particle": "projectile",
+    "features": ["ranged", "flying", "aoe"]
   },
   {
     "name": "Execute",
@@ -166,7 +179,8 @@
     "target_type": "single",
     "execute_threshold": 0.25,
     "instant_cast": true,
-    "spell_effect": "execute"
+    "spell_effect": "execute",
+    "features": ["spell", "aoe"]
   },
     {
     "name": "Jungle Headhunter",
@@ -179,7 +193,8 @@
     "cost": 3,
     "speed": 3,
     "range": 250,
-    "particle": "projectile"
+    "particle": "projectile",
+    "features": ["ranged"]
   },
   {
     "name": "Mana Wyrm",
@@ -192,7 +207,8 @@
     "cost": 3,
     "speed": 3,
     "range": 200,
-    "particle": "projectile"
+    "particle": "projectile",
+    "features": ["ranged", "flying"]
   },
   {
     "name": "Spirit Binder",
@@ -208,7 +224,8 @@
     "speed": 2,
     "range": 200,
     "cooldown": 1.5,
-    "particle": "projectile"
+    "particle": "projectile",
+    "features": ["healer", "ranged"]
   },
   {
     "name": "Obsidian Bat",
@@ -217,7 +234,7 @@
     "portrait": "obsidian_bat.png",
     "class": "melee",
     "subclass": "air-vs-base",
-    "features": ["siege"],
+    "features": ["siege", "flying"],
     "role": "mini",
     "cost": 3,
     "speed": 2,
@@ -232,7 +249,8 @@
     "class": "melee",
     "role": "mini",
     "cost": 3,
-    "speed": 2
+    "speed": 2,
+    "features": ["melee"]
   },
   {
     "name": "Aerie Guard",
@@ -245,7 +263,8 @@
     "cost": 3,
     "speed": 3,
     "range": 200,
-    "particle": "projectile"
+    "particle": "projectile",
+    "features": ["ranged", "flying"]
   },
   {
     "name": "Winged Screechers",
@@ -259,7 +278,8 @@
     "speed": 4,
     "range": 200,
     "particle": "projectile",
-    "spawn_count": 3
+    "spawn_count": 3,
+    "features": ["squad", "melee", "flying", "fast"]
   },
   {
     "name": "Warg Lord",
@@ -269,7 +289,8 @@
     "class": "melee",
     "role": "champion",
     "cost": 4,
-    "speed": 3
+    "speed": 3,
+    "features": ["melee", "tank", "fast"]
   },
   {
     "name": "Holy Nova",
@@ -284,7 +305,8 @@
     "target_type": "area",
     "effect_range": 100,
     "instant_cast": true,
-    "spell_effect": "holy_nova"
+    "spell_effect": "holy_nova",
+    "features": ["spell", "aoe"]
   },
   {
     "name": "Night Sentinel",
@@ -296,7 +318,8 @@
     "cost": 3,
     "speed": 4,
     "range": 200,
-    "particle": "projectile"
+    "particle": "projectile",
+    "features": ["ranged", "aoe", "fast"]
   },
   {
     "name": "Sorceress Glacia",
@@ -308,7 +331,20 @@
     "cost": 3,
     "speed": 2,
     "range": 200,
-    "particle": "projectile"
+    "particle": "projectile",
+    "features": ["ranged", "frost"]
+  },
+  {
+    "name": "Swordsman",
+    "dmg": 70,
+    "hp": 800,
+    "portrait": "swordsman.png",
+    "class": "melee",
+    "role": "mini",
+    "cost": 5,
+    "speed": 1,
+    "features": ["melee","armored","tank"],
+    "spawn_count": 4
   },
   {
     "name": "Living Bomb",
@@ -323,7 +359,8 @@
     "target_type": "single",
     "duration": 3,
     "instant_cast": true,
-    "spell_effect": "living_bomb"
+    "spell_effect": "living_bomb",
+    "features": ["spell", "aoe"]
   },
   {
     "name": "The Warden",
@@ -333,7 +370,8 @@
     "class": "melee",
     "role": "champion",
     "cost": 3,
-    "speed": 2
+    "speed": 2,
+    "features": ["melee", "stealth"]
   },
   {
     "name": "Aethelion Ragestorm",
@@ -348,7 +386,8 @@
     "cost": 5,
     "speed": 2,
     "range": 200,
-    "particle": "projectile"
+    "particle": "projectile",
+    "features": ["healer", "ranged"]
   },
   {
     "name": "Corpse Catapult",
@@ -357,7 +396,7 @@
     "portrait": "corpse_catapult.png",
     "class": "range",
     "subclass": "range-vs-ground",
-    "features": ["siege"],
+    "features": ["siege", "ranged"],
     "role": "mini",
     "cost": 3,
     "speed": 1,
@@ -372,7 +411,8 @@
     "class": "melee",
     "role": "mini",
     "cost": 3,
-    "speed": 1
+    "speed": 1,
+    "features": ["melee", "tank", "armored"]
   },
   {
     "name": "Reanimator",
@@ -382,7 +422,8 @@
     "class": "melee",
     "role": "mini",
     "cost": 3,
-    "speed": 2
+    "speed": 2,
+    "features": ["ranged", "summoner"]
   },
   {
     "name": "Polymorph",
@@ -397,7 +438,8 @@
     "target_type": "single",
     "duration": 5,
     "instant_cast": true,
-    "spell_effect": "polymorph"
+    "spell_effect": "polymorph",
+    "features": ["spell", "aoe"]
   },
   {
     "name": "Razorboar",
@@ -407,7 +449,8 @@
     "class": "melee",
     "role": "mini",
     "cost": 3,
-    "speed": 2
+    "speed": 2,
+    "features": ["melee", "unbound"]
   },
   {
     "name": "Lord of Flame",
@@ -417,7 +460,8 @@
     "class": "melee",
     "role": "champion",
     "cost": 5,
-    "speed": 1
+    "speed": 1,
+    "features": ["melee", "tank", "resistant"]
   },
   {
     "name": "Dino Steed",
@@ -427,7 +471,8 @@
     "class": "melee",
     "role": "mini",
     "cost": 2,
-    "speed": 3
+    "speed": 3,
+    "features": ["melee"]
   },
   {
     "name": "Grizzly Marksman",
@@ -439,7 +484,8 @@
     "cost": 2,
     "speed": 2,
     "range": 200,
-    "particle": "projectile"
+    "particle": "projectile",
+    "features": ["ranged", "summoner"]
   },
   {
     "name": "Kamikaze Aviator",
@@ -451,17 +497,20 @@
     "cost": 3,
     "speed": 2,
     "range": 200,
-    "particle": "projectile"
+    "particle": "projectile",
+    "features": ["ranged", "unbound"]
   },
   {
     "name": "Bone Revenants",
     "dmg": 200,
-    "hp": 300,
+    "hp": 150,
     "portrait": "bone_revenants.png",
     "class": "melee",
     "role": "mini",
     "cost": 2,
-    "speed": 2
+    "speed": 2,
+    "spawn_count": 4,
+    "features": ["squad", "melee"]
   },
   {
     "name": "Smoke Bomb",
@@ -477,7 +526,8 @@
     "effect_range": 60,
     "duration": 4,
     "instant_cast": true,
-    "spell_effect": "smoke_bomb"
+    "spell_effect": "smoke_bomb",
+    "features": ["spell", "aoe"]
   },
   {
     "name": "Earthhoof",
@@ -487,7 +537,8 @@
     "class": "melee",
     "role": "mini",
     "cost": 3,
-    "speed": 2
+    "speed": 2,
+    "features": ["melee", "tank"]
   },
   {
     "name": "Silvanus Windarrow",
@@ -500,7 +551,8 @@
     "speed": 2,
     "range": 200,
     "attack_speed": 0.5,
-    "particle": "projectile"
+    "particle": "projectile",
+    "features": ["ranged"]
   },
   {
     "name": "Rusttooth",
@@ -511,7 +563,8 @@
     "role": "champion",
     "cost": 4,
     "speed": 2,
-    "cooldown": 1.8
+    "cooldown": 1.8,
+    "features": ["melee", "tank", "armored"]
   },
   {
     "name": "Sir Kaelen Lightbane",
@@ -521,7 +574,10 @@
     "class": "melee",
     "role": "champion",
     "cost": 4,
-    "speed": 2
+    "speed": 2,
+    "heal": 270,
+    "hps": 90,
+    "features": ["melee", "armored", "healer"]
   },
   {
     "name": "Whelp Eggs",
@@ -552,7 +608,8 @@
     "cost": 3,
     "speed": 2,
     "range": 200,
-    "particle": "projectile"
+    "particle": "projectile",
+    "features": ["ranged"]
   },
   {
     "name": "Nightfang",
@@ -562,7 +619,8 @@
     "class": "melee",
     "role": "mini",
     "cost": 2,
-    "speed": 4
+    "speed": 4,
+    "features": ["melee", "fast"]
   },
   {
     "name": "Crimson Raider",
@@ -572,6 +630,7 @@
     "class": "melee",
     "role": "mini",
     "cost": 3,
-    "speed": 4
+    "speed": 4,
+    "features": ["melee", "fast"]
   }
 ]

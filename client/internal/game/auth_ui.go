@@ -316,7 +316,7 @@ func (a *AuthUI) Draw(screen *ebiten.Image) {
 	}
 	titleCol := color.NRGBA{220, 230, 255, 255}
 	text.Draw(screen, protocol.GameName, a.titleFace, a.cardX+24, a.cardY+40, titleCol)
-	text.Draw(screen, "— "+title+" —", a.uiFace, a.cardX+24, a.cardY+66, color.NRGBA{160, 190, 255, 200})
+	text.Draw(screen, "— "+title+" —", fonts.UI(12), a.cardX+24, a.cardY+66, color.NRGBA{160, 190, 255, 200})
 
 	// Segmented (Login | Register) — rounded pill
 	segW := 240
@@ -337,8 +337,8 @@ func (a *AuthUI) Draw(screen *ebiten.Image) {
 	}
 	// labels
 	txtY := segY + 26
-	text.Draw(screen, "Login", a.uiFace, segX+20, txtY, color.White)
-	text.Draw(screen, "Register", a.uiFace, segX+segW/2+20, txtY, color.White)
+	text.Draw(screen, "Login", fonts.UI(12), segX+20, txtY, color.White)
+	text.Draw(screen, "Register", fonts.UI(12), segX+segW/2+20, txtY, color.White)
 
 	// Fields
 	left := a.cardX + 24
@@ -375,7 +375,7 @@ func (a *AuthUI) Draw(screen *ebiten.Image) {
 	if a.remember {
 		vector.DrawFilledRect(screen, float32(cbX+3), float32(cbY+3), float32(cbSize-6), float32(cbSize-6), color.NRGBA{240, 196, 25, 220}, false)
 	}
-	text.Draw(screen, "Remember me", a.uiFace, cbX+cbSize+10, cbY+cbSize-2, color.NRGBA{210, 210, 220, 255})
+	text.Draw(screen, "Remember me", fonts.UI(12), cbX+cbSize+10, cbY+cbSize-2, color.NRGBA{210, 210, 220, 255})
 	y += rememberH
 
 	// Submit button (gold, chunky)

@@ -1,78 +1,33 @@
 {
-  "id": "",
+  "playerId": 6561856,
   "name": "silvester",
-  "gold": 3343421653,
-  "accountXp": 0,
-  "shop": {
-    "roll": [
-      {
-        "slot": 0,
-        "unitId": "Magma Goliath",
-        "isChampion": false,
-        "priceGold": 90,
-        "sold": false
-      },
-      {
-        "slot": 1,
-        "unitId": "Nightfang",
-        "isChampion": false,
-        "priceGold": 90,
-        "sold": false
-      },
-      {
-        "slot": 2,
-        "unitId": "Lord of Flame",
-        "isChampion": true,
-        "priceGold": 120,
-        "sold": false
-      },
-      {
-        "slot": 3,
-        "unitId": "Kamikaze Aviator",
-        "isChampion": false,
-        "priceGold": 90,
-        "sold": false
-      },
-      {
-        "slot": 4,
-        "unitId": "Earth and Moon",
-        "isChampion": false,
-        "priceGold": 90,
-        "sold": false
-      },
-      {
-        "slot": 5,
-        "unitId": "Magma Goliath",
-        "isChampion": false,
-        "priceGold": 90,
-        "sold": false
-      },
-      {
-        "slot": 6,
-        "unitId": "Spirit Binder",
-        "isChampion": false,
-        "priceGold": 90,
-        "sold": false
-      },
-      {
-        "slot": 7,
-        "unitId": "Aethelion Ragestorm",
-        "isChampion": true,
-        "priceGold": 120,
-        "sold": false
-      },
-      {
-        "slot": 8,
-        "unitId": "Voodoo Hexer",
-        "isChampion": false,
-        "priceGold": 90,
-        "sold": false
-      }
-    ],
-    "lastReroll": 1757492729,
-    "sold": {},
-    "nonceSeen": {},
-    "version": 1
+  "army": [
+    "Sorceress Glacia",
+    "Flesh Golem",
+    "Magma Beasts",
+    "Firedrake",
+    "Jungle Headhunter",
+    "Blizzard",
+    "Rampager"
+  ],
+  "armies": {
+    "Sorceress Glacia": [
+      "Flesh Golem",
+      "Magma Beasts",
+      "Firedrake",
+      "Jungle Headhunter",
+      "Blizzard",
+      "Rampager"
+    ]
   },
-  "progress": {}
+  "gold": 3343420963,
+  "accountXp": 0,
+  "unitXp": {
+    "Blizzard": 1,
+    "Rampager": 1,
+    "Sorceress Glacia": 1
+  },
+  "pvp_rating": 1200,
+  "pvp_rank": "Knight",
+  "avatar": "default.png"
 }

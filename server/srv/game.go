@@ -2365,6 +2365,7 @@ func LoadLobbyMinis() []protocol.MiniInfo {
 			Hps:         m.Hps,
 			Speed:       int(math.Round(m.Speed)),
 			AttackSpeed: m.AttackSpeed,
+			Features:    m.Features,
 		})
 	}
 	return out

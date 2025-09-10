@@ -21,7 +21,7 @@ import (
 	"golang.org/x/image/font/basicfont"
 )
 
-//go:embed assets/ui/* assets/ui/avatars/* assets/minis/* assets/maps/* assets/obstacles/*
+//go:embed assets/ui/* assets/ui/avatars/* assets/ui/icons/* assets/minis/* assets/maps/* assets/obstacles/*
 var assetsFS embed.FS
 
 var ornate *ui.OrnateBar
@@ -32,6 +32,7 @@ type Assets struct {
 	btn9Hover *ebiten.Image
 	minis     map[string]*ebiten.Image
 	obstacles map[string]*ebiten.Image
+	iconMap   map[string]*ebiten.Image
 	bg        map[string]*ebiten.Image
 	baseMe    *ebiten.Image
 	baseEnemy *ebiten.Image
@@ -102,6 +103,9 @@ func (a *Assets) ensureInit() {
 	if a.obstacles == nil {
 		a.obstacles = make(map[string]*ebiten.Image)
 	}
+	if a.iconMap == nil {
+		a.iconMap = make(map[string]*ebiten.Image)
+	}
 	if a.bg == nil {
 		a.bg = make(map[string]*ebiten.Image)
 	}
@@ -142,6 +146,19 @@ func (g *Game) ensureMiniImageByName(name string) *ebiten.Image {
 	}
 	img := loadImage("assets/minis/" + key)
 	g.assets.minis[key] = img
+	return img
+}
+
+func (g *Game) ensureIconImage(featureName string) *ebiten.Image {
+	if g.assets.iconMap == nil {
+		g.assets.iconMap = make(map[string]*ebiten.Image)
+	}
+	key := strings.ToLower(featureName) + ".png"
+	if img, ok := g.assets.iconMap[key]; ok {
+		return img
+	}
+	img := loadImage("assets/ui/icons/" + key)
+	g.assets.iconMap[key] = img
 	return img
 }
 

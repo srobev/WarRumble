@@ -20,6 +20,132 @@ import (
 	"golang.org/x/image/font/basicfont"
 )
 
+func getAbilityDescription(abilityName string) (name, description string) {
+	abilityName = strings.ToLower(strings.ReplaceAll(abilityName, "_", " "))
+
+	abilities := map[string]struct {
+		Name        string
+		Description string
+	}{
+		"ambush": {
+			Name:        "Ambush",
+			Description: "Double damage when attacking from Stealth.",
+		},
+		"aoe": {
+			Name:        "AoE",
+			Description: "Strong vs Squad units.",
+		},
+		"armored": {
+			Name:        "Armored",
+			Description: "50% Physical damage reduction.",
+		},
+		"attack_root": {
+			Name:        "Attack Root",
+			Description: "Attack roots enemies, immobilising them.",
+		},
+		"attack_stun": {
+			Name:        "Attack Stun",
+			Description: "Attack stuns enemies.",
+		},
+		"bombard": {
+			Name:        "Bombard",
+			Description: "Attacks ground enemies only.",
+		},
+		"charge": {
+			Name:        "Charge",
+			Description: "Charges to enemy targets.",
+		},
+		"cycle": {
+			Name:        "Cycle",
+			Description: "2 cost or less for more Unitplays!",
+		},
+		"detect": {
+			Name:        "Detect",
+			Description: "Detect and attack Sealthed enemies.",
+		},
+		"elemental": {
+			Name:        "Elemental",
+			Description: "Deals elemental damage. Strong vs Armored.",
+		},
+		"fast": {
+			Name:        "Fast",
+			Description: "Fastest moving units.",
+		},
+		"flying": {
+			Name:        "Flying",
+			Description: "Strong vs Melee units.",
+		},
+		"frost": {
+			Name:        "Frost",
+			Description: "Frost damage slows enemy movement and attack speed.",
+		},
+		"healer": {
+			Name:        "Healer",
+			Description: "Heals friendly units.",
+		},
+		"melee": {
+			Name:        "Melee",
+			Description: "Strong vs Ranged units.",
+		},
+		"one_target": {
+			Name:        "One-Target",
+			Description: "Strong vs AoE units.",
+		},
+		"poisonous": {
+			Name:        "Poisonous",
+			Description: "Deals stacking damage over time. Strong vs Armored.",
+		},
+		"ranged": {
+			Name:        "Ranged",
+			Description: "Attacks enemies from a distance.",
+		},
+		"possession": {
+			Name:        "Possession",
+			Description: "Takes control of an enemy unit.",
+		},
+		"resistant": {
+			Name:        "Resistant",
+			Description: "Takes 50% less Elemental damage.",
+		},
+		"siege": {
+			Name:        "Siege Damage",
+			Description: "Double damage vs Towers, Bases, Bosses.",
+		},
+		"spell": {
+			Name:        "Spell",
+			Description: "Cast anywhere on the map.",
+		},
+		"squad": {
+			Name:        "Squad",
+			Description: "Strong vs One-Target units.",
+		},
+		"stealth": {
+			Name:        "Stealth",
+			Description: "Invisible to enemies until it attacks or is damaged.",
+		},
+		"summoner": {
+			Name:        "Summoner",
+			Description: "Summons additional units.",
+		},
+		"tank": {
+			Name:        "Tank",
+			Description: "High health unit. Good at soaking Tower, Base, Boss damage.",
+		},
+		"unbound": {
+			Name:        "Unbound",
+			Description: "Can be played anywhere on the map.",
+		},
+	}
+
+	if ability, exists := abilities[abilityName]; exists {
+		return ability.Name, ability.Description
+	}
+
+	// Fallback for unknown abilities
+	displayName := strings.Title(abilityName)
+	return displayName, fmt.Sprintf("%s ability", displayName)
+}
+
 // ---------- Home (Army / Map tabs) ----------
 
 func (g *Game) drawHomeContent(screen *ebiten.Image) {
@@ -516,8 +642,8 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 						}
 
 						tooltipText := fmt.Sprintf("Level %d", lvl)
-						tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
-						th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
+						tw := text.BoundString(fonts.UI(12), tooltipText).Dx()
+						th := text.BoundString(fonts.UI(12), tooltipText).Dy()
 
 						// Position tooltip above the level badge
 						tooltipX := mx - tw/2
@@ -538,17 +664,17 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 						ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
 
 						// Draw tooltip text
-						text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.White)
+						text.Draw(screen, tooltipText, fonts.UI(12), tooltipX, tooltipY+th, color.White)
 					}
 
 					// Cost tooltip
 					costS := fmt.Sprintf("%d", it.Cost)
-					cw := text.BoundString(basicfont.Face7x13, costS).Dx()
+					cw := text.BoundString(fonts.UI(12), costS).Dx()
 					costRect := rect{x: r.x + r.w - cw - 8, y: r.y + 8, w: cw, h: 14}
 					if costRect.hit(mx, my) {
 						tooltipText := fmt.Sprintf("Deploy cost %d", it.Cost)
-						tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
-						th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
+						tw := text.BoundString(fonts.UI(12), tooltipText).Dx()
+						th := text.BoundString(fonts.UI(12), tooltipText).Dy()
 
 						// Position tooltip above the cost text
 						tooltipX := mx - tw/2
@@ -569,7 +695,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 						ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
 
 						// Draw tooltip text
-						text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.NRGBA{255, 215, 0, 255}) // Gold color for cost
+						text.Draw(screen, tooltipText, fonts.UI(11), tooltipX, tooltipY+th, color.NRGBA{255, 215, 0, 255}) // Gold color for cost
 					}
 				}
 				break
@@ -589,8 +715,8 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 			}
 
 			tooltipText := fmt.Sprintf("Level %d", lvl)
-			tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
-			th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
+			tw := text.BoundString(fonts.UI(12), tooltipText).Dx()
+			th := text.BoundString(fonts.UI(12), tooltipText).Dy()
 
 			// Position tooltip above the level badge
 			tooltipX := mx - tw/2
@@ -611,7 +737,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 			ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
 
 			// Draw tooltip text
-			text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.White)
+			text.Draw(screen, tooltipText, fonts.UI(11), tooltipX, tooltipY+th, color.White)
 		}
 
 		// Draw XP bar tooltips for selected champion
@@ -625,8 +751,8 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 			_, cur, next := computeLevel(xp)
 
 			tooltipText := fmt.Sprintf("%d/%d", cur, next)
-			tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
-			th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
+			tw := text.BoundString(fonts.UI(12), tooltipText).Dx()
+			th := text.BoundString(fonts.UI(12), tooltipText).Dy()
 
 			// Position tooltip above the XP bar
 			tooltipX := mx - tw/2
@@ -647,14 +773,14 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 			ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
 
 			// Draw tooltip text
-			text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.White)
+			text.Draw(screen, tooltipText, fonts.UI(12), tooltipX, tooltipY+th, color.White)
 		}
 
 		if g.hoveredSelectedChampionCost && g.selectedChampion != "" {
 			if info, ok := g.nameToMini[g.selectedChampion]; ok {
 				tooltipText := fmt.Sprintf("Deploy cost %d", info.Cost)
-				tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
-				th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
+				tw := text.BoundString(fonts.UI(12), tooltipText).Dx()
+				th := text.BoundString(fonts.UI(12), tooltipText).Dy()
 
 				// Position tooltip above the cost text
 				tooltipX := mx - tw/2
@@ -675,7 +801,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
 
 				// Draw tooltip text
-				text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.NRGBA{255, 215, 0, 255}) // Gold color for cost
+				text.Draw(screen, tooltipText, fonts.UI(12), tooltipX, tooltipY+th, color.NRGBA{255, 215, 0, 255}) // Gold color for cost
 			}
 		}
 
@@ -693,8 +819,8 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 			}
 
 			tooltipText := fmt.Sprintf("Level %d", lvl)
-			tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
-			th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
+			tw := text.BoundString(fonts.UI(12), tooltipText).Dx()
+			th := text.BoundString(fonts.UI(12), tooltipText).Dy()
 
 			// Position tooltip above the level badge
 			tooltipX := mx - tw/2
@@ -715,7 +841,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 			ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
 
 			// Draw tooltip text
-			text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.White)
+			text.Draw(screen, tooltipText, fonts.UI(12), tooltipX, tooltipY+th, color.White)
 		}
 
 		// Draw XP bar tooltips for equipped mini slots
@@ -730,8 +856,8 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 			_, cur, next := computeLevel(xp)
 
 			tooltipText := fmt.Sprintf("%d/%d", cur, next)
-			tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
-			th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
+			tw := text.BoundString(fonts.UI(12), tooltipText).Dx()
+			th := text.BoundString(fonts.UI(12), tooltipText).Dy()
 
 			// Position tooltip above the XP bar
 			tooltipX := mx - tw/2
@@ -752,15 +878,15 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 			ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
 
 			// Draw tooltip text
-			text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.White)
+			text.Draw(screen, tooltipText, fonts.UI(12), tooltipX, tooltipY+th, color.White)
 		}
 
 		if g.hoveredMiniSlotCost >= 0 && g.hoveredMiniSlotCost < len(g.selectedOrder) && g.selectedOrder[g.hoveredMiniSlotCost] != "" {
 			name := g.selectedOrder[g.hoveredMiniSlotCost]
 			if info, ok := g.nameToMini[name]; ok {
 				tooltipText := fmt.Sprintf("Deploy cost %d", info.Cost)
-				tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
-				th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
+				tw := text.BoundString(fonts.UI(12), tooltipText).Dx()
+				th := text.BoundString(fonts.UI(12), tooltipText).Dy()
 
 				// Position tooltip above the cost text
 				tooltipX := mx - tw/2
@@ -781,7 +907,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
 
 				// Draw tooltip text
-				text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.NRGBA{255, 215, 0, 255}) // Gold color for cost
+				text.Draw(screen, tooltipText, fonts.UI(12), tooltipX, tooltipY+th, color.NRGBA{255, 215, 0, 255}) // Gold color for cost
 			}
 		}
 
@@ -798,8 +924,8 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 			}
 
 			tooltipText := fmt.Sprintf("Level %d", lvl)
-			tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
-			th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
+			tw := text.BoundString(fonts.UI(12), tooltipText).Dx()
+			th := text.BoundString(fonts.UI(12), tooltipText).Dy()
 
 			// Position tooltip above the level badge
 			tooltipX := mx - tw/2
@@ -820,14 +946,14 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 			ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
 
 			// Draw tooltip text
-			text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.White)
+			text.Draw(screen, tooltipText, fonts.UI(12), tooltipX, tooltipY+th, color.White)
 		}
 
 		if g.hoveredOverlayCost && g.miniOverlayName != "" {
 			if info, ok := g.nameToMini[g.miniOverlayName]; ok {
 				tooltipText := fmt.Sprintf("Deploy cost %d", info.Cost)
-				tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
-				th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
+				tw := text.BoundString(fonts.UI(12), tooltipText).Dx()
+				th := text.BoundString(fonts.UI(12), tooltipText).Dy()
 
 				// Position tooltip above the cost text
 				tooltipX := mx - tw/2
@@ -848,7 +974,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
 
 				// Draw tooltip text
-				text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.NRGBA{255, 215, 0, 255}) // Gold color for cost
+				text.Draw(screen, tooltipText, fonts.UI(12), tooltipX, tooltipY+th, color.NRGBA{255, 215, 0, 255}) // Gold color for cost
 			}
 		}
 
@@ -864,8 +990,8 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 			_, cur, next := computeLevel(xp)
 
 			tooltipText := fmt.Sprintf("%d/%d", cur, next)
-			tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
-			th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
+			tw := text.BoundString(fonts.UI(12), tooltipText).Dx()
+			th := text.BoundString(fonts.UI(12), tooltipText).Dy()
 
 			// Position tooltip above the XP bar
 			tooltipX := mx - tw/2
@@ -886,11 +1012,89 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 			ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
 
 			// Draw tooltip text
-			text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.White)
+			text.Draw(screen, tooltipText, fonts.UI(12), tooltipX, tooltipY+th, color.White)
 		}
 
 		if g.armyMsg != "" {
-			text.Draw(screen, g.armyMsg, basicfont.Face7x13, pad, protocol.ScreenH-menuBarH-24, color.White)
+			text.Draw(screen, g.armyMsg, fonts.UI(12), pad, protocol.ScreenH-menuBarH-24, color.White)
+		}
+
+		// =========== STAR BAR TOOLTIPS (drawn after overlay for proper z-index) ===========
+		// Get mouse position for STAR bar tooltips
+		mx, my = ebiten.CursorPosition()
+
+		// Draw STAR progress bar tooltip if overlay is open
+		if g.miniOverlayOpen && g.miniOverlayName != "" {
+			// Calculate STAR bar position based on overlay dimensions
+			w, h := 580, 300
+			x := (protocol.ScreenW - w) / 2
+			const miniCardH = 116
+			const gap = 10
+			stripY := topBarH + pad
+			stripH := 116 + 8
+			topY := stripY + stripH + 12
+			slotsBottom := topY + 2*(miniCardH+gap) - gap
+			y := slotsBottom + 28
+			if y+h > protocol.ScreenH-12 {
+				y = (protocol.ScreenH - h) / 2
+			}
+
+			if _, ok := g.nameToMini[g.miniOverlayName]; ok {
+				sy := y + 50
+				startY := sy
+
+				// STAR (shards) progress bar position
+				starBarX := x + 160
+				starBarY := startY + 180
+				starBarW := w - 170 - 24
+				starBarH := 24
+
+				// Check if hovering over STAR bar
+				starBarHovered := mx >= starBarX && mx <= starBarX+starBarW && my >= starBarY && my <= starBarY+starBarH
+				if starBarHovered {
+					// Calculate proper dimensions for multi-line text
+					tooltipText := "Collect Shards to upgrade unit level\nand unlock perk slots"
+
+					lines := strings.Split(tooltipText, "\n")
+					maxWidth := 0
+					lineHeight := text.BoundString(fonts.UI(12), "Ay").Dy() // Get line height using a sample character
+
+					for _, line := range lines {
+						lineW := text.BoundString(fonts.UI(12), line).Dx()
+						if lineW > maxWidth {
+							maxWidth = lineW
+						}
+					}
+
+					tw := maxWidth
+					th := len(lines) * lineHeight
+
+					// Position tooltip above cursor
+					tooltipX := mx - tw/2
+					tooltipY := my - th - 12
+
+					// Keep tooltip on screen
+					if tooltipX < 4 {
+						tooltipX = 4
+					}
+					if tooltipX+tw+8 > protocol.ScreenW {
+						tooltipX = protocol.ScreenW - tw - 8
+					}
+					if tooltipY < 4 {
+						tooltipY = my + 16
+					}
+
+					// Draw tooltip background with proper padding
+					padding := 8
+					ebitenutil.DrawRect(screen, float64(tooltipX-padding), float64(tooltipY-padding), float64(tw+padding*2), float64(th+padding*2), color.NRGBA{30, 30, 45, 240})
+
+					// Draw tooltip text with proper line spacing
+					for i, line := range lines {
+						yOffset := tooltipY + (i * lineHeight) + lineHeight
+						text.Draw(screen, line, fonts.UI(12), tooltipX, yOffset, color.White)
+					}
+				}
+			}
 		}
 
 		// Right-click selected mini slots to open XP overlay handled in Update
@@ -917,7 +1121,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 			// close box (draw only; click handled in Update)
 			closeR := rect{x: x + w - 28, y: y + 8, w: 20, h: 20}
 			ebitenutil.DrawRect(screen, float64(closeR.x), float64(closeR.y), float64(closeR.w), float64(closeR.h), color.NRGBA{60, 60, 80, 255})
-			text.Draw(screen, "X", basicfont.Face7x13, closeR.x+6, closeR.y+14, color.White)
+			text.Draw(screen, "X", fonts.UI(12), closeR.x+6, closeR.y+14, color.White)
 			// portrait
 			if img := g.ensureMiniImageByName(g.miniOverlayName); img != nil {
 				iw, ih := img.Bounds().Dx(), img.Bounds().Dy()
@@ -947,7 +1151,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 					levelW := len(levelStr) * 7
 					vector.DrawFilledRect(screen, float32(px+0-4), float32(py+0-2), float32(levelW+8), 14, color.NRGBA{138, 43, 226, 200}, true)
 					vector.StrokeRect(screen, float32(px+0-4), float32(py+0-2), float32(levelW+8), 14, 1, color.NRGBA{100, 20, 150, 255}, true)
-					text.Draw(screen, levelStr, basicfont.Face7x13, px+0, py+0+10, color.NRGBA{255, 255, 255, 255})
+					text.Draw(screen, levelStr, fonts.UI(12), px+0, py+0+10, color.NRGBA{255, 255, 255, 255})
 				}
 			}
 			// Unit name as title
@@ -967,14 +1171,13 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 							sy = startY // Reset to first stat's Y position for right column
 						}
 					}
-					text.Draw(screen, label+": "+val, basicfont.Face7x13, colX, sy, color.NRGBA{220, 220, 230, 255})
+					text.Draw(screen, label+": "+val, fonts.UI(12), colX, sy, color.NRGBA{220, 220, 230, 255})
 					if !isRightColumn {
 						statCount++
 					}
 					sy += 16
 				}
-				// Class / Cost first
-				stat("Class", strings.Title(info.Class), false)
+				// Cost first (Class removed since we have abilities)
 				stat("Cost", fmt.Sprintf("%d", info.Cost), false)
 
 				// STAR (shards) progress bar - positioned below stats
@@ -983,9 +1186,14 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				starBarW = w - 170 - 24
 				starBarH = 24
 
-				// STAR title above progress bar
-				text.Draw(screen, "⭐ STAR Progress", basicfont.Face7x13, starBarX, starBarY-8, color.NRGBA{255, 215, 0, 255}) // Gold color
-
+				// STAR title centered above progress bar
+				starTitleText := "⭐ STAR Progress"
+				if starBarTextWidth := text.BoundString(fonts.UI(12), starTitleText).Dx(); starBarTextWidth > 0 {
+					titleOffsetX := (starBarW - starBarTextWidth) / 2
+					fonts.DrawUIWithFallback(screen, starTitleText, starBarX+titleOffsetX, starBarY-8, 12, color.NRGBA{255, 215, 0, 255})
+				} else {
+					fonts.DrawUIWithFallback(screen, starTitleText, starBarX, starBarY-8, 12, color.NRGBA{255, 215, 0, 255})
+				}
 				// Get unit progression data
 				// Get rarity threshold based on unit
 				threshold := 3 // default (Common)
@@ -1036,16 +1244,62 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 
 				// Star progress text centered over bar (X/Y format)
 				starProgressText := fmt.Sprintf("%d / %d", currentShards, threshold)
-				var tw int = text.BoundString(basicfont.Face7x13, starProgressText).Dx()
+				var tw int = text.BoundString(fonts.UI(12), starProgressText).Dx()
 				var tx int = starBarX + (starBarW-tw)/2
 				var ty int = starBarY + starBarH/2 + 6
 
 				// Shadow effect for better visibility
-				text.Draw(screen, starProgressText, basicfont.Face7x13, tx+1, ty, color.NRGBA{0, 0, 0, 200})
-				text.Draw(screen, starProgressText, basicfont.Face7x13, tx-1, ty, color.NRGBA{0, 0, 0, 200})
-				text.Draw(screen, starProgressText, basicfont.Face7x13, tx, ty+1, color.NRGBA{0, 0, 0, 200})
-				text.Draw(screen, starProgressText, basicfont.Face7x13, tx, ty-1, color.NRGBA{0, 0, 0, 200})
-				text.Draw(screen, starProgressText, basicfont.Face7x13, tx, ty, color.White)
+				text.Draw(screen, starProgressText, fonts.UI(12), tx+1, ty, color.NRGBA{0, 0, 0, 200})
+				text.Draw(screen, starProgressText, fonts.UI(12), tx-1, ty, color.NRGBA{0, 0, 0, 200})
+				text.Draw(screen, starProgressText, fonts.UI(12), tx, ty+1, color.NRGBA{0, 0, 0, 200})
+				text.Draw(screen, starProgressText, fonts.UI(12), tx, ty-1, color.NRGBA{0, 0, 0, 200})
+				text.Draw(screen, starProgressText, fonts.UI(12), tx, ty, color.White)
+
+				// STAR progress bar hover tooltip
+				starBarHovered := mx >= starBarX && mx <= starBarX+starBarW && my >= starBarY && my <= starBarY+starBarH
+				if starBarHovered {
+					tooltipText := "Collect Shards to upgrade unit level\nand unlock perk slots"
+
+					// Calculate proper dimensions for multi-line text
+					lines := strings.Split(tooltipText, "\n")
+					maxWidth := 0
+					lineHeight := text.BoundString(fonts.UI(12), "Ay").Dy() // Get line height using a sample character
+
+					for _, line := range lines {
+						lineW := text.BoundString(fonts.UI(12), line).Dx()
+						if lineW > maxWidth {
+							maxWidth = lineW
+						}
+					}
+
+					tw := maxWidth
+					th := len(lines) * lineHeight
+
+					// Position tooltip above cursor
+					tooltipX := mx - tw/2
+					tooltipY := my - th - 12
+
+					// Keep tooltip on screen
+					if tooltipX < 4 {
+						tooltipX = 4
+					}
+					if tooltipX+tw+8 > protocol.ScreenW {
+						tooltipX = protocol.ScreenW - tw - 8
+					}
+					if tooltipY < 4 {
+						tooltipY = my + 16
+					}
+
+					// Draw tooltip background with proper padding
+					padding := 8
+					ebitenutil.DrawRect(screen, float64(tooltipX-padding), float64(tooltipY-padding), float64(tw+padding*2), float64(th+padding*2), color.NRGBA{30, 30, 45, 240})
+
+					// Draw tooltip text with proper line spacing
+					for i, line := range lines {
+						yOffset := tooltipY + (i * lineHeight) + lineHeight
+						text.Draw(screen, line, fonts.UI(12), tooltipX, yOffset, color.White)
+					}
+				}
 
 				// Damage / Health
 				// Scale by level: 10% per level above 1
@@ -1089,6 +1343,109 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 					}
 					stat("Speed", sv, statCount >= 7)
 				}
+
+				// Draw "Abilities:" label and feature icons at bottom row, one row centered
+				if len(info.Features) > 0 {
+					// Icon dimensions and spacing
+					iconSize := 29 // 20% bigger than 24px
+					iconSpacing := 7
+
+					// Calculate position below STAR progress bar and tooltips
+					abilitiesText := "Abilities:"
+					textY := startY + 220
+
+					// Calculate total width of all icons with spacing for centering
+					numFeatures := len(info.Features)
+					if numFeatures > 8 {
+						numFeatures = 8 // Limit to 8 for centering purposes
+					}
+					totalWidth := (iconSize + iconSpacing) * numFeatures
+					if totalWidth > 0 {
+						totalWidth -= iconSpacing // Remove extra spacing
+					}
+
+					// Calculate centered starting position
+					centerX := x + w/2
+					startX := centerX - totalWidth/2
+
+					// Position text to be left of icons
+					textX := startX - 8 - text.BoundString(fonts.UI(12), abilitiesText).Dx()
+
+					// Draw "Abilities:" text
+					text.Draw(screen, abilitiesText, fonts.UI(12), textX, textY+12, color.NRGBA{220, 220, 230, 255})
+
+					// Draw icons in horizontal row, limiting to 8 max for space
+					iconY := textY - 8 // Align with text baseline
+					for i := 0; i < len(info.Features) && i < 8; i++ {
+						iconX := startX + i*(iconSize+iconSpacing)
+						feature := info.Features[i]
+
+						// Draw icon background (optional dark border)
+						ebitenutil.DrawRect(screen,
+							float64(iconX-1), float64(iconY-1),
+							float64(iconSize+2), float64(iconSize+2),
+							color.NRGBA{40, 40, 45, 255})
+
+						// Draw icon if image exists
+						if img := g.ensureIconImage(feature); img != nil {
+							// Scale and draw the icon
+							iconOpts := &ebiten.DrawImageOptions{}
+							iconOpts.GeoM.Scale(float64(iconSize)/float64(img.Bounds().Dx()),
+								float64(iconSize)/float64(img.Bounds().Dy()))
+							iconOpts.GeoM.Translate(float64(iconX), float64(iconY))
+							screen.DrawImage(img, iconOpts)
+						}
+
+						// Add hover detection for tooltip
+						iconRect := rect{x: iconX, y: iconY, w: iconSize, h: iconSize}
+						if mx, my := ebiten.CursorPosition(); iconRect.hit(mx, my) && g.miniOverlayOpen {
+							// Get detailed ability information
+							abilityName, abilityDesc := getAbilityDescription(feature)
+
+							// Calculate tooltip dimensions for multi-line text
+							nameWidth := text.BoundString(fonts.UI(12), abilityName).Dx()
+							descWidth := text.BoundString(fonts.UI(10), abilityDesc).Dx()
+							maxWidth := nameWidth
+							if descWidth > maxWidth {
+								maxWidth = descWidth
+							}
+
+							nameHeight := text.BoundString(fonts.UI(12), abilityName).Dy()
+							descHeight := text.BoundString(fonts.UI(10), abilityDesc).Dy()
+							totalHeight := nameHeight + 4 + descHeight
+
+							// Position tooltip centered above the icon
+							iconCenterX := iconX + iconSize/2
+							tooltipX := iconCenterX - maxWidth/2
+							tooltipY := iconY - totalHeight - 16
+
+							// Keep tooltip on screen
+							if tooltipX < 4 {
+								tooltipX = 4
+							}
+							if tooltipX+maxWidth+8 > protocol.ScreenW {
+								tooltipX = protocol.ScreenW - maxWidth - 8
+							}
+							if tooltipY < 4 {
+								// If tooltip would go off top screen, show it below the icon
+								tooltipY = iconY + iconSize + 8
+							}
+
+							// Draw tooltip background
+							ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4),
+								float64(maxWidth+8), float64(totalHeight+8), color.NRGBA{30, 30, 45, 240})
+
+							// Draw ability name in gold/bold color
+							text.Draw(screen, abilityName, fonts.UI(12),
+								tooltipX, tooltipY+nameHeight, color.NRGBA{255, 215, 0, 255})
+
+							// Draw description below name
+							text.Draw(screen, abilityDesc, fonts.UI(10),
+								tooltipX, tooltipY+nameHeight+4+descHeight, color.White)
+						}
+					}
+				}
+
 				// After stats, place XP bar
 				// Position XP bar below the stats area, not after the last stat
 				barX, barY := x+160, startY+120
@@ -1124,14 +1481,14 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				} else {
 					s = "max"
 				}
-				tw = text.BoundString(basicfont.Face7x13, s).Dx()
+				tw = text.BoundString(fonts.UI(12), s).Dx()
 				tx = barX + (barW-tw)/2
 				ty = barY + barH/2 + 6
-				text.Draw(screen, s, basicfont.Face7x13, tx+1, ty, color.NRGBA{0, 0, 0, 200})
-				text.Draw(screen, s, basicfont.Face7x13, tx-1, ty, color.NRGBA{0, 0, 0, 200})
-				text.Draw(screen, s, basicfont.Face7x13, tx, ty+1, color.NRGBA{0, 0, 0, 200})
-				text.Draw(screen, s, basicfont.Face7x13, tx, ty-1, color.NRGBA{0, 0, 0, 200})
-				text.Draw(screen, s, basicfont.Face7x13, tx, ty, color.White)
+				text.Draw(screen, s, fonts.UI(12), tx+1, ty, color.NRGBA{0, 0, 0, 200})
+				text.Draw(screen, s, fonts.UI(12), tx-1, ty, color.NRGBA{0, 0, 0, 200})
+				text.Draw(screen, s, fonts.UI(12), tx, ty+1, color.NRGBA{0, 0, 0, 200})
+				text.Draw(screen, s, fonts.UI(12), tx, ty-1, color.NRGBA{0, 0, 0, 200})
+				text.Draw(screen, s, fonts.UI(12), tx, ty, color.White)
 
 				// XP bar hover tooltip
 				if g.xpBarHovered {
@@ -1150,8 +1507,8 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 					tooltipText := fmt.Sprintf("XP to level %d: %d", nextLevel, xpRequired)
 
 					// Measure text for tooltip box
-					tw := text.BoundString(basicfont.Face7x13, tooltipText).Dx()
-					th := text.BoundString(basicfont.Face7x13, tooltipText).Dy()
+					tw := text.BoundString(fonts.UI(12), tooltipText).Dx()
+					th := text.BoundString(fonts.UI(12), tooltipText).Dy()
 
 					// Position tooltip above cursor with some offset
 					tooltipX := mx - tw/2
@@ -1172,7 +1529,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 					ebitenutil.DrawRect(screen, float64(tooltipX-4), float64(tooltipY-4), float64(tw+8), float64(th+8), color.NRGBA{30, 30, 45, 240})
 
 					// Draw tooltip text
-					text.Draw(screen, tooltipText, basicfont.Face7x13, tooltipX, tooltipY+th, color.White)
+					text.Draw(screen, tooltipText, fonts.UI(12), tooltipX, tooltipY+th, color.White)
 				}
 			}
 
@@ -1180,7 +1537,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 			btn := func(rx, ry int, label string) rect {
 				r := rect{x: rx, y: ry, w: 110, h: 26}
 				ebitenutil.DrawRect(screen, float64(r.x), float64(r.y), float64(r.w), float64(r.h), color.NRGBA{70, 110, 70, 255})
-				text.Draw(screen, label, basicfont.Face7x13, r.x+10, r.y+18, color.White)
+				text.Draw(screen, label, fonts.UI(12), r.x+10, r.y+18, color.White)
 				return r
 			}
 			if g.miniOverlayFrom == "collection" {
@@ -1271,7 +1628,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 		g.drawParticlesWithoutCamera(screen, 0, 0, protocol.ScreenW, protocol.ScreenH)
 
 		text.Draw(screen, "Map — click a location, then press Start",
-			basicfont.Face7x13, pad, topBarH-6, color.White)
+			fonts.UI(12), pad, topBarH-6, color.White)
 
 		g.ensureMapHotspots()
 		hsList := g.mapHotspots[disp]
@@ -1614,14 +1971,14 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 
 		// Title
 		y := contentY + 20
-		text.Draw(screen, "⚙️ Settings", basicfont.Face7x13, pad+8, y, color.NRGBA{240, 196, 25, 255})
+		text.Draw(screen, "⚙️ Settings", fonts.FallbackFace(12), pad+8, y, color.NRGBA{240, 196, 25, 255})
 
 		// Display Settings Section
 		y += 40
-		text.Draw(screen, "Display Settings", basicfont.Face7x13, pad+8, y, color.NRGBA{200, 200, 210, 255})
+		text.Draw(screen, "Display Settings", fonts.UI(12), pad+8, y, color.NRGBA{200, 200, 210, 255})
 
 		y += 25
-		text.Draw(screen, "Fullscreen:", basicfont.Face7x13, pad+16, y, color.White)
+		text.Draw(screen, "Fullscreen:", fonts.UI(12), pad+16, y, color.White)
 
 		g.fsOnBtn = rect{x: pad + 140, y: y - 14, w: 80, h: 20}
 		g.fsOffBtn = rect{x: g.fsOnBtn.x + 90, y: y - 14, w: 80, h: 20}
@@ -1640,10 +1997,10 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 
 		// Game Settings Section
 		y += 50
-		text.Draw(screen, "Game Settings", basicfont.Face7x13, pad+8, y, color.NRGBA{200, 200, 210, 255})
+		text.Draw(screen, "Game Settings", fonts.UI(12), pad+8, y, color.NRGBA{200, 200, 210, 255})
 
 		y += 25
-		text.Draw(screen, "Auto-save Army:", basicfont.Face7x13, pad+16, y, color.White)
+		text.Draw(screen, "Auto-save Army:", fonts.UI(12), pad+16, y, color.White)
 
 		// Auto-save toggle (for now, just show current state)
 		autoSaveStatus := "Enabled"
@@ -1654,14 +2011,14 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 
 		// Account Settings Section
 		y += 50
-		text.Draw(screen, "Account Settings", basicfont.Face7x13, pad+8, y, color.NRGBA{200, 200, 210, 255})
+		text.Draw(screen, "Account Settings", fonts.UI(12), pad+8, y, color.NRGBA{200, 200, 210, 255})
 
 		y += 25
-		text.Draw(screen, "Player:", basicfont.Face7x13, pad+16, y, color.White)
+		text.Draw(screen, "Player:", fonts.UI(12), pad+16, y, color.White)
 		text.Draw(screen, g.name, basicfont.Face7x13, pad+140, y, color.NRGBA{240, 196, 25, 255})
 
 		y += 20
-		text.Draw(screen, "Gold:", basicfont.Face7x13, pad+16, y, color.White)
+		text.Draw(screen, "Gold:", fonts.UI(12), pad+16, y, color.White)
 		goldStr := fmt.Sprintf("%d", g.accountGold)
 		text.Draw(screen, goldStr, basicfont.Face7x13, pad+140, y, color.NRGBA{255, 215, 0, 255})
 
@@ -1669,11 +2026,11 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 		y += 30
 		g.logoutBtn = rect{x: pad + 16, y: y - 6, w: 100, h: 24}
 		ebitenutil.DrawRect(screen, float64(g.logoutBtn.x), float64(g.logoutBtn.y), float64(g.logoutBtn.w), float64(g.logoutBtn.h), color.NRGBA{110, 70, 70, 255})
-		text.Draw(screen, "Logout", basicfont.Face7x13, g.logoutBtn.x+20, g.logoutBtn.y+16, color.White)
+		text.Draw(screen, "Logout", fonts.UI(12), g.logoutBtn.x+20, g.logoutBtn.y+16, color.White)
 
 		// Controls Section
 		y += 50
-		text.Draw(screen, "Controls", basicfont.Face7x13, pad+8, y, color.NRGBA{200, 200, 210, 255})
+		text.Draw(screen, "Controls", fonts.UI(12), pad+8, y, color.NRGBA{200, 200, 210, 255})
 
 		y += 18
 		text.Draw(screen, "Alt+F - Toggle Fullscreen", basicfont.Face7x13, pad+16, y, color.NRGBA{180, 180, 190, 255})
@@ -1684,7 +2041,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 
 		// Version/Info
 		y = protocol.ScreenH - menuBarH - 40
-		text.Draw(screen, protocol.GameName+" v"+protocol.GameVersion, basicfont.Face7x13, pad+8, y, color.NRGBA{150, 150, 160, 255})
+		text.Draw(screen, protocol.GameName+" v"+protocol.GameVersion, fonts.UI(12), pad+8, y, color.NRGBA{150, 150, 160, 255})
 		text.Draw(screen, "by S. Robev", basicfont.Face7x13, pad+8, y+16, color.NRGBA{120, 120, 130, 255})
 	}
 }

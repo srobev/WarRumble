@@ -33,6 +33,8 @@ type Account struct {
 	AccountXP int                            `json:"accountXp"`
 	Shop      ShopState                      `json:"shop"`
 	Progress  map[string]*types.UnitProgress `json:"progress"` // unitID -> progress
+	Army      []string                       `json:"army"`     // active army [champ, 6 minis]
+	Armies    map[string][]string            `json:"armies"`   // saved armies
 }
 
 // accountLocks protects per-account operations with sync.Mutex
@@ -94,6 +96,8 @@ func LoadAccount(username string) (*Account, error) {
 				Version:    1,
 			},
 			Progress: make(map[string]*types.UnitProgress),
+			Army:     nil,
+			Armies:   make(map[string][]string),
 		}, nil
 	} else if err != nil {
 		return nil, fmt.Errorf("failed to read account file: %w", err)
@@ -116,6 +120,8 @@ func LoadAccount(username string) (*Account, error) {
 				Version:    1,
 			},
 			Progress: make(map[string]*types.UnitProgress),
+			Army:     nil,
+			Armies:   make(map[string][]string),
 		}, nil
 	}
 
@@ -128,6 +134,9 @@ func LoadAccount(username string) (*Account, error) {
 	}
 	if account.Progress == nil {
 		account.Progress = make(map[string]*types.UnitProgress)
+	}
+	if account.Armies == nil {
+		account.Armies = make(map[string][]string)
 	}
 
 	// Give starting gold if account has 0 (new accounts)
