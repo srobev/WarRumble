@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"rumble/client/internal/game/assets/fonts"
 	"rumble/shared/protocol"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -189,9 +190,9 @@ type AuthUI struct {
 }
 
 func NewAuthUI(apiBase string, onSuccess func(username string)) *AuthUI {
-	titleFace := loadTTF("internal/game/assets/ui/fonts/medieval.ttf", 28) // swap to your preferred fantasy font
-	uiFace := loadTTF("internal/game/assets/ui/fonts/medieval.ttf", 18)
-	inpFace := loadTTF("internal/game/assets/ui/fonts/medieval.ttf", 18)
+	titleFace := fonts.Face(18) // custom font for title - reduced more
+	uiFace := fonts.Face(12)    // custom font for UI elements - reduced a bit more
+	inpFace := fonts.Face(12)   // same size as UI for input fields
 
 	a := &AuthUI{
 		mode:      AuthLogin,

@@ -11,9 +11,9 @@ import (
 	"golang.org/x/image/font/opentype"
 )
 
-// Embed all TTF/OTF files in this folder.
+// Embed all TTF files in this folder.
 //
-//go:embed *.ttf *.otf
+//go:embed *.ttf
 var files embed.FS
 
 // CHANGE this to the exact filename you added (e.g., "Cinzel-Black.ttf").
