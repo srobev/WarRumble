@@ -3,10 +3,10 @@
 This project is WarRumble, a multiplayer game built in Go.
 
 ## Overview
-- **Language**: Go 1.24.6
-- **Modules**: client, server, shared, cmd/mapeditor, cmd/splitgame
-- **Platform**: Cross-platform (desktop via Ebiten, Android support)
-- **Genre**: Multiplayer strategy game with battles, guilds, and miniatures
+- **Language**: Go 1.25.0
+- **Modules**: client, server, shared, cmd/mapeditor, cmd/splitgame, web-mapeditor, benchmarks
+- **Platform**: Cross-platform (desktop via Ebiten, Android support, web-based map editor)
+- **Genre**: Multiplayer strategy game with battles, guilds, miniatures, and advanced progression systems
 
 ## Structure
 - `client/`: Contains the game client code, including UI, game logic, assets.
@@ -40,22 +40,22 @@ This project is WarRumble, a multiplayer game built in Go.
 - **Profiles and Progression**: XP, levels, ratings (`profile.go`, `mini_xp.go`)
 
 ## Development Setup
-- **Go Version**: 1.24.6
+- **Go Version**: 1.25.0
 - **Dependencies**: Ebiten for client graphics, standard library for networking
 - **Build**: Use `go build` in respective modules
 - **Run Client**: `go run client/main_desktop.go` or build APK for Android
-- **Run Server**: Implement server startup (likely in `server/srv/`)
-- **Tools**: Map editor in `cmd/mapeditor/`, splitgame in `cmd/splitgame/`
+- **Run Server**: `go run server/main.go`
+- **Tools**: Map editor in `cmd/mapeditor/`, splitgame in `cmd/splitgame/`, web map editor in `web-mapeditor/`
 
 ## TODOs
-- [ ] Implement server startup and connection handling
-- [ ] Complete battle mechanics and unit interactions
-- [ ] Add more maps and arenas
-- [ ] Enhance UI for mobile responsiveness
-- [ ] Implement matchmaking for PVP
+- [ ] Complete server startup and connection handling reliability
+- [ ] Finish battle resolution and unit interactions (core combat mechanics)
+- [ ] Implement matchmaking system for PVP
 - [ ] Add sound effects and music
-- [ ] Optimize performance for large battles
-- [ ] Add tutorial system
+- [ ] Optimize performance for large battles and mobile devices
+- [ ] Add tutorial system and player onboarding
+- [ ] Test and polish perks/abilities UI integration
+- [ ] Implement tournament and leaderboard systems
 
 ## Decisions Log
 - **2023-XX-XX**: Chose Go for cross-platform compatibility and performance.

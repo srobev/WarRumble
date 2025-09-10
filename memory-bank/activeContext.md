@@ -2,25 +2,32 @@
 
 ## Current Work Focus
 
-### Primary Focus: Memory Bank Maintenance
-- **Status**: ✅ Completed - Updated with recent developments
-- **Goal**: Maintain comprehensive project documentation system
-- **Priority**: High - foundation for development continuity
+### Primary Focus: Perks System v1.3 Implementation
+- **Status**: ✅ Completed - Perks v1.3 with balance knobs implemented
+- **Location**: Server-side perks system with combat integration
+- **Goal**: Production-ready perks system with proper validation and metrics
+- **Priority**: High - Core gameplay enhancement completed
 
-### Secondary Focus: Economy Systems Implementation
-- **Status**: ✅ Completed - Gold currency and shards systems
-- **Goal**: Verify functionality and plan integration with other game systems
-- **Priority**: High - New major features ready for testing
+### Secondary Focus: Abilities System Implementation
+- **Status**: ✅ Completed - Complete abilities system with combat hooks
+- **Location**: `server/combat/perks.go`, balance configuration
+- **Goal**: Full integration of unit abilities with battle mechanics
+- **Priority**: High - Core combat system enhancement
+
+### Tertiary Focus: UI System Modernization
+- **Status**: 🔄 Ongoing - Font system migration and UI improvements
+- **Location**: `client/internal/game/assets/fonts/fonts.go`, UI components
+- **Goal**: Consistent theming and mobile-optimized interface
+- **Priority**: Medium - UX enhancements for current features
 
 ## Recent Changes
 
-### Memory Bank Setup (Today)
-- ✅ Created `projectbrief.md` - Core project requirements and goals
-- ✅ Created `productContext.md` - User experience and market positioning
-- ✅ Created `systemPatterns.md` - Architecture and design patterns
-- ✅ Created `techContext.md` - Technology stack and development setup
-- 🔄 Creating `activeContext.md` - Current work status and decisions
-- ⏳ Pending: `progress.md` - Implementation status and roadmap
+### Perks System Development (Recent Weeks)
+- ✅ **Perks v1.3 Implementation**: Complete system with balance knobs in `balance/v13.go`
+- ✅ **Validation Improvements**: Offer validation (offer_id), reroll rate limiting, pity timer
+- ✅ **Production Safety**: Hardening features including target-switch reset and comprehensive metrics
+- ✅ **Combat Integration**: Full perks system combat hooks and API integration
+- ✅ **Complete Abilities System**: Implementation of unit special abilities
 
 ### Codebase Analysis
 - 📖 Reviewed existing `project_context.md` - comprehensive overview available

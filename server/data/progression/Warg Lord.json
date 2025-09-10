@@ -1,8 +1,8 @@
 {
   "UnitID": "Warg Lord",
-  "Rarity": 2,
-  "Rank": 1,
-  "ShardsOwned": 1,
-  "PerksUnlocked": [],
-  "ActivePerk": null
+  "rarity": 3,
+  "rank": 1,
+  "shardsOwned": 6,
+  "perksUnlocked": [],
+  "activePerk": null
 }

@@ -3,10 +3,10 @@
 ## Current Status
 
 ### Overall Project Status
-- **Phase**: Active Development
-- **MVP Readiness**: ~60% complete
-- **Architecture**: Client-server model implemented
-- **Core Systems**: Partially implemented, needs completion
+- **Phase**: Active Development - Advanced Features Implementation
+- **MVP Readiness**: ~75% complete
+- **Architecture**: Client-server model implemented with advanced features
+- **Core Systems**: Major systems completed, including perks, abilities, economy
 
 ### Development Velocity
 - **Recent Activity**: High - Major codebase refactoring and modular split
@@ -48,6 +48,10 @@
 - **Map System**: Multiple battle arenas and world maps
 - **Profile System**: Player progression and XP tracking
 - **Basic Battle Framework**: Combat system foundation
+- **Perks System v1.3**: Complete perks with balance knobs, validation, and metrics
+- **Abilities System**: Full unit abilities implementation with combat integration
+- **Currency System**: Gold economy with server-side validation and auditing
+- **Progression System**: Shard-based unit advancement with rarity tiers
 
 ### ✅ Partially Working Features
 

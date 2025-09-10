@@ -1,95 +1,80 @@
 {
   "id": "",
   "name": "silvester",
-  "gold": 3343417633,
+  "gold": 3343415953,
   "accountXp": 0,
   "shop": {
     "roll": [
       {
         "slot": 0,
-        "unitId": "Warg Lord",
-        "isChampion": true,
-        "priceGold": 120,
+        "unitId": "Winged Screechers",
+        "isChampion": false,
+        "priceGold": 90,
         "sold": false
       },
       {
         "slot": 1,
-        "unitId": "Kamikaze Aviator",
+        "unitId": "Magma Beasts",
         "isChampion": false,
         "priceGold": 90,
         "sold": false
       },
       {
         "slot": 2,
-        "unitId": "Execute",
+        "unitId": "Earth and Moon",
         "isChampion": false,
         "priceGold": 90,
         "sold": false
       },
       {
         "slot": 3,
-        "unitId": "Grizzly Marksman",
+        "unitId": "Smoke Bomb",
         "isChampion": false,
         "priceGold": 90,
         "sold": false
       },
       {
         "slot": 4,
-        "unitId": "Blazebinder",
-        "isChampion": false,
-        "priceGold": 90,
+        "unitId": "Warg Lord",
+        "isChampion": true,
+        "priceGold": 120,
         "sold": false
       },
       {
         "slot": 5,
-        "unitId": "The Warden",
-        "isChampion": true,
-        "priceGold": 120,
+        "unitId": "Holy Nova",
+        "isChampion": false,
+        "priceGold": 90,
         "sold": false
       },
       {
         "slot": 6,
-        "unitId": "Bloodmage Thalor",
-        "isChampion": true,
-        "priceGold": 120,
+        "unitId": "Earth and Moon",
+        "isChampion": false,
+        "priceGold": 90,
         "sold": false
       },
       {
         "slot": 7,
-        "unitId": "Winged Screechers",
+        "unitId": "Razorboar",
         "isChampion": false,
         "priceGold": 90,
-        "sold": true
+        "sold": false
       },
       {
         "slot": 8,
-        "unitId": "Aethelion Ragestorm",
-        "isChampion": true,
-        "priceGold": 120,
+        "unitId": "Smoke Bomb",
+        "isChampion": false,
+        "priceGold": 90,
         "sold": false
       }
     ],
-    "lastReroll": 1757522728,
-    "sold": {
-      "7": true
-    },
-    "nonceSeen": {
-      "buy-7-1757522728129": true,
-      "buy-7-1757522734520": true,
-      "reroll-1757522728826": true
-    },
+    "lastReroll": 1757525937,
+    "sold": {},
+    "nonceSeen": {},
     "version": 1
   },
-  "progress": {
-    "Winged Screechers": {
-      "UnitID": "Winged Screechers",
-      "rarity": 0,
-      "rank": 2,
-      "shardsOwned": 0,
-      "perksUnlocked": [],
-      "activePerk": null
-    }
-  },
+  "progress": {},
   "army": [
     "Sorceress Glacia",
     "Flesh Golem",

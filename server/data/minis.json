@@ -167,10 +167,10 @@
     "features": ["ranged", "flying", "aoe"]
   },
   {
-    "name": "Execute",
+    "name": "Final Strike",
     "dmg": 340,
     "hp": 0,
-    "portrait": "execute.png",
+    "portrait": "final_strike.png",
     "class": "spell",
     "role": "mini",
     "cost": 3,
@@ -426,10 +426,10 @@
     "features": ["ranged", "summoner"]
   },
   {
-    "name": "Polymorph",
+    "name": "Hex",
     "dmg": 0,
     "hp": 0,
-    "portrait": "polymorph.png",
+    "portrait": "hex.png",
     "class": "spell",
     "role": "mini",
     "cost": 2,
@@ -438,7 +438,7 @@
     "target_type": "single",
     "duration": 5,
     "instant_cast": true,
-    "spell_effect": "polymorph",
+    "spell_effect": "hex",
     "features": ["spell", "aoe"]
   },
   {
