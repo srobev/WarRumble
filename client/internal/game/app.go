@@ -12,6 +12,8 @@ import (
 	"strings"
 	"time"
 
+	uipkg "rumble/client/internal/game/ui"
+
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
@@ -863,6 +865,32 @@ func (g *Game) Draw(screen *ebiten.Image) {
 					Bases: make(map[int64]protocol.BaseState),
 				}
 			}
+		}
+
+		// Add panel rendering here (after base scene)
+		shopRect := image.Rect(int(float64(protocol.ScreenW)*0.62), 80, protocol.ScreenW-40, protocol.ScreenH-40)
+		unitRect := image.Rect(40, 80, int(float64(protocol.ScreenW)*0.58), protocol.ScreenH-40)
+
+		if g.ShowShopPanel {
+			rs := &uipkg.ShopRenderState{
+				Fetching:    g.Shop.Fetching,
+				Err:         g.Shop.Err,
+				Offers:      g.Shop.Grid.Offers,
+				Toast:       g.Shop.Toast,
+				ToastUntil:  g.Shop.ToastUntil,
+				CooldownSec: int(math.Max(0, g.Shop.NextReroll.Sub(time.Time{}))),
+			}
+			uipkg.DrawShopPanel(screen, shopRect, rs)
+		}
+
+		if g.ShowUnitPanel {
+			ur := &uipkg.UnitRenderState{
+				Unit:     g.UnitPanel.Unit,
+				Perks:    g.UnitPanel.Perks,
+				Fetching: g.UnitPanel.Fetching,
+				Err:      g.UnitPanel.Err,
+			}
+			uipkg.DrawUnitPanel(screen, unitRect, ur)
 		}
 
 	}

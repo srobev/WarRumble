@@ -131,7 +131,7 @@ func (p *PerksPanel) Draw(screen *ebiten.Image) {
 	for i, perk := range p.availablePerks {
 		perkText := perk.Name
 		if i == p.selectedPerk {
-			perkText = "▶ " + perkText
+			perkText = "> " + perkText
 		}
 
 		// Check if this perk can be activated
