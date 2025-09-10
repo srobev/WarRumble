@@ -16,6 +16,7 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/inpututil"
 	"github.com/hajimehoshi/ebiten/v2/text"
 	"github.com/hajimehoshi/ebiten/v2/vector"
+
 	"golang.org/x/image/font/basicfont"
 )
 
@@ -78,7 +79,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				// Cost badge with gold theme
 				vector.DrawFilledRect(screen, float32(costX-4), float32(costY-2), float32(costW+8), 14, color.NRGBA{255, 215, 0, 255}, true)
 				vector.StrokeRect(screen, float32(costX-4), float32(costY-2), float32(costW+8), 14, 1, color.NRGBA{200, 160, 20, 255}, true)
-				text.Draw(screen, costStr, fonts.Face(13), costX, costY+10, color.NRGBA{64, 64, 64, 255})
+				text.Draw(screen, costStr, fonts.UI(12), costX, costY+10, color.NRGBA{64, 64, 64, 255})
 			}
 
 			if img := g.ensureMiniImageByName(it.Name); img != nil {
@@ -111,7 +112,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				levelW := len(levelStr) * 7
 				vector.DrawFilledRect(screen, float32(levelBadgeX-4), float32(levelBadgeY-2), float32(levelW+8), 14, color.NRGBA{138, 43, 226, 200}, true)
 				vector.StrokeRect(screen, float32(levelBadgeX-4), float32(levelBadgeY-2), float32(levelW+8), 14, 1, color.NRGBA{100, 20, 150, 255}, true)
-				text.Draw(screen, levelStr, fonts.Face(13), levelBadgeX, levelBadgeY+10, color.NRGBA{255, 255, 255, 255})
+				text.Draw(screen, levelStr, fonts.UI(12), levelBadgeX, levelBadgeY+10, color.NRGBA{255, 255, 255, 255})
 			}
 
 			// Selection indicator with theme color
@@ -172,7 +173,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				// Cost badge with gold theme
 				vector.DrawFilledRect(screen, float32(costX-4), float32(costY-2), float32(costW+8), 14, color.NRGBA{255, 215, 0, 255}, true)
 				vector.StrokeRect(screen, float32(costX-4), float32(costY-2), float32(costW+8), 14, 1, color.NRGBA{200, 160, 20, 255}, true)
-				text.Draw(screen, costStr, basicfont.Face7x13, costX, costY+10, color.NRGBA{64, 64, 64, 255})
+				text.Draw(screen, costStr, fonts.UI(12), costX, costY+10, color.NRGBA{64, 64, 64, 255})
 			}
 
 			// Level and XP bar at bottom-left
@@ -197,7 +198,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				levelW := len(levelStr) * 7
 				vector.DrawFilledRect(screen, float32(levelBadgeX-4), float32(levelBadgeY-2), float32(levelW+8), 14, color.NRGBA{138, 43, 226, 200}, true)
 				vector.StrokeRect(screen, float32(levelBadgeX-4), float32(levelBadgeY-2), float32(levelW+8), 14, 1, color.NRGBA{100, 20, 150, 255}, true)
-				text.Draw(screen, levelStr, basicfont.Face7x13, levelBadgeX, levelBadgeY+10, color.NRGBA{255, 255, 255, 255})
+				text.Draw(screen, levelStr, fonts.UI(12), levelBadgeX, levelBadgeY+10, color.NRGBA{255, 255, 255, 255})
 			}
 
 			// XP bar next to level badge (centered vertically with level badge)
@@ -231,7 +232,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 					"", []string{"Select a champion from above"})
 			} else {
 				ebitenutil.DrawRect(screen, float64(chRect.x), float64(chRect.y), float64(chRect.w), float64(chRect.h), color.NRGBA{0x2b, 0x2b, 0x3e, 0xff})
-				text.Draw(screen, "Champion (select above)", basicfont.Face7x13, chRect.x+6, chRect.y+18, color.NRGBA{200, 200, 200, 255})
+				text.Draw(screen, "Champion (select above)", fonts.UI(12), chRect.x+6, chRect.y+18, color.NRGBA{200, 200, 200, 255})
 			}
 		}
 
@@ -286,7 +287,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 						// Cost badge with gold theme
 						vector.DrawFilledRect(screen, float32(costX-4), float32(costY-2), float32(costW+8), 14, color.NRGBA{255, 215, 0, 255}, true)
 						vector.StrokeRect(screen, float32(costX-4), float32(costY-2), float32(costW+8), 14, 1, color.NRGBA{200, 160, 20, 255}, true)
-						text.Draw(screen, costStr, basicfont.Face7x13, costX, costY+10, color.NRGBA{64, 64, 64, 255})
+						text.Draw(screen, costStr, fonts.UI(12), costX, costY+10, color.NRGBA{64, 64, 64, 255})
 					}
 
 					// Level and XP bar at bottom-left
@@ -358,7 +359,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				cnt++
 			}
 		}
-		text.Draw(screen, fmt.Sprintf("Minis: %d/6", cnt), fonts.Face(13), gridX, gridY-6, color.White)
+		text.Draw(screen, fmt.Sprintf("Minis: %d/6", cnt), basicfont.Face7x13, gridX, gridY-6, color.White)
 
 		gridTop := topY + bigH + 16
 		// Center the collection grid rows
@@ -424,7 +425,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				// Cost badge with gold theme
 				vector.DrawFilledRect(screen, float32(costX-4), float32(costY-2), float32(costW+8), 14, color.NRGBA{255, 215, 0, 255}, true)
 				vector.StrokeRect(screen, float32(costX-4), float32(costY-2), float32(costW+8), 14, 1, color.NRGBA{200, 160, 20, 255}, true)
-				text.Draw(screen, costStr, basicfont.Face7x13, costX, costY+10, color.NRGBA{64, 64, 64, 255})
+				text.Draw(screen, costStr, fonts.UI(12), costX, costY+10, color.NRGBA{64, 64, 64, 255})
 			}
 
 			// Level badge at bottom-left for collection items

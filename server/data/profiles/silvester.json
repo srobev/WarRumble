@@ -7,69 +7,69 @@
     "roll": [
       {
         "slot": 0,
-        "unitId": "Bloodmage Thalor",
-        "isChampion": true,
-        "priceGold": 120,
-        "sold": false
-      },
-      {
-        "slot": 1,
-        "unitId": "Silvanus Windarrow",
-        "isChampion": true,
-        "priceGold": 120,
-        "sold": false
-      },
-      {
-        "slot": 2,
-        "unitId": "Whelp Eggs",
+        "unitId": "Magma Goliath",
         "isChampion": false,
         "priceGold": 90,
         "sold": false
       },
       {
-        "slot": 3,
-        "unitId": "Aethelion Ragestorm",
+        "slot": 1,
+        "unitId": "Nightfang",
+        "isChampion": false,
+        "priceGold": 90,
+        "sold": false
+      },
+      {
+        "slot": 2,
+        "unitId": "Lord of Flame",
         "isChampion": true,
         "priceGold": 120,
         "sold": false
       },
       {
+        "slot": 3,
+        "unitId": "Kamikaze Aviator",
+        "isChampion": false,
+        "priceGold": 90,
+        "sold": false
+      },
+      {
         "slot": 4,
-        "unitId": "Winged Screechers",
+        "unitId": "Earth and Moon",
         "isChampion": false,
         "priceGold": 90,
         "sold": false
       },
       {
         "slot": 5,
-        "unitId": "Holy Nova",
+        "unitId": "Magma Goliath",
         "isChampion": false,
         "priceGold": 90,
         "sold": false
       },
       {
         "slot": 6,
-        "unitId": "Execute",
+        "unitId": "Spirit Binder",
         "isChampion": false,
         "priceGold": 90,
         "sold": false
       },
       {
         "slot": 7,
-        "unitId": "Rusttooth",
+        "unitId": "Aethelion Ragestorm",
         "isChampion": true,
         "priceGold": 120,
         "sold": false
       },
       {
         "slot": 8,
-        "unitId": "Execute",
+        "unitId": "Voodoo Hexer",
         "isChampion": false,
         "priceGold": 90,
         "sold": false
       }
     ],
-    "lastReroll": 1757487799,
+    "lastReroll": 1757491504,
     "sold": {},
     "nonceSeen": {},
     "version": 1
