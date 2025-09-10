@@ -92,7 +92,7 @@ func TestTickPerkAuras_GlaciaChillAura(t *testing.T) {
 func TestTickPerkAuras_SwordsmanInspireAlly(t *testing.T) {
 	w := &MockWorld{}
 	w.units = []*UnitRuntime{
-		{ID: 1, TeamID: "blue", Pos: Vec2{X: 100, Y: 100}, Alive: true, ActivePerk: &Perk{
+		{ID: 1, TeamID: "blue", Pos: Vec2{X: 100, Y: 100}, Alive: true, IsSquadLeader: true, ActivePerk: &Perk{
 			Effects: PerkEffects{Type: "aura_ally_dmg", Radius: 60, AllyDmgPct: 0.10},
 		}},
 		{ID: 2, TeamID: "blue", Pos: Vec2{X: 120, Y: 100}, Alive: true}, // 20 units away, within radius

@@ -7,6 +7,8 @@ import (
 	"strings"
 )
 
+// V1_3_APPLIED: true - shop security and aura polish added but metrics commented out
+
 // PerkView represents the client-facing view of a perk
 type PerkView struct {
 	ID           string `json:"id"`

@@ -8,4 +8,6 @@ const (
 	GridRerollRefillSec       = 15
 	GridRerollBurst           = 2
 	PerkPityEveryRerolls      = 4
+
+	// V1_3_APPLIED: true
 )

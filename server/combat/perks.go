@@ -33,6 +33,12 @@ type Perk struct {
 	Effects PerkEffects `json:"effects"`
 }
 
+// PerkState tracks state for perks that need reset logic
+type PerkState struct {
+	AttackCount  int
+	LastTargetID int64
+}
+
 // UnitRuntime represents a unit in combat with perk state
 type UnitRuntime struct {
 	ID         int64
@@ -82,6 +88,11 @@ func TickPerkAuras(w World, dt time.Duration) {
 				}
 			}
 		case "aura_ally_dmg":
+			// Gate Swordsman (x4) leader only for ally damage aura
+			if e.AllyDmgPct > 0 && u.IsSquadLeader == false {
+				break // Skip non-leader inspire auras
+			}
+
 			for _, ally := range w.AlliesOf(u) {
 				if ally.ID == u.ID {
 					continue
@@ -96,12 +107,17 @@ func TickPerkAuras(w World, dt time.Duration) {
 
 // OnAttackDamageMultiplier returns damage multiplier for attacker
 func OnAttackDamageMultiplier(attacker, target *UnitRuntime) float64 {
-	m := attacker.AttackMultiplier
-	if attacker.ActivePerk == nil {
+	m := 1.0
+	if attacker == nil || target == nil || attacker.ActivePerk == nil {
 		return m
 	}
-
 	e := attacker.ActivePerk.Effects
+
+	if attacker.PerkState.LastTargetID != target.ID {
+		attacker.PerkState.AttackCount = 0
+		attacker.PerkState.LastTargetID = target.ID
+	}
+
 	switch e.Type {
 	case "nth_attack_bonus":
 		attacker.PerkState.AttackCount++
@@ -110,7 +126,6 @@ func OnAttackDamageMultiplier(attacker, target *UnitRuntime) float64 {
 			attacker.PerkState.AttackCount = 0
 		}
 	}
-
 	return m
 }
 
