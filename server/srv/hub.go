@@ -12,6 +12,9 @@ import (
 	"path/filepath"
 	"regexp"
 	"rumble/server/currency"
+	"rumble/server/progression"
+	"rumble/server/shop"
+	"rumble/shared/game/types"
 	"rumble/shared/protocol"
 	"sort"
 	"strings"
@@ -73,7 +76,9 @@ type Hub struct {
 	guilds    *Guilds
 	guildSubs map[string]map[*client]struct{} // guildID -> clients subscribed
 
-	social *Social
+	social             *Social
+	shopService        *shop.Service
+	progressionService *progression.Service
 }
 
 func NewHub() *Hub {
@@ -92,8 +97,10 @@ func NewHub() *Hub {
 	return h
 }
 
-func (h *Hub) SetGuilds(g *Guilds) { h.guilds = g }
-func (h *Hub) SetSocial(s *Social) { h.social = s }
+func (h *Hub) SetGuilds(g *Guilds)                          { h.guilds = g }
+func (h *Hub) SetSocial(s *Social)                          { h.social = s }
+func (h *Hub) SetShopService(s *shop.Service)               { h.shopService = s }
+func (h *Hub) SetProgressionService(p *progression.Service) { h.progressionService = p }
 
 func makeRoomID(prefix string) string {
 	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
@@ -1142,6 +1149,94 @@ func (c *client) reader(h *Hub) {
 			// DO NOT close c.conn here; just continue the read loop.
 			// The client will Close(); our reader will then get an error,
 			// the defer will run, and we’ll clean up this client safely.
+
+		// Shop handlers
+		case "GetShopRoll":
+			var req protocol.GetShopRollReq
+			_ = json.Unmarshal(env.Data, &req)
+			h.mu.Lock()
+			s := h.sessions[c]
+			username := ""
+			if s != nil {
+				username = s.Name // Use username from session
+			}
+			h.mu.Unlock()
+
+			if username == "" {
+				sendJSON(c, "Error", protocol.ErrorMsg{Message: "Not authenticated"})
+				break
+			}
+
+			// Call shop service through hub's shop handler
+			if h.shopService != nil {
+				err := h.shopService.HandleGetShopRoll(username, func(eventType string, event interface{}) {
+					sendJSON(c, eventType, event)
+				})
+				if err != nil {
+					sendJSON(c, "Error", protocol.ErrorMsg{Message: err.Error()})
+				}
+			} else {
+				sendJSON(c, "Error", protocol.ErrorMsg{Message: "Shop service unavailable"})
+			}
+
+		case "RerollShop":
+			var req protocol.RerollShopReq
+			_ = json.Unmarshal(env.Data, &req)
+			h.mu.Lock()
+			s := h.sessions[c]
+			username := ""
+			if s != nil {
+				username = s.Name // Use username from session
+			}
+			h.mu.Unlock()
+
+			if username == "" {
+				sendJSON(c, "Error", protocol.ErrorMsg{Message: "Not authenticated"})
+				break
+			}
+
+			if h.shopService != nil {
+				// Convert protocol type to types type
+				reqTypes := types.RerollShopReq{req.Nonce}
+				err := h.shopService.HandleRerollShop(username, reqTypes, func(eventType string, event interface{}) {
+					sendJSON(c, eventType, event)
+				})
+				if err != nil {
+					sendJSON(c, "Error", protocol.ErrorMsg{Message: err.Error()})
+				}
+			} else {
+				sendJSON(c, "Error", protocol.ErrorMsg{Message: "Shop service unavailable"})
+			}
+
+		case "BuyShopSlot":
+			var req protocol.BuyShopSlotReq
+			_ = json.Unmarshal(env.Data, &req)
+			h.mu.Lock()
+			s := h.sessions[c]
+			username := ""
+			if s != nil {
+				username = s.Name // Use username from session
+			}
+			h.mu.Unlock()
+
+			if username == "" {
+				sendJSON(c, "Error", protocol.ErrorMsg{Message: "Not authenticated"})
+
+				break
+			}
+
+			if h.shopService != nil {
+				// Convert protocol type to types type
+				reqTypes := types.BuyShopSlotReq{Slot: req.Slot, Nonce: req.Nonce}
+				err := h.shopService.HandleBuyShopSlot(username, reqTypes, func(eventType string, event interface{}) {
+					sendJSON(c, eventType, event)
+				})
+				if err != nil {
+					sendJSON(c, "Error", protocol.ErrorMsg{Message: err.Error()})
+				}
+			} else {
+				sendJSON(c, "Error", protocol.ErrorMsg{Message: "Shop service unavailable"})
+			}
 
 		default:
 			sendJSON(c, "Error", protocol.ErrorMsg{Message: "Unknown message type: " + env.Type})

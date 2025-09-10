@@ -1,7 +1,11 @@
 {
   "gege": {},
   "gfdgagfadg": {},
+  "minazz": {
+    "silvester": true
+  },
   "silvester": {
+    "minazz": true,
     "tester": true,
     "tester2": true
   },

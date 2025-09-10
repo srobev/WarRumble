@@ -1,28 +1,80 @@
 {
-  "playerId": 0,
-  "name": "Guest",
+  "playerId": 110420,
+  "name": "silvester4o",
   "army": [
-    "Bloodmage Thalnos",
-    "Banshee",
-    "Bat Rider",
-    "Core Hound",
-    "Darkspear Troll",
-    "Defias Bandits",
-    "Drake"
+    "Warg Lord",
+    "Magma Beasts",
+    "Corpse Catapult",
+    "Obsidian Bat",
+    "Redhand Thieves",
+    "Voodoo Hexer",
+    "Winged Screechers"
   ],
   "armies": {
-    "Bloodmage Thalnos": [
-      "Banshee",
-      "Bat Rider",
-      "Core Hound",
-      "Darkspear Troll",
-      "Defias Bandits",
-      "Drake"
+    "Aethelion Ragestorm": [
+      "Magma Beasts",
+      "Obsidian Bat",
+      "Jungle Headhunter",
+      "Winged Screechers",
+      "Spirit Binder",
+      "Blazebinder"
+    ],
+    "Bloodmage Thalor": [
+      "Whelp Eggs",
+      "Foulwing Rider",
+      "Winged Screechers",
+      "Spirit Binder",
+      "Magma Beasts",
+      "Corpse Catapult"
+    ],
+    "Sorceress Glacia": [
+      "Arcane Blast",
+      "Chain Lightning",
+      "Magma Goliath",
+      "Execute",
+      "Holy Nova",
+      "Blizzard"
+    ],
+    "Warg Lord": [
+      "Magma Beasts",
+      "Corpse Catapult",
+      "Obsidian Bat",
+      "Redhand Thieves",
+      "Voodoo Hexer",
+      "Winged Screechers"
     ]
   },
-  "gold": 0,
+  "gold": 555,
   "accountXp": 0,
-  "pvp_rating": 1200,
+  "unitXp": {
+    "Aerie Guard": 2,
+    "Aethelion Ragestorm": 1,
+    "Arcane Blast": 16,
+    "Blazebinder": 6,
+    "Blizzard": 13,
+    "Bloodmage Thalor": 5,
+    "Chain Lightning": 14,
+    "Corpse Catapult": 7,
+    "Execute": 11,
+    "Flesh Golem": 3,
+    "Foulwing Rider": 3,
+    "Holy Nova": 14,
+    "Jungle Headhunter": 2,
+    "Magma Beasts": 11,
+    "Magma Goliath": 18,
+    "Obsidian Bat": 7,
+    "Polymorph": 4,
+    "Redhand Thieves": 11,
+    "Sorceress Glacia": 70,
+    "Spirit Binder": 4,
+    "Twin Wyrnn": 3,
+    "Voodoo Hexer": 10,
+    "Warg Lord": 31,
+    "Whelp Eggs": 1,
+    "Winged Screechers": 14
+  },
+  "pvp_rating": 1276,
   "pvp_rank": "Knight",
-  "avatar": "default.png"
+  "avatar": "male.png",
+  "guildId": "g-1757237974642085700"
 }

@@ -1,6 +1,8 @@
 package game
 
 import (
+	"rumble/client/internal/game/ui/shop"
+	"rumble/shared/game/types"
 	"rumble/shared/protocol"
 	"sync"
 	"time"
@@ -75,8 +77,16 @@ type Game struct {
 	goldArea    rect
 	topBarBg    *ebiten.Image
 	// bottom bar buttons
-	armyBtn, mapBtn, pvpBtn, socialBtn, settingsBtn rect
-	bottomBarBg                                     *ebiten.Image
+	shopBtn, armyBtn, mapBtn, pvpBtn, socialBtn, settingsBtn rect
+	bottomBarBg                                              *ebiten.Image
+
+	// Shop tab
+	shopView     *shop.ShopView    // Shop UI orchestrator
+	shopActions  *shop.ShopActions // Network communication
+	shopRoll     types.ShopRoll    // Current shop roll data
+	shopRects    []rect            // Rectangles for shop card positions
+	shopQueryIdx int               // Index of card being purchased (prevents multiple clicks)
+	rerollBtn    rect              // Reroll button position
 
 	// settings
 	fullscreen        bool
@@ -315,6 +325,40 @@ type Game struct {
 	hoveredOverlayLevel          bool // true when hovering mini overlay level badge
 	hoveredOverlayCost           bool // true when hovering mini overlay cost text
 
+	// Unit progression data (shards, rank)
+	unitProgression map[string]protocol.UnitProgressSynced // unitID -> progression data
+
 	// Fantasy UI System
 	fantasyUI *FantasyUI // manages themed UI elements across the home screen
+}
+
+// initShopUI initializes the shop UI components
+func (g *Game) initShopUI() {
+	if g.shopView == nil {
+		// Create image loader function that calls Game's ensureMiniImageByName
+		imageLoader := func(unitName string) interface{} {
+			img := g.ensureMiniImageByName(unitName)
+			if img != nil {
+				return img
+			}
+			return nil
+		}
+
+		g.shopView = shop.NewShopView(protocol.ScreenW, nil, imageLoader) // TODO: Pass fantasyUI
+		g.shopActions = shop.NewShopActions(g.shopView)
+
+		// Show initial shop data
+		if g.net != nil {
+			g.shopView.Show(g.GetSendFunction())
+		}
+	}
+}
+
+// GetSendFunction returns a send function for network communication
+func (g *Game) GetSendFunction() func(string, interface{}) {
+	return func(msgType string, msg interface{}) {
+		if g.net != nil {
+			g.net.Send(msgType, msg)
+		}
+	}
 }

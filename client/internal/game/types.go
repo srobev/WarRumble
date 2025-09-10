@@ -32,7 +32,8 @@ const (
 type tab int
 
 const (
-	tabArmy tab = iota
+	tabShop tab = iota
+	tabArmy
 	tabMap
 	tabPvp
 	tabSocial

@@ -1,28 +1,53 @@
 package account
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"sync"
 
-	"rumble/shared/protocol"
+	"rumble/shared/game/types"
 )
+
+// ShopState represents shop-specific account data
+type ShopState struct {
+	Roll       []types.ShopSlot `json:"roll"`       // 81 shop slots
+	LastReroll int64            `json:"lastReroll"` // unix sec
+	Sold       map[int]bool     `json:"sold"`       // slot->true
+	NonceSeen  map[string]bool  `json:"nonceSeen"`  // for idempotency
+	Version    int              `json:"version"`    // for format changes
+}
 
 // Account represents an account record with persisted data
 type Account struct {
-	ID        string `json:"id"`
-	Name      string `json:"name"`
-	Gold      int64  `json:"gold"`
-	AccountXP int    `json:"accountXp"`
-	// Add more fields as needed
+	ID        string                         `json:"id"`
+	Name      string                         `json:"name"`
+	Gold      int64                          `json:"gold"`
+	AccountXP int                            `json:"accountXp"`
+	Shop      ShopState                      `json:"shop"`
+	Progress  map[string]*types.UnitProgress `json:"progress"` // unitID -> progress
 }
 
 // accountLocks protects per-account operations with sync.Mutex
 var accountLocks = make(map[string]*sync.Mutex)
 var accountsDir = filepath.Join("data", "profiles")
+
+// safeFileName creates a safe filename from potentially unsafe characters
+func safeFileName(name string) string {
+	re := regexp.MustCompile(`[^a-zA-Z0-9]+`)
+	s := re.ReplaceAllString(name, "_")
+	if s == "" {
+		s = "player"
+	}
+	return s
+}
 
 // getAccountLock returns a mutex for the given account ID
 func getAccountLock(id string) *sync.Mutex {
@@ -34,43 +59,108 @@ func getAccountLock(id string) *sync.Mutex {
 	return lock
 }
 
-// LoadAccount loads an account by ID from disk
-func LoadAccount(id string) (*Account, error) {
-	if id == "" {
-		return nil, errors.New("empty account ID")
+// LoadAccount loads an account by username (no longer by numeric ID)
+func LoadAccount(username string) (*Account, error) {
+	if username == "" {
+		return nil, errors.New("empty username")
 	}
 
-	lock := getAccountLock(id)
+	lock := getAccountLock(username)
 	lock.Lock()
 	defer lock.Unlock()
 
-	path := filepath.Join(accountsDir, fmt.Sprintf("%s.json", id))
+	// Now accounts are stored by username instead of numeric ID
+	path := filepath.Join(accountsDir, safeFileName(username)+".json")
+
 	data, err := os.ReadFile(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			// Return default account if not found
-			return &Account{
-				ID:        id,
-				Name:      id, // Use ID as default name
-				Gold:      0,
-				AccountXP: 0,
-			}, nil
-		}
+	if err != nil && errors.Is(err, os.ErrNotExist) {
+		// Account not found - create new account with unique ID
+		// Generate unique ID for new account
+		idBytes := make([]byte, 16)
+		rand.Read(idBytes)
+		newID := hex.EncodeToString(idBytes)
+
+		log.Printf("ACCOUNT: Creating new account for username '%s' (ID: %s)", username, newID)
+		return &Account{
+			ID:        newID,
+			Name:      username,
+			Gold:      1000, // Give starting gold
+			AccountXP: 0,
+			Shop: ShopState{
+				Roll:       make([]types.ShopSlot, 0),
+				LastReroll: 0,
+				Sold:       make(map[int]bool),
+				NonceSeen:  make(map[string]bool),
+				Version:    1,
+			},
+			Progress: make(map[string]*types.UnitProgress),
+		}, nil
+	} else if err != nil {
 		return nil, fmt.Errorf("failed to read account file: %w", err)
 	}
 
 	var account Account
 	if err := json.Unmarshal(data, &account); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal account: %w", err)
+		log.Printf("ACCOUNT: Failed to unmarshal account file: %v, creating new account", err)
+		// Return default account if parsing fails
+		return &Account{
+			ID:        username, // Use username as ID for now
+			Name:      username,
+			Gold:      1000, // Give starting gold
+			AccountXP: 0,
+			Shop: ShopState{
+				Roll:       make([]types.ShopSlot, 0),
+				LastReroll: 0,
+				Sold:       make(map[int]bool),
+				NonceSeen:  make(map[string]bool),
+				Version:    1,
+			},
+			Progress: make(map[string]*types.UnitProgress),
+		}, nil
+	}
+
+	// Ensure shop state is properly initialized
+	if account.Shop.Sold == nil {
+		account.Shop.Sold = make(map[int]bool)
+	}
+	if account.Shop.NonceSeen == nil {
+		account.Shop.NonceSeen = make(map[string]bool)
+	}
+	if account.Progress == nil {
+		account.Progress = make(map[string]*types.UnitProgress)
+	}
+
+	// Give starting gold if account has 0 (new accounts)
+	if account.Gold == 0 {
+		account.Gold = 1000
+		log.Printf("ACCOUNT: Giving starting gold to account %s", username)
+		// This call will now use the new username-based saving
+		account.Name = username // Ensure name is set properly
+		if saveErr := SaveAccount(&account); saveErr != nil {
+			log.Printf("ACCOUNT: Failed to save starting gold for %s: %v", username, saveErr)
+		}
 	}
 
 	return &account, nil
 }
 
 // SaveAccount persists an account to disk atomically
+// Now saves to username.json instead of user_id.json for cleaner file structure
 func SaveAccount(account *Account) error {
-	if account == nil || account.ID == "" {
-		return errors.New("invalid account")
+	if account == nil {
+		log.Printf("ACCOUNT SAVE ERROR: account is nil")
+		return errors.New("invalid account: nil pointer")
+	}
+
+	// Use name for filename, fallback to ID if name is empty
+	filename := strings.TrimSpace(account.Name)
+	if filename == "" {
+		filename = strings.TrimSpace(account.ID)
+	}
+
+	if filename == "" {
+		log.Printf("ACCOUNT SAVE ERROR: no valid filename (name or ID)")
+		return errors.New("invalid account: no name or ID for filename")
 	}
 
 	lock := getAccountLock(account.ID)
@@ -82,9 +172,9 @@ func SaveAccount(account *Account) error {
 		return fmt.Errorf("failed to create accounts directory: %w", err)
 	}
 
-	path := filepath.Join(accountsDir, fmt.Sprintf("%s.json", account.ID))
+	path := filepath.Join(accountsDir, safeFileName(filename)+".json")
 
-	// Marshal to JSON
+	// Marshal to JSON (just the account data, not profile data)
 	data, err := json.MarshalIndent(account, "", "  ")
 	if err != nil {
 		return fmt.Errorf("failed to marshal account: %w", err)
@@ -139,45 +229,7 @@ func UpdateGold(id string, delta int64) (*Account, error) {
 }
 
 // LoadAccountByName loads an account by username (matches Profile.Name)
+// This is now a simple wrapper around LoadAccount since both use usernames
 func LoadAccountByName(name string) (*Account, error) {
-	if name == "" {
-		return nil, errors.New("empty account name")
-	}
-
-	// Find the account ID by name from profiles
-	profilesDir := filepath.Join("data", "profiles")
-	files, err := os.ReadDir(profilesDir)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read profiles directory: %w", err)
-	}
-
-	for _, file := range files {
-		if filepath.Ext(file.Name()) != ".json" {
-			continue
-		}
-
-		path := filepath.Join(profilesDir, file.Name())
-		data, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-
-		var profile protocol.Profile
-		if err := json.Unmarshal(data, &profile); err != nil {
-			continue
-		}
-
-		if profile.Name == name {
-			// Found the profile, load corresponding account
-			return LoadAccount(fmt.Sprintf("%d", profile.PlayerID))
-		}
-	}
-
-	// Account not found
-	return &Account{
-		ID:        "", // Will be set when saved
-		Name:      name,
-		Gold:      0,
-		AccountXP: 0,
-	}, nil
+	return LoadAccount(name)
 }

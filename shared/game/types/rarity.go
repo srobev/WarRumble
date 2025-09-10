@@ -21,3 +21,8 @@ func (r Rarity) ShardsPerRank() int {
 		return 999999
 	}
 }
+
+const (
+	ShopPriceMiniGold     = int64(90)
+	ShopPriceChampionGold = int64(120)
+)

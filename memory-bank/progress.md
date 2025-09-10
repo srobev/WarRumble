@@ -176,6 +176,72 @@
 ### Overview
 Completed a comprehensive modular split of the client codebase to improve maintainability, readability, and development velocity.
 
+## Recent Developments (September 2025 - Current)
+
+### Currency & Economy System Implementation
+
+#### Complete Gold Currency System
+- **_status**: ✅ Completed - Fully implemented
+- **Location**: `server/currency/handlers.go`, shared protocol types
+- **Features**:
+  - Grant gold to players with reason tracking
+  - Spend gold with balance validation
+  - Duplicate prevention via nonce system
+  - Server-side validation and error handling
+  - Gold synchronization with clients
+- **Technical Implementation**:
+  - Thread-safe nonce tracking with `sync.Mutex`
+  - Authoritative server-side balance verification
+  - Comprehensive error types with codes and messages
+  - Logging for all transactions with account details
+
+#### Unit Shards Progression System
+- **_status**: ✅ Completed - Fully implemented
+- **Location**: `client/internal/game/progression/shards.go`
+- **Features**:
+  - Shard accumulation and rank progression
+  - Rarity-based shard requirements per rank
+  - Perk slot unlocking system
+  - Legendary unit special perk unlocking at rank 10
+- **Progression Tiers** (by rarity):
+  - **Common**: 2 shards per rank
+  - **Rare**: 4 shards per rank
+  - **Epic**: 5 shards per rank
+  - **Legendary**: 6 shards per rank + special UnlockPerk at rank 10
+
+#### Economy Infrastructure
+- **Transaction System**: Secure with duplicate prevention
+- **Balance Validation**: Server-authoritative financial state
+- **Synchronization**: Real-time gold balance updates
+- **Auditing**: Comprehensive transaction logging
+
+### Battle Visual Enhancements (Recent Updates)
+
+#### Particle Effects System
+- **_status**: ✅ Completed - Enhanced
+- **Features**: Drop effects, ranged attack particles
+- **Impact**: Improved battle realism and visual feedback
+- **Location**: `client/internal/game/particles.go`
+
+#### UI Combat Improvements
+- **_status**: 🔄 Ongoing - Recent enhancements
+- **Features**: Battle UI bars revamps, visual system updates
+- **Impact**: Better user experience during combat
+
+### Map Editor Enhancements (October 2025)
+
+#### Ebiten Map Editor
+- **_status**: ✅ Enhanced - Major updates completed
+- **Features**: Map scaling, size adjustments, better tools
+- **Technical**: Improved rendering performance
+
+#### Web Map Editor
+- **_status**: ✅ Major overhaul completed
+- **Location**: `web-mapeditor/` directory
+- **Technology**: TSConfig, Vite-based development
+- **Features**: Modern web interface for map creation
+- **Components**: Modular React components structure
+
 ### Changes Made
 
 #### 1. Asset Management Centralization

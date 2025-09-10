@@ -32,7 +32,9 @@ func (e *Endpoints) HandleUnitProgressUpdate(msg protocol.UnitProgressUpdate, br
 func (e *Endpoints) HandleSetActivePerk(msg protocol.SetActivePerk, available []types.Perk, broadcaster func(eventType string, event interface{})) error {
 	log.Printf("Processing SetActivePerk: unitID=%s, perkID=%s", msg.UnitID, msg.PerkID)
 
-	err := e.service.HandleSetActivePerk(msg.UnitID, msg.PerkID, available, broadcaster)
+	// Convert protocol PerkID to types PerkID
+	perkID := types.PerkID(msg.PerkID)
+	err := e.service.HandleSetActivePerk(msg.UnitID, perkID, available, broadcaster)
 	if err != nil {
 		log.Printf("Failed to handle set active perk: %v", err)
 		return err

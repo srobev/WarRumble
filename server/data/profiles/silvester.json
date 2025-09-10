@@ -1,80 +1,99 @@
 {
-  "playerId": 163103,
+  "id": "",
   "name": "silvester",
-  "army": [
-    "Warg Lord",
-    "Magma Beasts",
-    "Corpse Catapult",
-    "Obsidian Bat",
-    "Redhand Thieves",
-    "Voodoo Hexer",
-    "Winged Screechers"
-  ],
-  "armies": {
-    "Aethelion Ragestorm": [
-      "Magma Beasts",
-      "Obsidian Bat",
-      "Jungle Headhunter",
-      "Winged Screechers",
-      "Spirit Binder",
-      "Blazebinder"
-    ],
-    "Bloodmage Thalor": [
-      "Whelp Eggs",
-      "Foulwing Rider",
-      "Winged Screechers",
-      "Spirit Binder",
-      "Magma Beasts",
-      "Corpse Catapult"
-    ],
-    "Sorceress Glacia": [
-      "Arcane Blast",
-      "Chain Lightning",
-      "Magma Goliath",
-      "Execute",
-      "Holy Nova",
-      "Blizzard"
-    ],
-    "Warg Lord": [
-      "Magma Beasts",
-      "Corpse Catapult",
-      "Obsidian Bat",
-      "Redhand Thieves",
-      "Voodoo Hexer",
-      "Winged Screechers"
-    ]
-  },
-  "gold": 555,
+  "gold": 3343421653,
   "accountXp": 0,
-  "unitXp": {
-    "Aerie Guard": 2,
-    "Aethelion Ragestorm": 1,
-    "Arcane Blast": 16,
-    "Blazebinder": 6,
-    "Blizzard": 13,
-    "Bloodmage Thalor": 5,
-    "Chain Lightning": 14,
-    "Corpse Catapult": 7,
-    "Execute": 11,
-    "Flesh Golem": 3,
-    "Foulwing Rider": 3,
-    "Holy Nova": 14,
-    "Jungle Headhunter": 2,
-    "Magma Beasts": 10,
-    "Magma Goliath": 18,
-    "Obsidian Bat": 7,
-    "Polymorph": 4,
-    "Redhand Thieves": 11,
-    "Sorceress Glacia": 70,
-    "Spirit Binder": 4,
-    "Twin Wyrnn": 3,
-    "Voodoo Hexer": 9,
-    "Warg Lord": 30,
-    "Whelp Eggs": 1,
-    "Winged Screechers": 14
+  "shop": {
+    "roll": [
+      {
+        "slot": 0,
+        "unitId": "Dino Steed",
+        "isChampion": false,
+        "priceGold": 90,
+        "sold": false
+      },
+      {
+        "slot": 1,
+        "unitId": "Reanimator",
+        "isChampion": false,
+        "priceGold": 90,
+        "sold": false
+      },
+      {
+        "slot": 2,
+        "unitId": "Magma Beasts",
+        "isChampion": false,
+        "priceGold": 90,
+        "sold": false
+      },
+      {
+        "slot": 3,
+        "unitId": "Magma Goliath",
+        "isChampion": false,
+        "priceGold": 90,
+        "sold": false
+      },
+      {
+        "slot": 4,
+        "unitId": "Sorceress Glacia",
+        "isChampion": true,
+        "priceGold": 120,
+        "sold": true
+      },
+      {
+        "slot": 5,
+        "unitId": "Kamikaze Aviator",
+        "isChampion": false,
+        "priceGold": 90,
+        "sold": false
+      },
+      {
+        "slot": 6,
+        "unitId": "Spirit Binder",
+        "isChampion": false,
+        "priceGold": 90,
+        "sold": false
+      },
+      {
+        "slot": 7,
+        "unitId": "Magma Goliath",
+        "isChampion": false,
+        "priceGold": 90,
+        "sold": false
+      },
+      {
+        "slot": 8,
+        "unitId": "Chain Lightning",
+        "isChampion": false,
+        "priceGold": 90,
+        "sold": false
+      }
+    ],
+    "lastReroll": 1757485456,
+    "sold": {
+      "4": true
+    },
+    "nonceSeen": {
+      "buy-4-1757485453881": true,
+      "buy-4-1757485457364": true,
+      "reroll-1757485407826": true,
+      "reroll-1757485408306": true,
+      "reroll-1757485408459": true,
+      "reroll-1757485409321": true,
+      "reroll-1757485409509": true,
+      "reroll-1757485411727": true,
+      "reroll-1757485456148": true
+    },
+    "version": 1
   },
-  "pvp_rating": 1276,
-  "pvp_rank": "Knight",
-  "avatar": "male.png",
-  "guildId": "g-1757237974642085700"
+  "progress": {
+    "Sorceress Glacia": {
+      "UnitID": "Sorceress Glacia",
+      "Rarity": 2,
+      "Rank": 2,
+      "ShardsOwned": 0,
+      "PerksUnlocked": [],
+      "ActivePerk": null
+    }
+  }
 }

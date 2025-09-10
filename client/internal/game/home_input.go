@@ -26,6 +26,9 @@ func (g *Game) updateHome() {
 	}
 
 	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		if g.shopBtn.hit(mx, my) {
+			g.activeTab = tabShop
+		}
 		if g.armyBtn.hit(mx, my) {
 			g.activeTab = tabArmy
 		}
@@ -108,6 +111,8 @@ func (g *Game) updateHome() {
 	}
 
 	switch g.activeTab {
+	case tabShop:
+		g.updateShopTab(mx, my)
 	case tabArmy:
 		g.updateArmyTab(mx, my)
 	case tabMap:
@@ -938,6 +943,29 @@ func (g *Game) updatePvpTab(mx, my int) {
 	if time.Since(g.lbLastReq) > 10*time.Second {
 		g.send("GetLeaderboard", protocol.GetLeaderboard{})
 		g.lbLastReq = time.Now()
+	}
+}
+
+// Shop tab input handling
+func (g *Game) updateShopTab(mx, my int) {
+	if g.shopView == nil {
+		return
+	}
+
+	// Handle input through shop view
+	g.shopView.Update(mx, my, func(eventType string, event interface{}) {
+		if g.net != nil {
+			g.net.Send(eventType, event)
+		}
+	})
+
+	// Handle mouse click events for shop
+	if inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		g.shopView.HandleClick(mx, my, func(eventType string, event interface{}) {
+			if g.net != nil {
+				g.net.Send(eventType, event)
+			}
+		})
 	}
 }
 

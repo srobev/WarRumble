@@ -43,6 +43,7 @@ func (g *Game) drawBottomBar(screen *ebiten.Image) {
 		rect   rect
 		active bool
 	}{
+		{"shop", "Shop", g.shopBtn, g.activeTab == tabShop},
 		{"army", "Army", g.armyBtn, g.activeTab == tabArmy},
 		{"map", "Map", g.mapBtn, g.activeTab == tabMap},
 		{"pvp", "PvP", g.pvpBtn, g.activeTab == tabPvp},
@@ -89,6 +90,7 @@ func (g *Game) computeBottomBarLayout() {
 		out   *rect
 	}
 	items := []item{
+		{"Shop", &g.shopBtn},
 		{"Army", &g.armyBtn},
 		{"Map", &g.mapBtn},
 		{"PvP", &g.pvpBtn},

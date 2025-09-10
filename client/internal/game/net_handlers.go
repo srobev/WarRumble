@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"rumble/shared/game/types"
 	"rumble/shared/protocol"
 	"strings"
 	"time"
@@ -242,6 +243,10 @@ func (g *Game) handle(env Msg) {
 		var m protocol.GoldSynced
 		json.Unmarshal(env.Data, &m)
 		g.accountGold = m.Gold
+		// Update shop gold display if shop is open
+		if g.shopView != nil {
+			g.shopView.UpdateGold(m.Gold)
+		}
 
 	case "StateDelta":
 		var d protocol.StateDelta
@@ -283,6 +288,80 @@ func (g *Game) handle(env Msg) {
 		if g.socialActive() == socialFriends {
 			g.friendSearchError = strings.TrimSpace(em.Message)
 		}
+
+	// Shop messages
+	case "ShopRollSynced":
+		var rollSync protocol.ShopRollSynced
+		json.Unmarshal(env.Data, &rollSync)
+		// Convert from protocol.ShopRoll to shared types.ShopRoll
+		if rollData, ok := rollSync.Roll.(map[string]interface{}); ok {
+			if slots, ok := rollData["slots"].([]interface{}); ok {
+				shopRoll := types.ShopRoll{
+					Version: 1,
+				}
+				shopRoll.Slots = make([]types.ShopSlot, len(slots))
+				for i, slotInt := range slots {
+					if slotMap, ok := slotInt.(map[string]interface{}); ok {
+						slot := types.ShopSlot{
+							Slot:       int(slotMap["slot"].(float64)),
+							UnitID:     slotMap["unitId"].(string),
+							IsChampion: slotMap["isChampion"].(bool),
+							PriceGold:  int64(slotMap["priceGold"].(float64)),
+							Sold:       slotMap["sold"].(bool),
+						}
+						shopRoll.Slots[i] = slot
+					}
+				}
+				// Update local shop state
+				g.shopRoll = shopRoll
+				// Update shop grid if shop view is active
+				if g.shopView != nil && g.activeTab == tabShop {
+					g.shopView.UpdateShopRoll(shopRoll)
+				}
+			}
+		}
+
+	case "BuyShopResult":
+		var result protocol.BuyShopResult
+		json.Unmarshal(env.Data, &result)
+
+		// Update local state
+		g.accountGold = result.Gold
+
+		// Clear any pending purchase state
+		if g.shopQueryIdx >= 0 && g.shopQueryIdx < len(g.shopRoll.Slots) {
+			g.shopRoll.Slots[g.shopQueryIdx].Sold = true
+			g.shopQueryIdx = -1
+		}
+
+		// Notify shop UI of successful purchase
+		if g.shopView != nil {
+			g.shopView.OnBuyResult(result)
+		}
+
+		log.Printf("Shop purchase successful: %s (shards: %d/%d)", result.UnitID, result.Shards, result.Threshold)
+
+		// Update unit progression data for display
+		if g.unitProgression == nil {
+			g.unitProgression = make(map[string]protocol.UnitProgressSynced)
+		}
+		g.unitProgression[result.UnitID] = protocol.UnitProgressSynced{
+			UnitID:      result.UnitID,
+			Rank:        result.Rank,
+			ShardsOwned: result.Shards,
+		}
+
+	case "UnitProgressSynced":
+		var progress protocol.UnitProgressSynced
+		json.Unmarshal(env.Data, &progress)
+
+		// Update local unit progression state
+		if g.unitProgression == nil {
+			g.unitProgression = make(map[string]protocol.UnitProgressSynced)
+		}
+		g.unitProgression[progress.UnitID] = progress
+
+		log.Printf("Unit progression updated: %s (rank %d, shards %d)", progress.UnitID, progress.Rank, progress.ShardsOwned)
 
 	case "HandUpdate":
 		var hu protocol.HandUpdate

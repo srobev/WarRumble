@@ -12,6 +12,8 @@ import (
 	"time"
 
 	"rumble/server/auth"
+	"rumble/server/progression"
+	"rumble/server/shop"
 	"rumble/server/srv"
 	"rumble/shared/protocol"
 
@@ -74,6 +76,10 @@ func main() {
 		panic(err)
 	}
 	hub.SetSocial(social)
+	progService := progression.NewService("./data")
+	hub.SetProgressionService(progService)
+	shopService := shop.NewService(progService)
+	hub.SetShopService(shopService)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("/ws", wsHandler(hub, authz))

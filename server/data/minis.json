@@ -375,21 +375,6 @@
     "speed": 1
   },
   {
-    "name": "Earth and Moon",
-    "dmg": 975,
-    "hp": 0,
-    "portrait": "earth-and-moon.png",
-    "class": "spell",
-    "role": "mini",
-    "cost": 3,
-    "speed": 1,
-    "spell_type": "damage",
-    "target_type": "area",
-    "effect_range": 120,
-    "instant_cast": true,
-    "spell_effect": "earth_and_moon"
-  },
-  {
     "name": "Reanimator",
     "dmg": 120,
     "hp": 360,

@@ -4,10 +4,11 @@ import (
 	"fmt"
 	"image/color"
 	_ "image/jpeg" // (optional) register JPEG decoder
-	_ "image/png"  // register PNG decoder
-	"rumble/shared/protocol"
+	_ "image/png"  // register PNG decoder"
 	"strings"
 	"time"
+
+	"rumble/shared/protocol"
 
 	"github.com/hajimehoshi/ebiten/v2"
 	"github.com/hajimehoshi/ebiten/v2/ebitenutil"
@@ -222,6 +223,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 
 			// XP bar border
 			vector.StrokeRect(screen, float32(xpBarX), float32(xpBarY), float32(xpBarW), float32(xpBarH), 1, color.NRGBA{100, 90, 0, 255}, true)
+
 		} else {
 			// Empty champion slot with themed styling
 			if g.fantasyUI != nil {
@@ -893,6 +895,9 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 		// Right-click selected mini slots to open XP overlay handled in Update
 		// Mini XP overlay drawing + actions
 		if g.miniOverlayOpen && g.miniOverlayName != "" {
+			// Declare STAR bar variables here
+			var starBarX, starBarY, starBarW, starBarH int
+
 			ebitenutil.DrawRect(screen, 0, 0, float64(protocol.ScreenW), float64(protocol.ScreenH), color.NRGBA{0, 0, 0, 120})
 			w, h := 580, 300
 			x := (protocol.ScreenW - w) / 2
@@ -970,6 +975,77 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				// Class / Cost first
 				stat("Class", strings.Title(info.Class), false)
 				stat("Cost", fmt.Sprintf("%d", info.Cost), false)
+
+				// STAR (shards) progress bar - positioned below stats
+				starBarX = x + 160
+				starBarY = startY + 180
+				starBarW = w - 170 - 24
+				starBarH = 24
+
+				// STAR title above progress bar
+				text.Draw(screen, "⭐ STAR Progress", basicfont.Face7x13, starBarX, starBarY-8, color.NRGBA{255, 215, 0, 255}) // Gold color
+
+				// Get unit progression data
+				// Get rarity threshold based on unit
+				threshold := 3 // default (Common)
+				if info.Class == "champion" {
+					threshold = 25 // Legendary
+				} else {
+					// Simple mapping based on class/name patterns for minis
+					unitName := strings.ToLower(g.miniOverlayName)
+					if strings.Contains(unitName, "rare") ||
+						strings.Contains(unitName, "elite") ||
+						strings.Contains(unitName, "knight") ||
+						strings.Contains(unitName, "archer") {
+						threshold = 10 // Rare
+					} else if strings.Contains(unitName, "legendary") ||
+						strings.Contains(unitName, "mythic") ||
+						strings.Contains(unitName, "lord") ||
+						strings.Contains(unitName, "king") {
+						threshold = 25 // Epic/Legendary
+					}
+				}
+
+				// Get current progress from unitProgression
+				currentShards := 0
+				if g.unitProgression != nil {
+					if progress, exists := g.unitProgression[g.miniOverlayName]; exists {
+						currentShards = progress.ShardsOwned
+					}
+				}
+
+				// Star progress bar background
+				vector.DrawFilledRect(screen, float32(starBarX), float32(starBarY), float32(starBarW), float32(starBarH), color.NRGBA{20, 22, 30, 200}, true)
+
+				// Star progress bar fill (gold/star themed color for progress)
+				var fillW int
+				if threshold > 0 {
+					progressRatio := float64(currentShards) / float64(threshold)
+					if progressRatio > 1.0 {
+						progressRatio = 1.0 // Cap at 100%
+					}
+					fillW = int(float64(starBarW) * progressRatio)
+					if fillW > 0 {
+						vector.DrawFilledRect(screen, float32(starBarX), float32(starBarY), float32(fillW), float32(starBarH), color.NRGBA{255, 200, 0, 220}, true)
+					}
+				}
+
+				// Star progress bar border (gold-themed)
+				vector.StrokeRect(screen, float32(starBarX), float32(starBarY), float32(starBarW), float32(starBarH), 2, color.NRGBA{180, 140, 0, 255}, true)
+
+				// Star progress text centered over bar (X/Y format)
+				starProgressText := fmt.Sprintf("%d / %d", currentShards, threshold)
+				var tw int = text.BoundString(basicfont.Face7x13, starProgressText).Dx()
+				var tx int = starBarX + (starBarW-tw)/2
+				var ty int = starBarY + starBarH/2 + 6
+
+				// Shadow effect for better visibility
+				text.Draw(screen, starProgressText, basicfont.Face7x13, tx+1, ty, color.NRGBA{0, 0, 0, 200})
+				text.Draw(screen, starProgressText, basicfont.Face7x13, tx-1, ty, color.NRGBA{0, 0, 0, 200})
+				text.Draw(screen, starProgressText, basicfont.Face7x13, tx, ty+1, color.NRGBA{0, 0, 0, 200})
+				text.Draw(screen, starProgressText, basicfont.Face7x13, tx, ty-1, color.NRGBA{0, 0, 0, 200})
+				text.Draw(screen, starProgressText, basicfont.Face7x13, tx, ty, color.White)
+
 				// Damage / Health
 				// Scale by level: 10% per level above 1
 				lvlStat := 1
@@ -1035,7 +1111,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				if next > 0 {
 					frac = float64(cur) / float64(next)
 				}
-				fillW := int(float64(barW) * frac)
+				fillW = int(float64(barW) * frac)
 				// Purpleish blue fill only for the filled portion
 				if fillW > 0 {
 					ebitenutil.DrawRect(screen, float64(barX), float64(barY), float64(fillW), float64(barH), color.NRGBA{138, 43, 226, 200})
@@ -1047,9 +1123,9 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				} else {
 					s = "max"
 				}
-				tw := text.BoundString(basicfont.Face7x13, s).Dx()
-				tx := barX + (barW-tw)/2
-				ty := barY + barH/2 + 6
+				tw = text.BoundString(basicfont.Face7x13, s).Dx()
+				tx = barX + (barW-tw)/2
+				ty = barY + barH/2 + 6
 				text.Draw(screen, s, basicfont.Face7x13, tx+1, ty, color.NRGBA{0, 0, 0, 200})
 				text.Draw(screen, s, basicfont.Face7x13, tx-1, ty, color.NRGBA{0, 0, 0, 200})
 				text.Draw(screen, s, basicfont.Face7x13, tx, ty+1, color.NRGBA{0, 0, 0, 200})
@@ -1523,6 +1599,12 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 
 	case tabSocial:
 		g.drawSocial(screen)
+	case tabShop:
+		// Draw the actual shop UI
+		if g.shopView == nil {
+			g.initShopUI()
+		}
+		g.shopView.Draw(screen)
 	case tabSettings:
 		// Settings panel background
 		contentY := topBarH + pad

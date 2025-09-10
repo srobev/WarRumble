@@ -55,7 +55,8 @@ This memory bank serves as a comprehensive knowledge base for the WarRumble proj
 
 ## Version History
 - **v1.0** - Initial memory bank creation (September 2025)
-- **v1.1** - INDEX.md added for better navigation (Current)
+- **v1.1** - INDEX.md added for better navigation (September 2025)
+- **v1.2** - Major update with currency and shards systems, battle enhancements, and map editor updates (September 2025)
 
 ---
 
