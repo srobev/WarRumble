@@ -1,97 +1,123 @@
 {
   "id": "",
   "name": "silvester",
-  "gold": 3343415953,
+  "gold": 3343411963,
   "accountXp": 0,
   "shop": {
     "roll": [
       {
         "slot": 0,
-        "unitId": "Winged Screechers",
+        "unitId": "Night Sentinel",
         "isChampion": false,
         "priceGold": 90,
         "sold": false
       },
       {
         "slot": 1,
-        "unitId": "Magma Beasts",
-        "isChampion": false,
-        "priceGold": 90,
+        "unitId": "Aethelion Ragestorm",
+        "isChampion": true,
+        "priceGold": 120,
         "sold": false
       },
       {
         "slot": 2,
-        "unitId": "Earth and Moon",
+        "unitId": "Chain Lightning",
         "isChampion": false,
         "priceGold": 90,
         "sold": false
       },
       {
         "slot": 3,
-        "unitId": "Smoke Bomb",
+        "unitId": "Kamikaze Aviator",
         "isChampion": false,
         "priceGold": 90,
         "sold": false
       },
       {
         "slot": 4,
-        "unitId": "Warg Lord",
-        "isChampion": true,
-        "priceGold": 120,
+        "unitId": "Wraith",
+        "isChampion": false,
+        "priceGold": 90,
         "sold": false
       },
       {
         "slot": 5,
-        "unitId": "Holy Nova",
+        "unitId": "Night Sentinel",
         "isChampion": false,
         "priceGold": 90,
         "sold": false
       },
       {
         "slot": 6,
+        "unitId": "Lord of Flame",
+        "isChampion": true,
+        "priceGold": 120,
+        "sold": false
+      },
+      {
+        "slot": 7,
         "unitId": "Earth and Moon",
         "isChampion": false,
         "priceGold": 90,
         "sold": false
       },
       {
-        "slot": 7,
-        "unitId": "Razorboar",
-        "isChampion": false,
-        "priceGold": 90,
-        "sold": false
-      },
-      {
         "slot": 8,
-        "unitId": "Smoke Bomb",
-        "isChampion": false,
-        "priceGold": 90,
-        "sold": false
+        "unitId": "Warg Lord",
+        "isChampion": true,
+        "priceGold": 120,
+        "sold": true
       }
     ],
-    "lastReroll": 1757525937,
-    "sold": {},
-    "nonceSeen": {},
+    "lastReroll": 1757545004,
+    "sold": {
+      "8": true
+    },
+    "nonceSeen": {
+      "buy-8-1757544994770": true,
+      "buy-8-1757545003873": true,
+      "buy-8-1757545005174": true,
+      "reroll-1757544994291": true,
+      "reroll-1757545003441": true,
+      "reroll-1757545004820": true
+    },
     "version": 1
   },
-  "progress": {},
+  "progress": {
+    "Warg Lord": {
+      "UnitID": "Warg Lord",
+      "rarity": 3,
+      "rank": 2,
+      "shardsOwned": 3,
+      "perksUnlocked": [],
+      "activePerk": null
+    }
+  },
   "army": [
-    "Sorceress Glacia",
-    "Flesh Golem",
+    "Warg Lord",
+    "Chain Lightning",
     "Magma Beasts",
     "Firedrake",
     "Jungle Headhunter",
     "Blizzard",
-    "Rampager"
+    "Winged Screechers"
   ],
   "armies": {
     "Sorceress Glacia": [
       "Flesh Golem",
       "Magma Beasts",
+      "Winged Screechers",
+      "Jungle Headhunter",
+      "Blizzard",
+      "Swordsman"
+    ],
+    "Warg Lord": [
+      "Chain Lightning",
+      "Magma Beasts",
       "Firedrake",
       "Jungle Headhunter",
       "Blizzard",
-      "Rampager"
+      "Winged Screechers"
     ]
   }
 }

@@ -54,6 +54,28 @@ func (g *Game) updateHome() {
 		}
 	}
 
+	// Handle panel hotkeys (dev)
+	if inpututil.IsKeyJustPressed(ebiten.KeyB) {
+		if g.ShowShopPanel {
+			g.ShowShopPanel = false
+		} else {
+			g.ShowShopPanel = true
+			// TODO: fetch shop
+		}
+	}
+	if inpututil.IsKeyJustPressed(ebiten.KeyU) {
+		if g.ShowUnitPanel {
+			g.ShowUnitPanel = false
+		} else {
+			g.ShowUnitPanel = true
+			if g.ShowUnitPanel && g.SelectedUnit == "" {
+				if g.selectedChampion != "" {
+					g.SelectedUnit = g.selectedChampion
+				}
+			}
+		}
+	}
+
 	if len(g.minisAll) == 0 {
 		g.send("ListMinis", protocol.ListMinis{})
 	}

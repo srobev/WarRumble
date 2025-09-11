@@ -41,3 +41,12 @@ func computeLevel(totalXP int) (int, int, int) {
 	// reached top of table
 	return len(tbl) + 1, 0, 0
 }
+
+// computeEffectiveLevel combines XP-based level with rank progression
+// Returns (effectiveLevel, baseXPLevel, rank, perkSlotsUnlocked, legendaryUnlocked)
+func computeEffectiveLevel(totalXP int, rank int, perkSlotsUnlocked int, legendaryUnlocked bool) (int, int, int, int, bool) {
+	baseLevel, _, _ := computeLevel(totalXP)
+	effectiveLevel := baseLevel + rank - 1 // rank 1 = +0, rank 2 = +1, etc.
+
+	return effectiveLevel, baseLevel, rank, perkSlotsUnlocked, legendaryUnlocked
+}

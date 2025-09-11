@@ -183,3 +183,31 @@ func (s *Service) HandleSetActivePerk(unitID string, perkID types.PerkID, availa
 
 	return nil
 }
+
+// HandleUpgradeUnit processes unit upgrade (consuming shards to increase rank)
+func (s *Service) HandleUpgradeUnit(username, unitID string, broadcaster func(eventType string, event interface{})) error {
+	progress, err := s.LoadUnitProgress(unitID)
+	if err != nil {
+		return fmt.Errorf("failed to load progress: %w", err)
+	}
+
+	// Check if the unit has enough shards for upgrade
+	requiredShards := progress.Rarity.ShardsPerRank()
+	if progress.ShardsOwned < requiredShards {
+		return fmt.Errorf("insufficient shards: have %d, need %d", progress.ShardsOwned, requiredShards)
+	}
+
+	// Consume shards and upgrade rank
+	progress.ShardsOwned -= requiredShards
+	progress.Rank++
+
+	if err := s.SaveUnitProgress(progress); err != nil {
+		return fmt.Errorf("failed to save progress: %w", err)
+	}
+
+	// Broadcast updated progress
+	s.BroadcastUnitProgress(unitID, progress, broadcaster)
+
+	log.Printf("[%s] Upgraded unit %s to rank %d (consumed %d shards)", username, unitID, progress.Rank, requiredShards)
+	return nil
+}

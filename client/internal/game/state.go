@@ -10,6 +10,49 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
+// Panel types
+type Offer struct {
+	OfferID   string  `json:"offer_id"`
+	Type      string  `json:"offer_type"` // "mini"|"champion"|"perk"
+	Unit      string  `json:"unit"`
+	PerkID    *string `json:"perk_id,omitempty"`
+	PriceGold int     `json:"price_gold"`
+	Portrait  string  `json:"portrait"`
+	Desc      string  `json:"desc,omitempty"`
+}
+
+type Grid struct {
+	Offers []Offer `json:"offers"`
+}
+
+type PerkView struct {
+	ID           string `json:"id"`
+	Name         string `json:"name"`
+	Desc         string `json:"desc"`
+	Purchased    bool   `json:"purchased"`
+	Locked       bool   `json:"locked"`
+	Active       bool   `json:"active"`
+	UnlockRarity string `json:"unlockRarity"`
+}
+
+// Panel state types
+type ShopState struct {
+	NeedsFetch bool
+	Fetching   bool
+	Err        error
+	Grid       Grid
+	Toast      string
+	ToastUntil time.Time
+	NextReroll time.Time
+}
+
+type UnitPanelState struct {
+	Unit     string
+	Perks    []PerkView
+	Fetching bool
+	Err      error
+}
+
 type Game struct {
 	// connection/boot UI
 	connOnce        sync.Once
@@ -33,6 +76,15 @@ type Game struct {
 	nameInput string
 	playerID  int64
 	name      string
+
+	// Panel states
+	ShowShopPanel bool
+	ShowUnitPanel bool
+	SelectedUnit  string
+
+	// Panel data states
+	Shop      ShopState
+	UnitPanel UnitPanelState
 
 	// battle
 	gold              int

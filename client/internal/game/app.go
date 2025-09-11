@@ -157,6 +157,12 @@ func (g *Game) Update() error {
 		g.lobbyRequested = true
 		g.scr = screenHome
 
+		// Initialize assets and UI systems
+		g.assets.ensureInit()
+
+		// Initialize shop UI system
+		g.initShopUI()
+
 		// Clear particle effects when transitioning to home screen (but keep them for other screens)
 		// Particles are disabled on army tab
 
@@ -868,31 +874,39 @@ func (g *Game) Draw(screen *ebiten.Image) {
 		}
 
 		// Add panel rendering here (after base scene)
-		shopRect := image.Rect(int(float64(protocol.ScreenW)*0.62), 80, protocol.ScreenW-40, protocol.ScreenH-40)
-		unitRect := image.Rect(40, 80, int(float64(protocol.ScreenW)*0.58), protocol.ScreenH-40)
-
 		if g.ShowShopPanel {
-			rs := &uipkg.ShopRenderState{
-				Fetching:    g.Shop.Fetching,
-				Err:         g.Shop.Err,
-				Offers:      g.Shop.Grid.Offers,
-				Toast:       g.Shop.Toast,
-				ToastUntil:  g.Shop.ToastUntil,
-				CooldownSec: int(math.Max(0, g.Shop.NextReroll.Sub(time.Time{}))),
+			if g.shopView != nil && g.shopView.IsVisible() {
+				g.shopView.Draw(screen)
 			}
-			uipkg.DrawShopPanel(screen, shopRect, rs)
 		}
 
-		if g.ShowUnitPanel {
-			ur := &uipkg.UnitRenderState{
-				Unit:     g.UnitPanel.Unit,
-				Perks:    g.UnitPanel.Perks,
-				Fetching: g.UnitPanel.Fetching,
-				Err:      g.UnitPanel.Err,
-			}
-			uipkg.DrawUnitPanel(screen, unitRect, ur)
-		}
+	}
 
+	// Handle panel input (after rendering)
+	if inpututil.IsMouseButtonJustReleased(ebiten.MouseButtonLeft) {
+		mx, my := ebiten.CursorPosition()
+
+		// Legacy shop input handling removed - now handled through shopView in updateShopTab
+
+		// Unit panel Activate clicks
+		if g.ShowUnitPanel && g.scr == screenBattle && (g.endActive || g.gameOver) {
+			unitRect := image.Rect(40, 80, int(float64(protocol.ScreenW)*0.58), protocol.ScreenH-40)
+			for i := 0; i < len(g.UnitPanel.Perks) && i < 3; i++ {
+				r := uipkg.UnitPerkCardRect(unitRect, i)
+				if mx >= r.Min.X && mx <= r.Max.X && my >= r.Min.Y && my <= r.Max.Y {
+					p := g.UnitPanel.Perks[i]
+					if p.Purchased && !p.Active {
+						// Flip active locally
+						for j := range g.UnitPanel.Perks {
+							g.UnitPanel.Perks[j].Active = (g.UnitPanel.Perks[j].ID == p.ID)
+						}
+						g.Shop.Toast = fmt.Sprintf("Activated: %s", p.Name)
+						g.Shop.ToastUntil = time.Now().Add(2 * time.Second)
+					}
+					break
+				}
+			}
+		}
 	}
 }
 

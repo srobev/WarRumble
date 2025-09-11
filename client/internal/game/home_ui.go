@@ -18,6 +18,8 @@ import (
 	"github.com/hajimehoshi/ebiten/v2/vector"
 
 	"golang.org/x/image/font/basicfont"
+	// if you added exported rect helpers there
+	// FetchGrid / Purchase / Reroll
 )
 
 func getAbilityDescription(abilityName string) (name, description string) {
@@ -219,26 +221,85 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				screen.DrawImage(img, op)
 			}
 
-			// Level bottom-left (moved from top-left)
+			// Level bottom-left with rank progression & perk slot indicators
 			lvl := 1
+			baseLvl := 1
+			rankBonus := 0
+			perkSlots := 0
+			currentShards := 0
+			shardsNeeded := 3 // Default
+			canUpgrade := false
+
 			if g.unitXP != nil {
 				if xp, ok := g.unitXP[it.Name]; ok {
-					l, _, _ := computeLevel(xp)
-					if l > 0 {
+					if l, _, _ := computeLevel(xp); l > 0 {
+						baseLvl = l
 						lvl = l
 					}
 				}
 			}
+
+			// Check for rank progression and perk slots
+			if g.unitProgression != nil {
+				if progress, exists := g.unitProgression[it.Name]; exists {
+					rankBonus = progress.Rank - 1
+					perkSlots = progress.PerkSlotsUnlocked
+					currentShards = progress.ShardsOwned
+					lvl = baseLvl + rankBonus
+
+					// Check if can upgrade
+					shardsNeeded = progress.Rank * 10 // Dynamic cost: first upgrade costs shards for rank 1, etc.
+					if shardsNeeded < 10 {
+						shardsNeeded = 10 // Minimum 10 shards
+					}
+					canUpgrade = currentShards >= shardsNeeded
+				}
+			}
+
 			levelBadgeX := r.x + 8
 			levelBadgeY := r.y + r.h - 20
 
-			// Level badge with purple theme (same size as gold cost badges)
+			// Level badge with purple theme (larger for combined level + indicators)
 			if lvl > 0 {
+				// Main level display
 				levelStr := fmt.Sprintf("%d", lvl)
 				levelW := len(levelStr) * 7
-				vector.DrawFilledRect(screen, float32(levelBadgeX-4), float32(levelBadgeY-2), float32(levelW+8), 14, color.NRGBA{138, 43, 226, 200}, true)
-				vector.StrokeRect(screen, float32(levelBadgeX-4), float32(levelBadgeY-2), float32(levelW+8), 14, 1, color.NRGBA{100, 20, 150, 255}, true)
+				vector.DrawFilledRect(screen, float32(levelBadgeX-6), float32(levelBadgeY-3), float32(levelW+12), 16, color.NRGBA{138, 43, 226, 220}, true)
+				vector.StrokeRect(screen, float32(levelBadgeX-6), float32(levelBadgeY-3), float32(levelW+12), 16, 1, color.NRGBA{100, 20, 150, 255}, true)
 				text.Draw(screen, levelStr, fonts.UI(12), levelBadgeX, levelBadgeY+10, color.NRGBA{255, 255, 255, 255})
+
+				// Rank progression indicator (red flame if has rank bonus)
+				if rankBonus > 0 {
+					fireX := levelBadgeX + levelW + 10
+					vector.DrawFilledRect(screen, float32(fireX-2), float32(levelBadgeY-2), 8, 14, color.NRGBA{255, 100, 50, 230}, true)
+					vector.StrokeRect(screen, float32(fireX-2), float32(levelBadgeY-2), 8, 14, 1, color.NRGBA{200, 40, 20, 255}, true)
+					text.Draw(screen, "🔥", basicfont.Face7x13, fireX-4, levelBadgeY+8, color.NRGBA{255, 255, 100, 255})
+				}
+
+				// Perk slots indicator (gear icon if has perk slots)
+				if perkSlots > 0 {
+					perkX := levelBadgeX + levelW + 20
+					if rankBonus > 0 {
+						perkX += 8
+					}
+					vector.DrawFilledRect(screen, float32(perkX-2), float32(levelBadgeY-2), 8, 14, color.NRGBA{255, 215, 0, 230}, true)
+					vector.StrokeRect(screen, float32(perkX-2), float32(levelBadgeY-2), 8, 14, 1, color.NRGBA{200, 160, 20, 255}, true)
+					text.Draw(screen, "⚙", basicfont.Face7x13, perkX-4, levelBadgeY+8, color.NRGBA{255, 255, 255, 255})
+				}
+
+				// Upgrade indicator (green arrow if ready to upgrade)
+				if canUpgrade {
+					upgradeX := levelBadgeX + levelW + 30
+					if rankBonus > 0 {
+						upgradeX += 8
+					}
+					if perkSlots > 0 {
+						upgradeX += 8
+					}
+					vector.DrawFilledRect(screen, float32(upgradeX-2), float32(levelBadgeY-2), 8, 14, color.NRGBA{0, 200, 0, 230}, true)
+					vector.StrokeRect(screen, float32(upgradeX-2), float32(levelBadgeY-2), 8, 14, 1, color.NRGBA{0, 150, 0, 255}, true)
+					text.Draw(screen, "⬆", basicfont.Face7x13, upgradeX-4, levelBadgeY+8, color.NRGBA{255, 255, 255, 255})
+				}
 			}
 
 			// Selection indicator with theme color
@@ -1255,6 +1316,64 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				text.Draw(screen, starProgressText, fonts.UI(12), tx, ty-1, color.NRGBA{0, 0, 0, 200})
 				text.Draw(screen, starProgressText, fonts.UI(12), tx, ty, color.White)
 
+				// Add UPGRADE button below STAR progress bar if unit can be upgraded
+				if currentShards >= threshold && g.unitProgression != nil {
+					if progress, exists := g.unitProgression[g.miniOverlayName]; exists {
+						// Get the required shards for this unit's level - fixed values based on unit type
+						shardsPerRank := 3 // Common default
+						if info.Class == "champion" {
+							shardsPerRank = 25 // Legendary
+						} else {
+							// Simple mapping based on name/class patterns for minis
+							unitName := strings.ToLower(g.miniOverlayName)
+							if strings.Contains(unitName, "rare") ||
+								strings.Contains(unitName, "elite") ||
+								strings.Contains(unitName, "knight") ||
+								strings.Contains(unitName, "archer") {
+								shardsPerRank = 10 // Rare
+							} else if strings.Contains(unitName, "legendary") ||
+								strings.Contains(unitName, "mythic") ||
+								strings.Contains(unitName, "lord") ||
+								strings.Contains(unitName, "king") {
+								shardsPerRank = 25 // Epic/Legendary
+							}
+						}
+						if progress.ShardsOwned >= shardsPerRank {
+							// Position button below STAR progress bar
+							upgradeBtnY := starBarY + starBarH + 10 // Gap of 10px below progress bar
+							upgradeBtnX := starBarX                 // Left align with progress bar
+							upgradeBtnW := 120
+							upgradeBtnH := 26
+
+							// Draw upgrade button background
+							ebitenutil.DrawRect(screen, float64(upgradeBtnX), float64(upgradeBtnY), float64(upgradeBtnW), float64(upgradeBtnH), color.NRGBA{70, 130, 70, 255})
+
+							// Check if button is hovered
+							mx, my := ebiten.CursorPosition()
+							isHovered := mx >= upgradeBtnX && mx <= upgradeBtnX+upgradeBtnW && my >= upgradeBtnY && my <= upgradeBtnY+upgradeBtnH
+
+							// Draw hover effect
+							if isHovered {
+								ebitenutil.DrawRect(screen, float64(upgradeBtnX), float64(upgradeBtnY), float64(upgradeBtnW), float64(upgradeBtnH), color.NRGBA{100, 160, 100, 180})
+							}
+
+							// Draw button border
+							ebitenutil.DrawRect(screen, float64(upgradeBtnX), float64(upgradeBtnY), float64(upgradeBtnW), 2, color.NRGBA{100, 160, 100, 255})
+							ebitenutil.DrawRect(screen, float64(upgradeBtnX), float64(upgradeBtnY+upgradeBtnH-2), float64(upgradeBtnW), 2, color.NRGBA{100, 160, 100, 255})
+							ebitenutil.DrawRect(screen, float64(upgradeBtnX), float64(upgradeBtnY), 2, float64(upgradeBtnH), color.NRGBA{100, 160, 100, 255})
+							ebitenutil.DrawRect(screen, float64(upgradeBtnX+upgradeBtnW-2), float64(upgradeBtnY), 2, float64(upgradeBtnH), color.NRGBA{100, 160, 100, 255})
+
+							// Draw button text "UPGRADE ⭐" with gold star
+							text.Draw(screen, "UPGRADE ⭐", fonts.UI(12), upgradeBtnX+15, upgradeBtnY+18, color.White)
+
+							// Handle click - send upgrade message
+							if isHovered && inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+								g.send("UpgradeUnit", protocol.UpgradeUnit{UnitID: g.miniOverlayName})
+							}
+						}
+					}
+				}
+
 				// STAR progress bar hover tooltip
 				starBarHovered := mx >= starBarX && mx <= starBarX+starBarW && my >= starBarY && my <= starBarY+starBarH
 				if starBarHovered {
@@ -1958,11 +2077,14 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 	case tabSocial:
 		g.drawSocial(screen)
 	case tabShop:
-		// Draw the actual shop UI
-		if g.shopView == nil {
-			g.initShopUI()
+		// Draw the shop tab content using the new shop UI system
+		if g.shopView != nil {
+			g.shopView.Draw(screen)
+		} else {
+			// Fallback if shop view is not initialized
+			text.Draw(screen, "Loading shop...", fonts.UI(12), protocol.ScreenW/2-60, protocol.ScreenH/2, color.White)
 		}
-		g.shopView.Draw(screen)
+
 	case tabSettings:
 		// Settings panel background
 		contentY := topBarH + pad

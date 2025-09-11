@@ -12,9 +12,8 @@ import (
 )
 
 type UnitRenderState struct {
-	Unit  string
-	Perks []net.PerkView
-	// TODO: add rarity/shards/level when you have those available in client
+	Unit     string
+	Perks    []net.PerkView
 	Fetching bool
 	Err      error
 }
@@ -27,9 +26,9 @@ func DrawUnitPanel(screen *ebiten.Image, panel image.Rectangle, s *UnitRenderSta
 	screen.DrawImage(bg, op)
 
 	// Title
-	title := "Unit"
-	if s.Unit != "" {
-		title = s.Unit
+	title := s.Unit
+	if title == "" {
+		title = "Unit"
 	}
 	text.Draw(screen, title, basicfont.Face7x13, panel.Min.X+16, panel.Min.Y+24, color.White)
 
@@ -41,11 +40,11 @@ func DrawUnitPanel(screen *ebiten.Image, panel image.Rectangle, s *UnitRenderSta
 		text.Draw(screen, "Error loading perks", basicfont.Face7x13, panel.Min.X+16, panel.Min.Y+48, color.RGBA{255, 120, 120, 255})
 	}
 
-	// Right column for 3 perk cards
+	// Right column: 3 perk cards
 	top := panel.Min.Y + 56
 	left := panel.Min.X + 16
 	w := panel.Dx() - 32
-	cardH := 80
+	cardH := 84
 	gap := 10
 
 	for i := 0; i < len(s.Perks) && i < 3; i++ {
@@ -85,4 +84,15 @@ func drawPerkCard(screen *ebiten.Image, rect image.Rectangle, p net.PerkView) {
 		state = "Active"
 	}
 	text.Draw(screen, state, basicfont.Face7x13, rect.Min.X+8, rect.Min.Y+58, color.RGBA{230, 230, 140, 255})
+}
+
+// ---- Hit-test utility ----
+func UnitPerkCardRect(panel image.Rectangle, idx int) image.Rectangle {
+	top := panel.Min.Y + 56
+	left := panel.Min.X + 16
+	w := panel.Dx() - 32
+	cardH := 84
+	gap := 10
+	y := top + idx*(cardH+gap)
+	return image.Rect(left, y, left+w, y+cardH)
 }

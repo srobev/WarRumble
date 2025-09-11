@@ -1238,6 +1238,35 @@ func (c *client) reader(h *Hub) {
 				sendJSON(c, "Error", protocol.ErrorMsg{Message: "Shop service unavailable"})
 			}
 
+		case "UpgradeUnit":
+			var req protocol.UpgradeUnit
+			_ = json.Unmarshal(env.Data, &req)
+
+			h.mu.Lock()
+			s := h.sessions[c]
+			username := ""
+			if s != nil {
+				username = s.Name // Use username from session
+			}
+			h.mu.Unlock()
+
+			if username == "" {
+				sendJSON(c, "Error", protocol.ErrorMsg{Message: "Not authenticated"})
+				break
+			}
+
+			// Handle unit upgrade through progression service
+			if h.progressionService != nil {
+				err := h.progressionService.HandleUpgradeUnit(username, req.UnitID, func(eventType string, event interface{}) {
+					sendJSON(c, eventType, event)
+				})
+				if err != nil {
+					sendJSON(c, "Error", protocol.ErrorMsg{Message: err.Error()})
+				}
+			} else {
+				sendJSON(c, "Error", protocol.ErrorMsg{Message: "Progression service unavailable"})
+			}
+
 		default:
 			sendJSON(c, "Error", protocol.ErrorMsg{Message: "Unknown message type: " + env.Type})
 		}

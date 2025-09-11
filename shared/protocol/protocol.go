@@ -61,3 +61,7 @@ type ActivePerkChanged struct {
 	UnitID     string  `json:"unitId"`
 	ActivePerk *PerkID `json:"activePerk"`
 }
+
+type UpgradeUnit struct {
+	UnitID string `json:"unitId"`
+}
