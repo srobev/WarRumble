@@ -1,115 +1,160 @@
 {
   "id": "",
   "name": "silvester",
-  "gold": 3343411963,
+  "gold": 3343385533,
   "accountXp": 0,
+  "resources": {},
+  "pvpRating": 1200,
+  "pvpRank": "Knight",
+  "avatar": "orc.png",
+  "guildId": "",
+  "unitXp": {
+    "Blazebinder": 3,
+    "Blizzard": 1,
+    "Bloodmage Thalor": 2,
+    "Flesh Golem": 1,
+    "Grizzly Marksman": 1,
+    "Jungle Headhunter": 2,
+    "Magma Beasts": 1,
+    "Razorboar": 1,
+    "Reanimator": 2,
+    "Redhand Thieves": 2,
+    "Sir Kaelen Lightbane": 4,
+    "Sorceress Glacia": 1,
+    "Spirit Binder": 3,
+    "Swordsman": 2,
+    "The Warden": 3,
+    "Winged Screechers": 1
+  },
   "shop": {
     "roll": [
       {
         "slot": 0,
-        "unitId": "Night Sentinel",
+        "unitId": "Earthhoof",
         "isChampion": false,
         "priceGold": 90,
         "sold": false
       },
       {
         "slot": 1,
-        "unitId": "Aethelion Ragestorm",
-        "isChampion": true,
-        "priceGold": 120,
+        "unitId": "Twin Wyrnn",
+        "isChampion": false,
+        "priceGold": 90,
         "sold": false
       },
       {
         "slot": 2,
-        "unitId": "Chain Lightning",
+        "unitId": "Blazebinder",
         "isChampion": false,
         "priceGold": 90,
         "sold": false
       },
       {
         "slot": 3,
-        "unitId": "Kamikaze Aviator",
+        "unitId": "Whelp Eggs",
         "isChampion": false,
         "priceGold": 90,
         "sold": false
       },
       {
         "slot": 4,
-        "unitId": "Wraith",
+        "unitId": "Aerie Guard",
         "isChampion": false,
         "priceGold": 90,
         "sold": false
       },
       {
         "slot": 5,
-        "unitId": "Night Sentinel",
-        "isChampion": false,
-        "priceGold": 90,
+        "unitId": "Bloodmage Thalor",
+        "isChampion": true,
+        "priceGold": 120,
         "sold": false
       },
       {
         "slot": 6,
-        "unitId": "Lord of Flame",
-        "isChampion": true,
-        "priceGold": 120,
-        "sold": false
-      },
-      {
-        "slot": 7,
-        "unitId": "Earth and Moon",
+        "unitId": "Whelp Eggs",
         "isChampion": false,
         "priceGold": 90,
         "sold": false
       },
       {
-        "slot": 8,
-        "unitId": "Warg Lord",
+        "slot": 7,
+        "unitId": "Sorceress Glacia",
         "isChampion": true,
         "priceGold": 120,
-        "sold": true
+        "sold": false
+      },
+      {
+        "slot": 8,
+        "unitId": "Living Bomb",
+        "isChampion": false,
+        "priceGold": 90,
+        "sold": false
       }
     ],
-    "lastReroll": 1757545004,
-    "sold": {
-      "8": true
-    },
+    "lastReroll": 1757596220,
+    "sold": {},
     "nonceSeen": {
-      "buy-8-1757544994770": true,
-      "buy-8-1757545003873": true,
-      "buy-8-1757545005174": true,
-      "reroll-1757544994291": true,
-      "reroll-1757545003441": true,
-      "reroll-1757545004820": true
+      "reroll-1757596174539": true
     },
     "version": 1
   },
-  "progress": {
-    "Warg Lord": {
-      "UnitID": "Warg Lord",
-      "rarity": 3,
-      "rank": 2,
-      "shardsOwned": 3,
-      "perksUnlocked": [],
-      "activePerk": null
-    }
+  "progress": {},
+  "dust": 1500,
+  "capsules": {
+    "rare": 1,
+    "epic": 1,
+    "legendary": 1
   },
   "army": [
-    "Warg Lord",
-    "Chain Lightning",
-    "Magma Beasts",
-    "Firedrake",
-    "Jungle Headhunter",
-    "Blizzard",
-    "Winged Screechers"
+    "The Warden",
+    "Spirit Binder",
+    "Nightfang",
+    "Swordsman",
+    "Winged Screechers",
+    "Redhand Thieves",
+    "Blazebinder"
   ],
   "armies": {
+    "Bloodmage Thalor": [
+      "Flesh Golem",
+      "Winged Screechers",
+      "Reanimator",
+      "Swordsman",
+      "Earthhoof",
+      "Razorboar"
+    ],
+    "Rusttooth": [
+      "Flesh Golem",
+      "Foulwing Rider",
+      "Blazebinder",
+      "Arcane Blast",
+      "Obsidian Bat",
+      "Spirit Binder"
+    ],
+    "Sir Kaelen Lightbane": [
+      "Redhand Thieves",
+      "Blazebinder",
+      "Jungle Headhunter",
+      "Spirit Binder",
+      "Swordsman",
+      "Grizzly Marksman"
+    ],
     "Sorceress Glacia": [
       "Flesh Golem",
       "Magma Beasts",
       "Winged Screechers",
-      "Jungle Headhunter",
+      "Blazebinder",
       "Blizzard",
       "Swordsman"
+    ],
+    "The Warden": [
+      "Spirit Binder",
+      "Nightfang",
+      "Swordsman",
+      "Winged Screechers",
+      "Redhand Thieves",
+      "Blazebinder"
     ],
     "Warg Lord": [
       "Chain Lightning",
@@ -119,5 +164,14 @@
       "Blizzard",
       "Winged Screechers"
     ]
+  },
+  "lastUpdated": 0,
+  "sectionTimes": {
+    "progress": 0,
+    "resources": 0,
+    "pvp": 0,
+    "army": 0,
+    "shop": 0,
+    "profile": 0
   }
 }

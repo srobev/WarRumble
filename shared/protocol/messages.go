@@ -278,6 +278,20 @@ type GoldSynced struct {
 	Gold int64 `json:"gold"`
 }
 
+type DustSynced struct {
+	Dust int `json:"dust"`
+}
+
+type CapsulesSynced struct {
+	Capsules CapsulesCount `json:"capsules"`
+}
+
+type CapsulesCount struct {
+	Rare      int `json:"rare"`
+	Epic      int `json:"epic"`
+	Legendary int `json:"legendary"`
+}
+
 type Error struct {
 	Code    string `json:"code"`
 	Message string `json:"message"`

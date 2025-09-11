@@ -119,7 +119,11 @@ func (p *PerksPanel) Draw(screen *ebiten.Image) {
 		rankText := fmt.Sprintf("Rank: %d", p.unitProgress.Rank)
 		text.Draw(screen, rankText, basicfont.Face7x13, p.x+10, p.y+40, p.textColor)
 
-		shardsText := fmt.Sprintf("Shards: %d / %d", p.unitProgress.ShardsOwned, p.unitProgress.Rarity.ShardsPerRank())
+		// Show current shards toward NEXT rank using TRADITIONAL progression system
+		var nextRankRequirement int
+		nextRankRequirement = types.GetUpgradeCost(p.unitProgress.Rank)
+		shardsText := fmt.Sprintf("Clones: %d / %d (Rank %d → %d)",
+			p.unitProgress.ShardsOwned-1, nextRankRequirement, p.unitProgress.Rank, p.unitProgress.Rank+1)
 		text.Draw(screen, shardsText, basicfont.Face7x13, p.x+10, p.y+55, p.textColor)
 
 		slotsText := fmt.Sprintf("Perk Slots: %d", progression.PerkSlotsUnlocked(p.unitProgress))

@@ -11,8 +11,8 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"rumble/server/account"
 	"rumble/server/currency"
-	"rumble/server/progression"
 	"rumble/server/shop"
 	"rumble/shared/game/types"
 	"rumble/shared/protocol"
@@ -23,6 +23,104 @@ import (
 
 	"github.com/gorilla/websocket"
 )
+
+// converters between Account and Profile for backward compatibility
+
+// accountToProfile converts an Account to Profile for network transmission
+func accountToProfile(acc *account.Account) protocol.Profile {
+	profile := protocol.Profile{
+		PlayerID:  0, // Will be set from session later
+		Name:      acc.Name,
+		Army:      make([]string, len(acc.Army)),
+		Armies:    make(map[string][]string),
+		Gold:      int(acc.Gold),
+		AccountXP: acc.AccountXP,
+		UnitXP:    make(map[string]int),
+		Resources: make(map[string]int),
+		PvPRating: acc.PvPRating,
+		PvPRank:   acc.PvPRank,
+		Avatar:    acc.Avatar,
+		GuildID:   acc.GuildID,
+		Dust:      acc.Dust,
+		Capsules: protocol.CapsuleStock{
+			Rare:      acc.Capsules.Rare,
+			Epic:      acc.Capsules.Epic,
+			Legendary: acc.Capsules.Legendary,
+		},
+	}
+
+	// Copy army and armies
+	copy(profile.Army, acc.Army)
+	for k, v := range acc.Armies {
+		profile.Armies[k] = make([]string, len(v))
+		copy(profile.Armies[k], v)
+	}
+
+	// Copy UnitXP
+	for k, v := range acc.UnitXP {
+		profile.UnitXP[k] = v
+	}
+
+	// Copy Resources
+	for k, v := range acc.Resources {
+		profile.Resources[k] = v
+	}
+
+	return profile
+}
+
+// sendUnitProgressionData sends unit progression data to client for UI display
+func (h *Hub) sendUnitProgressionData(acc *account.Account, client *client) {
+	if acc.Progress != nil {
+		for unitID, progress := range acc.Progress {
+			unitProgressSync := protocol.UnitProgressSynced{
+				UnitID:                unitID,
+				Rank:                  progress.Rank,
+				ShardsOwned:           progress.ShardsOwned,
+				PerkSlotsUnlocked:     progress.Rank, // Approximation - can be calculated based on rank
+				LegendaryPerkUnlocked: false,         // Calculate based on rank requirements
+			}
+			sendJSON(client, "UnitProgressSynced", unitProgressSync)
+		}
+	}
+}
+
+// profileToAccount converts a Profile to Account for persistent storage
+func profileToAccount(prof protocol.Profile) *account.Account {
+	acc := &account.Account{
+		ID:        prof.Name, // Use name as ID fallback
+		Name:      prof.Name,
+		Gold:      int64(prof.Gold),
+		AccountXP: prof.AccountXP,
+		Resources: make(map[string]int),
+		PvPRating: prof.PvPRating,
+		PvPRank:   prof.PvPRank,
+		Avatar:    prof.Avatar,
+		GuildID:   prof.GuildID,
+		UnitXP:    make(map[string]int),
+		Army:      make([]string, len(prof.Army)),
+		Armies:    make(map[string][]string),
+	}
+
+	// Copy army and armies
+	copy(acc.Army, prof.Army)
+	for k, v := range prof.Armies {
+		acc.Armies[k] = make([]string, len(v))
+		copy(acc.Armies[k], v)
+	}
+
+	// Copy UnitXP
+	for k, v := range prof.UnitXP {
+		acc.UnitXP[k] = v
+	}
+
+	// Copy Resources
+	for k, v := range prof.Resources {
+		acc.Resources[k] = v
+	}
+
+	return acc
+}
 
 type client struct {
 	conn *websocket.Conn
@@ -76,9 +174,8 @@ type Hub struct {
 	guilds    *Guilds
 	guildSubs map[string]map[*client]struct{} // guildID -> clients subscribed
 
-	social             *Social
-	shopService        *shop.Service
-	progressionService *progression.Service
+	social      *Social
+	shopService *shop.Service
 }
 
 func NewHub() *Hub {
@@ -97,10 +194,9 @@ func NewHub() *Hub {
 	return h
 }
 
-func (h *Hub) SetGuilds(g *Guilds)                          { h.guilds = g }
-func (h *Hub) SetSocial(s *Social)                          { h.social = s }
-func (h *Hub) SetShopService(s *shop.Service)               { h.shopService = s }
-func (h *Hub) SetProgressionService(p *progression.Service) { h.progressionService = p }
+func (h *Hub) SetGuilds(g *Guilds)            { h.guilds = g }
+func (h *Hub) SetSocial(s *Social)            { h.social = s }
+func (h *Hub) SetShopService(s *shop.Service) { h.shopService = s }
 
 func makeRoomID(prefix string) string {
 	return fmt.Sprintf("%s-%d", prefix, time.Now().UnixNano())
@@ -361,32 +457,50 @@ func (c *client) reader(h *Hub) {
 				h.sessions[c] = s
 			}
 			s.Name = msg.Name
-			prof, err := loadProfile(s.Name)
+
+			// Load Account data as the single source of truth
+			acc, err := account.LoadAccount(s.Name)
 			if err != nil {
-				log.Printf("loadProfile: %v", err)
-			}
-			// bind server-issued ID + name
-			prof.PlayerID = s.PlayerID
-			prof.Name = s.Name
-			s.Profile = prof
-			if s.Profile.Avatar == "" {
-				s.Profile.Avatar = "default.png"
-			}
-			if s.Profile.PvPRating == 0 {
-				s.Profile.PvPRating = 1200
-			}
-			if s.Profile.PvPRank == "" {
-				s.Profile.PvPRank = rankName(s.Profile.PvPRating)
-			}
-			// keep legacy field in sync
-			s.Army = append([]string{}, prof.Army...)
-			h.mu.Unlock()
-			// Ensure a profile file exists for new users
-			if err := saveProfile(s.Profile); err != nil {
-				log.Printf("saveProfile(SetName): %v", err)
+				log.Printf("LoadAccount: %v", err)
+				// Create new account if it doesn't exist
+				acc = &account.Account{
+					ID:        s.Name, // Use name as ID
+					Name:      s.Name,
+					Gold:      1000, // Starting gold
+					Avatar:    "default.png",
+					PvPRating: 1200,
+					PvPRank:   "Knight",
+					UnitXP:    make(map[string]int),
+					Resources: make(map[string]int),
+					Armies:    make(map[string][]string),
+					Progress:  make(map[string]*types.UnitProgress),
+				}
 			}
 
+			// Convert Account to Profile for session compatibility
+			prof := accountToProfile(acc)
+			prof.PlayerID = s.PlayerID
+			s.Profile = prof
+			s.Army = append([]string{}, prof.Army...) // keep legacy field in sync
+
+			h.mu.Unlock()
+
+			// Send Profile to client
 			sendJSON(c, "Profile", s.Profile)
+
+			// Send dust and capsule data to client
+			sendJSON(c, "DustSynced", protocol.DustSynced{Dust: acc.Dust})
+			sendJSON(c, "CapsulesSynced", protocol.CapsulesSynced{
+				Capsules: protocol.CapsulesCount{
+					Rare:      acc.Capsules.Rare,
+					Epic:      acc.Capsules.Epic,
+					Legendary: acc.Capsules.Legendary,
+				},
+			})
+
+			// Send unit progression data for UI display
+			// Do this after unlock to avoid blocking other operations
+			h.sendUnitProgressionData(acc, c)
 		case "GetGuild":
 			h.mu.Lock()
 			s := h.sessions[c]
@@ -1255,16 +1369,45 @@ func (c *client) reader(h *Hub) {
 				break
 			}
 
-			// Handle unit upgrade through progression service
-			if h.progressionService != nil {
-				err := h.progressionService.HandleUpgradeUnit(username, req.UnitID, func(eventType string, event interface{}) {
-					sendJSON(c, eventType, event)
-				})
-				if err != nil {
-					sendJSON(c, "Error", protocol.ErrorMsg{Message: err.Error()})
-				}
+			// Handle unit upgrade directly through account service
+			// Load the account to perform the upgrade
+			acc, accountErr := account.LoadAccount(username)
+			if accountErr != nil {
+				sendJSON(c, "Error", protocol.ErrorMsg{Message: "Failed to load account: " + accountErr.Error()})
+				break
+			}
+
+			if err := acc.HandleUpgradeUnit(username, req.UnitID); err != nil {
+				sendJSON(c, "Error", protocol.ErrorMsg{Message: err.Error()})
 			} else {
-				sendJSON(c, "Error", protocol.ErrorMsg{Message: "Progression service unavailable"})
+				// Reload account after upgrade to get fresh data
+				acc, accountErr = account.LoadAccount(username)
+				if accountErr != nil {
+					sendJSON(c, "Error", protocol.ErrorMsg{Message: "Failed to reload account: " + accountErr.Error()})
+					break
+				}
+
+				// Update session profile with fresh account data
+				h.mu.Lock()
+				if s := h.sessions[c]; s != nil {
+					s.Profile = accountToProfile(acc)
+					logWithAccount(username, fmt.Sprintf("Upgrade success: %s rank %d, shards %d, dust %d, capsules (%d rare, %d epic, %d legendary)",
+						req.UnitID, acc.Progress[req.UnitID].Rank, acc.Progress[req.UnitID].ShardsOwned, acc.Dust, acc.Capsules.Rare, acc.Capsules.Epic, acc.Capsules.Legendary))
+				}
+				h.mu.Unlock()
+
+				// Send success response with updated account data
+				sendJSON(c, "UpgradeUnit", req)
+
+				// IMPORTANT: Sync the unit progression data back to client
+				// This prevents the client from showing stale shard counts
+				h.sendUnitProgressionData(acc, c)
+
+				// Send updated gold to client (dust costs consume gold equivalent)
+				sendJSON(c, "GoldUpdate", protocol.GoldUpdate{
+					PlayerID: s.PlayerID,
+					Gold:     int(acc.Gold),
+				})
 			}
 
 		default:

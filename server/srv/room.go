@@ -3,8 +3,10 @@ package srv
 import (
 	"log"
 	"math/rand"
-	"rumble/shared/protocol"
 	"time"
+
+	"rumble/server/account"
+	"rumble/shared/protocol"
 )
 
 type Room struct {
@@ -445,7 +447,8 @@ func (r *Room) Tick() {
 	}
 }
 
-// awardPveXPServer updates each human player's profile with XP after PvE battle.
+// awardPveXPServer updates each human player's Account with XP after PvE battle.
+// Now uses Account as the single source of truth for UnitXP data.
 func (r *Room) awardPveXPServer(winnerID int64) {
 	if r.hub == nil {
 		return
@@ -461,18 +464,37 @@ func (r *Room) awardPveXPServer(winnerID int64) {
 			r.hub.mu.Unlock()
 			continue
 		}
-		if s.Profile.UnitXP == nil {
-			s.Profile.UnitXP = map[string]int{}
+
+		// Load Account data (single source of truth)
+		acc, err := account.LoadAccount(s.Name)
+		if err != nil {
+			log.Printf("Failed to load account for XP update: %v", err)
+			r.hub.mu.Unlock()
+			continue
 		}
+
+		// Ensure Account UnitXP is initialized
+		if acc.UnitXP == nil {
+			acc.UnitXP = map[string]int{}
+		}
+
 		rate := 0.02
 		if c.id == winnerID {
 			rate = 0.05
 		}
+
 		// Use saved active army and award to champion + random minis
-		army := s.Profile.Army
+		army := acc.Army
 		if len(army) == 0 {
 			// nothing to award
-			_ = saveProfile(s.Profile)
+			err = account.SaveAccount(acc)
+			if err != nil {
+				log.Printf("Failed to save account: %v", err)
+			}
+
+			// Update session profile for compatibility
+			s.Profile = accountToProfile(acc)
+			s.Profile.PlayerID = s.PlayerID
 			prof := s.Profile
 			r.hub.mu.Unlock()
 			sendJSON(c, "Profile", prof)
@@ -510,16 +532,28 @@ func (r *Room) awardPveXPServer(winnerID int64) {
 		targets = append(targets, minis[:k]...)
 
 		for _, name := range targets {
-			cur := s.Profile.UnitXP[name]
+			cur := acc.UnitXP[name]
 			delta := xpDeltaForRate(cur, rate)
 			if delta > 0 {
-				s.Profile.UnitXP[name] = cur + delta
+				acc.UnitXP[name] = cur + delta
 			}
 		}
-		_ = saveProfile(s.Profile)
+
+		// Save Account with updated UnitXP (single source of truth)
+		err = account.SaveAccount(acc)
+		if err != nil {
+			log.Printf("Failed to save account with XP updates: %v", err)
+		}
+
+		// Update session profile for compatibility
+		s.Profile = accountToProfile(acc)
+		s.Profile.PlayerID = s.PlayerID
 		prof := s.Profile
+
 		r.hub.mu.Unlock()
 		sendJSON(c, "Profile", prof)
+
+		log.Printf("Updated account %s with XP: %v", s.Name, acc.UnitXP)
 	}
 }
 

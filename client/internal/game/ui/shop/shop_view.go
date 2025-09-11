@@ -232,9 +232,9 @@ func (v *ShopView) OnBuyResult(result protocol.BuyShopResult) {
 		v.grid.UpdateLayout(roll)
 	}
 
-	// Could show a success toast/message here
-	log.Printf("Shop purchase successful: %d %s (shards: %d/%d)",
-		result.Gold, result.UnitID, result.Shards, result.Threshold)
+	// Simple log showing total shards - just for verification
+	log.Printf("Shop purchase successful: %d %s (total shards: %d)",
+		result.Gold, result.UnitID, result.Shards)
 }
 
 // getCurrentGold returns current player gold for display

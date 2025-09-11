@@ -3,6 +3,12 @@ package protocol
 // PerkID alias to avoid circular import (same as types.PerkID)
 type PerkID = string
 
+type CapsuleStock struct {
+	Rare      int `json:"rare"`
+	Epic      int `json:"epic"`
+	Legendary int `json:"legendary"`
+}
+
 type Profile struct {
 	PlayerID  int64               `json:"playerId"`
 	Name      string              `json:"name"`
@@ -12,6 +18,8 @@ type Profile struct {
 	AccountXP int                 `json:"accountXp"`
 	UnitXP    map[string]int      `json:"unitXp,omitempty"` // per-mini XP, e.g. "Archer": 120
 	Resources map[string]int      `json:"resources,omitempty"`
+	Dust      int                 `json:"dust"`       // upgrade dust currency
+	Capsules  CapsuleStock        `json:"capsules"`   // upgrade capsules by rarity
 	PvPRating int                 `json:"pvp_rating"` // e.g. 1200 base
 	PvPRank   string              `json:"pvp_rank"`   // derived server-side
 	Avatar    string              `json:"avatar"`     // in game avatar

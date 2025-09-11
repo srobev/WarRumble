@@ -10,6 +10,13 @@ import (
 	"github.com/hajimehoshi/ebiten/v2"
 )
 
+// CapsuleStock tracks capsule counts by rarity
+type CapsuleStock struct {
+	Rare      int `json:"rare"`
+	Epic      int `json:"epic"`
+	Legendary int `json:"legendary"`
+}
+
 // Panel types
 type Offer struct {
 	OfferID   string  `json:"offer_id"`
@@ -123,10 +130,13 @@ type Game struct {
 	roomID      string
 	startBtn    rect
 	// --- Top bar (Home only) ---
-	accountGold int64 // separate "meta" currency (not battle gold)
-	userBtn     rect  // clickable later for profile/statistics
+	accountGold int64        // separate "meta" currency (not battle gold)
+	dust        int          // upgrade dust currency
+	capsules    CapsuleStock // upgrade capsules by rarity
+	userBtn     rect         // clickable later for profile/statistics
 	titleArea   rect
 	goldArea    rect
+	resourceBtn rect // resource panel button (next to gold)
 	topBarBg    *ebiten.Image
 	// bottom bar buttons
 	shopBtn, armyBtn, mapBtn, pvpBtn, socialBtn, settingsBtn rect
@@ -294,6 +304,14 @@ type Game struct {
 	profileOpen   bool
 	profCloseBtn  rect
 	profLogoutBtn rect
+
+	// --- Resource Panel UI ---
+	showResourcePanel bool
+	resourcePanelArea rect
+	dustArea          rect
+	rareCapsArea      rect
+	epicCapsArea      rect
+	legendaryCapsArea rect
 
 	// --- Social / Guilds ---
 	socialTab           int // 0=friends,1=guild,2=messages

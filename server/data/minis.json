@@ -146,10 +146,10 @@
     "portrait": "redhand_thieves.png",
     "class": "melee",
     "role": "mini",
-    "cost": 3,
+    "cost": 1,
     "speed": 2,
     "spawn_count": 2,
-    "features": ["squad", "melee", "stealth"]
+    "features": ["squad", "melee", "stealth", "cycle"]
   },
   {
     "name": "Firedrake",

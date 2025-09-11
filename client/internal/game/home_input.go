@@ -90,9 +90,10 @@ func (g *Game) updateHome() {
 			log.Println("Account clicked")
 			g.showProfile = true
 			return
-
 		} else if g.goldArea.hit(mx, my) {
-			log.Println("Gold clicked")
+			log.Println("Resources clicked - toggling panel")
+			g.showResourcePanel = !g.showResourcePanel
+			return
 		}
 		return
 	}

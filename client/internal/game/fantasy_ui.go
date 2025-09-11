@@ -7,10 +7,10 @@ import (
 	"math"
 	"time"
 
+	"rumble/client/internal/game/assets/fonts"
+
 	"github.com/hajimehoshi/ebiten/v2"
-	"github.com/hajimehoshi/ebiten/v2/text"
 	"github.com/hajimehoshi/ebiten/v2/vector"
-	"golang.org/x/image/font/basicfont"
 )
 
 // FantasyUI manages the application of fantasy themes across all UI elements
@@ -111,7 +111,7 @@ func (ui *FantasyUI) DrawThemedCard(screen *ebiten.Image, x, y, width, height in
 	// Draw title
 	if title != "" {
 		titleY := y + 8
-		text.Draw(screen, title, basicfont.Face7x13, x+12, titleY+12, ui.Theme.TextPrimary)
+		fonts.DrawUIWithFallback(screen, title, x+12, titleY+12, 14, ui.Theme.TextPrimary)
 
 		// Title underline
 		underlineY := titleY + 16
@@ -121,7 +121,7 @@ func (ui *FantasyUI) DrawThemedCard(screen *ebiten.Image, x, y, width, height in
 	// Draw content
 	contentY := y + 30
 	for i, line := range content {
-		text.Draw(screen, line, basicfont.Face7x13, x+12, contentY+i*16, ui.Theme.TextSecondary)
+		fonts.DrawUIWithFallback(screen, line, x+12, contentY+i*16, 14, ui.Theme.TextSecondary)
 	}
 }
 
@@ -237,31 +237,86 @@ func (ui *FantasyUI) DrawEnhancedUnitCard(screen *ebiten.Image, x, y, width, hei
 		vector.DrawFilledRect(screen, float32(costX-4), float32(costY-2), float32(costW+8), 14, ui.Theme.Secondary, true)
 		vector.StrokeRect(screen, float32(costX-4), float32(costY-2), float32(costW+8), 14, 1, ui.Theme.Border, true)
 		// Use dark gray text for better visibility
-		text.Draw(screen, costStr, basicfont.Face7x13, costX, costY+10, color.NRGBA{64, 64, 64, 255})
+		fonts.DrawUIWithFallback(screen, costStr, costX, costY+10, 14, color.NRGBA{64, 64, 64, 255})
 	}
 }
 
-// DrawThemedTooltip draws a themed tooltip with enhanced styling
+// DrawThemedTooltip draws a themed tooltip with enhanced styling matching the account tooltip style
 func (ui *FantasyUI) DrawThemedTooltip(screen *ebiten.Image, x, y, width, height int, title string, lines []string) {
-	// Tooltip background with theme
-	vector.DrawFilledRect(screen, float32(x), float32(y), float32(width), float32(height), ui.Theme.CardBackground, true)
+	// Use themed panel background (same as account tooltip)
+	ui.DrawThemedPanel(screen, x, y, width, height, 0.9)
 
-	// Border
-	vector.StrokeRect(screen, float32(x), float32(y), float32(width), float32(height), 2, ui.Theme.Border, true)
+	// Handle different tooltip sizes for different content types
+	hasAvatar := width >= 180 && title == "Account" // Account tooltip has avatar
+	if hasAvatar {
+		ui.drawAvatarTooltip(screen, x, y, width, height, title, lines)
+	} else {
+		ui.drawStandardTooltip(screen, x, y, width, height, title, lines)
+	}
+}
 
-	// Title
+// drawStandardTooltip draws a standard tooltip without avatar
+func (ui *FantasyUI) drawStandardTooltip(screen *ebiten.Image, x, y, width, height int, title string, lines []string) {
+	const leftTextX = 12
+	const titleY = 20
+	const lineHeight = 18
+
+	// Title with enhanced styling
 	if title != "" {
-		text.Draw(screen, title, basicfont.Face7x13, x+8, y+16, ui.Theme.TextPrimary)
-
+		fonts.DrawUIWithFallback(screen, title, x+leftTextX, y+titleY, 14, ui.Theme.TextPrimary)
 		// Title separator
-		vector.DrawFilledRect(screen, float32(x+8), float32(y+20), float32(width-16), 1, ui.Theme.Border, true)
+		vector.DrawFilledRect(screen, float32(x+leftTextX), float32(y+titleY+4), float32(width-leftTextX*2), 1, ui.Theme.Border, true)
 	}
 
-	// Content lines
-	lineY := y + 28
-	for _, line := range lines {
-		text.Draw(screen, line, basicfont.Face7x13, x+8, lineY, ui.Theme.TextSecondary)
-		lineY += 14
+	// Content lines with better spacing
+	contentY := y + titleY + 16
+	for i, line := range lines {
+		if line != "" {
+			fonts.DrawUIWithFallback(screen, line, x+leftTextX, contentY+i*lineHeight, 14, ui.Theme.TextSecondary)
+		}
+	}
+}
+
+// drawAvatarTooltip draws an enhanced tooltip with avatar (like account tooltip)
+func (ui *FantasyUI) drawAvatarTooltip(screen *ebiten.Image, x, y, width, height int, title string, lines []string) {
+	const leftTextX = 68
+	const padRight = 12
+
+	// Avatar block with themed styling
+	avatarX := x + 10
+	avatarY := y + 10
+	avatarW, avatarH := 56, 56
+
+	// Avatar placeholder with theme colors
+	vector.DrawFilledRect(screen, float32(avatarX), float32(avatarY), float32(avatarW), float32(avatarH), ui.Theme.Surface, true)
+	vector.StrokeRect(screen, float32(avatarX), float32(avatarY), float32(avatarW), float32(avatarH), 1, ui.Theme.Border, true)
+
+	// Title with enhanced styling
+	fonts.DrawUIWithFallback(screen, title, x+leftTextX, y+25, 14, ui.Theme.TextPrimary)
+
+	// Multiple content lines with different styling
+	if len(lines) >= 3 {
+		// First line (name/player)
+		fonts.DrawUIWithFallback(screen, lines[0], x+leftTextX, y+43, 14, ui.Theme.TextSecondary)
+
+		// Second line and beyond (stats/ratings/etc)
+		if len(lines) >= 1 {
+			fonts.DrawUIWithFallback(screen, lines[1], x+leftTextX, y+61, 14, ui.Theme.Secondary)
+
+			// Additional lines if present
+			for i := 2; i < len(lines); i++ {
+				fonts.DrawUIWithFallback(screen, lines[i], x+leftTextX, y+61+(i-1)*14, 12, ui.Theme.TextSecondary)
+			}
+		}
+	} else {
+		// Fallback for fewer lines
+		for i, line := range lines {
+			color := ui.Theme.TextSecondary
+			if i == 0 {
+				color = ui.Theme.TextPrimary
+			}
+			fonts.DrawUIWithFallback(screen, line, x+leftTextX, y+25+i*18, 14, color)
+		}
 	}
 }
 

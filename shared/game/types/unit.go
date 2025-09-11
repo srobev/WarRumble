@@ -18,6 +18,22 @@ type UnitProgress struct {
 	ActivePerk    *PerkID  `json:"activePerk"`
 }
 
+// GetUpgradeCost returns the shards required to upgrade from given rank (TRADITIONAL SYSTEM)
+func GetUpgradeCost(rank int) int {
+	switch rank {
+	case 1:
+		return 3 // Rank 1 → Rank 2: 3 shards (clones needed)
+	case 2:
+		return 10 // Rank 2 → Rank 3: 10 shards (clones needed)
+	case 3:
+		return 25 // Rank 3 → Rank 4: 25 shards (clones needed)
+	case 4:
+		return 25 // Rank 4 → Rank 5: 25 shards (clones needed)
+	default:
+		return 999 // Max rank reached
+	}
+}
+
 type PerkEffect struct {
 	Type              string  `json:"type"`
 	Radius            float64 `json:"radius,omitempty"`

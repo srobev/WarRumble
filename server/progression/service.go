@@ -11,19 +11,15 @@ import (
 	"rumble/shared/protocol"
 )
 
-// AddShards adds shards to unit progress and calculates rank ups
+// AddShards adds shards to unit progress WITHOUT auto rank-ups (TRADITIONAL SYSTEM)
 func AddShards(p *types.UnitProgress, add int) (rankUps int) {
 	if add <= 0 {
 		return 0
 	}
+	// Just add shards - NO automatic rank-ups
 	p.ShardsOwned += add
-	cost := p.Rarity.ShardsPerRank()
-	for p.ShardsOwned >= cost {
-		p.ShardsOwned -= cost
-		p.Rank++
-		rankUps++
-	}
-	return
+	// Manual upgrades only via HandleUpgradeUnit
+	return 0 // Never auto rank-up
 }
 
 // PerkSlotsUnlocked returns the number of perk slots unlocked for the unit's rarity
@@ -184,7 +180,7 @@ func (s *Service) HandleSetActivePerk(unitID string, perkID types.PerkID, availa
 	return nil
 }
 
-// HandleUpgradeUnit processes unit upgrade (consuming shards to increase rank)
+// HandleUpgradeUnit processes unit upgrade (DEPRECATED - use Account.HandleUpgradeUnit)
 func (s *Service) HandleUpgradeUnit(username, unitID string, broadcaster func(eventType string, event interface{})) error {
 	progress, err := s.LoadUnitProgress(unitID)
 	if err != nil {
@@ -192,7 +188,7 @@ func (s *Service) HandleUpgradeUnit(username, unitID string, broadcaster func(ev
 	}
 
 	// Check if the unit has enough shards for upgrade
-	requiredShards := progress.Rarity.ShardsPerRank()
+	requiredShards := types.GetUpgradeCost(progress.Rank)
 	if progress.ShardsOwned < requiredShards {
 		return fmt.Errorf("insufficient shards: have %d, need %d", progress.ShardsOwned, requiredShards)
 	}

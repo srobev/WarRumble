@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"rumble/client/internal/game/assets/fonts"
+	"rumble/shared/game/types"
 	"rumble/shared/protocol"
 
 	"github.com/hajimehoshi/ebiten/v2"
@@ -247,12 +248,59 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 					currentShards = progress.ShardsOwned
 					lvl = baseLvl + rankBonus
 
-					// Check if can upgrade
-					shardsNeeded = progress.Rank * 10 // Dynamic cost: first upgrade costs shards for rank 1, etc.
-					if shardsNeeded < 10 {
-						shardsNeeded = 10 // Minimum 10 shards
+					// Get unit metadata to access rarity information
+					var meta types.UnitMeta
+					if info, ok := g.nameToMini[it.Name]; ok {
+						// This is a champion, determine rarity from class name patterns
+						if info.Class == "champion" {
+							unitName := strings.ToLower(it.Name)
+							if strings.Contains(unitName, "legendary") ||
+								strings.Contains(unitName, "mythic") ||
+								strings.Contains(unitName, "lord") ||
+								strings.Contains(unitName, "king") {
+								meta.Rarity = types.RarityLegendary
+							} else if strings.Contains(unitName, "rare") ||
+								strings.Contains(unitName, "elite") ||
+								strings.Contains(unitName, "knight") ||
+								strings.Contains(unitName, "archer") {
+								meta.Rarity = types.RarityRare
+							} else {
+								meta.Rarity = types.RarityEpic
+							}
+						} else {
+							// For minis, get rarity from class
+							unitName := strings.ToLower(it.Name)
+							if strings.Contains(unitName, "legendary") ||
+								strings.Contains(unitName, "mythic") ||
+								strings.Contains(unitName, "lord") ||
+								strings.Contains(unitName, "king") {
+								meta.Rarity = types.RarityLegendary
+							} else if strings.Contains(unitName, "rare") ||
+								strings.Contains(unitName, "elite") ||
+								strings.Contains(unitName, "knight") ||
+								strings.Contains(unitName, "archer") {
+								meta.Rarity = types.RarityRare
+							} else {
+								meta.Rarity = types.RarityEpic
+							}
+						}
 					}
-					canUpgrade = currentShards >= shardsNeeded
+
+					// Check if can upgrade - use rarity-based cost
+					// Updated with proper resource costs matching server-side logic
+					switch progress.Rank {
+					case 1:
+						shardsNeeded = 3 // Rank 1 → Rank 2: 3 shards + 500 dust (no capsule)
+					case 2:
+						shardsNeeded = 10 // Rank 2 → Rank 3: 10 shards + 2000 dust + 1 rare capsule
+					case 3:
+						shardsNeeded = 25 // Rank 3 → Rank 4: 25 shards + 8000 dust + 1 epic capsule
+					case 4:
+						shardsNeeded = 25 // Rank 4 → Rank 5: 25 shards + 20000 dust + 1 legendary capsule
+					default:
+						shardsNeeded = 0 // Max rank reached - show MAX
+					}
+					canUpgrade = progress.Rank < 5 && currentShards >= shardsNeeded
 				}
 			}
 
@@ -1255,24 +1303,12 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				} else {
 					fonts.DrawUIWithFallback(screen, starTitleText, starBarX, starBarY-8, 12, color.NRGBA{255, 215, 0, 255})
 				}
-				// Get unit progression data
-				// Get rarity threshold based on unit
-				threshold := 3 // default (Common)
-				if info.Class == "champion" {
-					threshold = 25 // Legendary
-				} else {
-					// Simple mapping based on class/name patterns for minis
-					unitName := strings.ToLower(g.miniOverlayName)
-					if strings.Contains(unitName, "rare") ||
-						strings.Contains(unitName, "elite") ||
-						strings.Contains(unitName, "knight") ||
-						strings.Contains(unitName, "archer") {
-						threshold = 10 // Rare
-					} else if strings.Contains(unitName, "legendary") ||
-						strings.Contains(unitName, "mythic") ||
-						strings.Contains(unitName, "lord") ||
-						strings.Contains(unitName, "king") {
-						threshold = 25 // Epic/Legendary
+				// Use shared progression system for accurate thresholds (DRY)
+				threshold := 25 // Default to 25 shards for next tier
+				if g.unitProgression != nil {
+					if progress, exists := g.unitProgression[g.miniOverlayName]; exists {
+						// Use centralized upgrade cost function
+						threshold = types.GetUpgradeCost(progress.Rank)
 					}
 				}
 
@@ -1303,8 +1339,21 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				// Star progress bar border (gold-themed)
 				vector.StrokeRect(screen, float32(starBarX), float32(starBarY), float32(starBarW), float32(starBarH), 2, color.NRGBA{180, 140, 0, 255}, true)
 
-				// Star progress text centered over bar (X/Y format)
-				starProgressText := fmt.Sprintf("%d / %d", currentShards, threshold)
+				// Check if unit is at max rank (5) to display MAX instead of shard count
+				var starProgressText string
+				currentRank := 1
+				if g.unitProgression != nil {
+					if prog, exists := g.unitProgression[g.miniOverlayName]; exists {
+						currentRank = prog.Rank
+					}
+				}
+
+				if currentRank >= 5 {
+					starProgressText = "MAX"
+				} else {
+					starProgressText = fmt.Sprintf("%d / %d", currentShards, threshold)
+				}
+
 				var tw int = text.BoundString(fonts.UI(12), starProgressText).Dx()
 				var tx int = starBarX + (starBarW-tw)/2
 				var ty int = starBarY + starBarH/2 + 6
@@ -1314,11 +1363,16 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				text.Draw(screen, starProgressText, fonts.UI(12), tx-1, ty, color.NRGBA{0, 0, 0, 200})
 				text.Draw(screen, starProgressText, fonts.UI(12), tx, ty+1, color.NRGBA{0, 0, 0, 200})
 				text.Draw(screen, starProgressText, fonts.UI(12), tx, ty-1, color.NRGBA{0, 0, 0, 200})
-				text.Draw(screen, starProgressText, fonts.UI(12), tx, ty, color.White)
+				// Draw MAX in gold color for max rank, white for normal
+				if currentRank >= 5 {
+					text.Draw(screen, starProgressText, fonts.UI(12), tx, ty, color.NRGBA{255, 215, 0, 255})
+				} else {
+					text.Draw(screen, starProgressText, fonts.UI(12), tx, ty, color.White)
+				}
 
 				// Add UPGRADE button below STAR progress bar if unit can be upgraded
 				if currentShards >= threshold && g.unitProgression != nil {
-					if progress, exists := g.unitProgression[g.miniOverlayName]; exists {
+					if prog, exists := g.unitProgression[g.miniOverlayName]; exists {
 						// Get the required shards for this unit's level - fixed values based on unit type
 						shardsPerRank := 3 // Common default
 						if info.Class == "champion" {
@@ -1338,9 +1392,9 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 								shardsPerRank = 25 // Epic/Legendary
 							}
 						}
-						if progress.ShardsOwned >= shardsPerRank {
-							// Position button below STAR progress bar
-							upgradeBtnY := starBarY + starBarH + 10 // Gap of 10px below progress bar
+						if prog.ShardsOwned >= shardsPerRank {
+							// Position button below STAR progress bar (with increased spacing)
+							upgradeBtnY := starBarY + starBarH + 16 // Gap of 16px below progress bar to avoid overlapping
 							upgradeBtnX := starBarX                 // Left align with progress bar
 							upgradeBtnW := 120
 							upgradeBtnH := 26

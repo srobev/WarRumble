@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"rumble/server/auth"
-	"rumble/server/progression"
 	"rumble/server/shop"
 	"rumble/server/srv"
 	"rumble/shared/protocol"
@@ -76,9 +75,7 @@ func main() {
 		panic(err)
 	}
 	hub.SetSocial(social)
-	progService := progression.NewService("./data")
-	hub.SetProgressionService(progService)
-	shopService := shop.NewService(progService)
+	shopService := shop.NewService()
 	hub.SetShopService(shopService)
 
 	// Load static perks data

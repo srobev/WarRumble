@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"rumble/server/account"
-	"rumble/server/progression"
 	"rumble/shared/game/types"
 	"rumble/shared/protocol"
 )
@@ -15,15 +14,13 @@ import (
 const SLOT_COUNT = 9
 
 type Service struct {
-	progressionService *progression.Service
-	unitCatalog        func() ([]types.UnitMeta, []types.UnitMeta)
-	perkCatalog        func() []string           // list of units that have perks
-	PerkCatalogFunc    func(string) []types.Perk // get perks for unit
+	unitCatalog     func() ([]types.UnitMeta, []types.UnitMeta)
+	perkCatalog     func() []string           // list of units that have perks
+	PerkCatalogFunc func(string) []types.Perk // get perks for unit
 }
 
-func NewService(progressionService *progression.Service) *Service {
+func NewService() *Service {
 	return &Service{
-		progressionService: progressionService,
 		unitCatalog: func() ([]types.UnitMeta, []types.UnitMeta) {
 			return types.ListMinis(), types.ListChampions()
 		},
@@ -119,13 +116,13 @@ func (s *Service) getOrCreateRoll(playerID string, account *account.Account) (ty
 }
 
 // addPerkOffers adds up to 2 perk offers for units with available slots
-func (s *Service) addPerkOffers(roll *types.ShopRoll, account *account.Account) {
+func (s *Service) addPerkOffers(roll *types.ShopRoll, acc *account.Account) {
 	perkUnits := s.perkCatalog()
 	var candidates []string
 
 	for _, unitID := range perkUnits {
-		progress, exists := account.Progress[unitID]
-		if !exists {
+		progress, exists := acc.Progress[unitID]
+		if !exists || progress == nil {
 			continue
 		}
 		if progress.Rarity == 0 {
@@ -168,7 +165,7 @@ func (s *Service) addPerkOffers(roll *types.ShopRoll, account *account.Account) 
 		availablePerks := []string{}
 		for _, u := range s.PerkCatalogFunc(unitID) {
 			found := false
-			for _, pur := range account.Progress[unitID].PerksUnlocked {
+			for _, pur := range acc.Progress[unitID].PerksUnlocked {
 				if string(pur) == string(u.ID) {
 					found = true
 					break
@@ -285,19 +282,6 @@ func (s *Service) HandleBuyShopSlot(playerID string, req types.BuyShopSlotReq, b
 		return fmt.Errorf("failed to load account: %w", err)
 	}
 
-	// TEMPORARY: Provide default gold if Account has 0
-	// This gives players some gold to start with the shop
-	if acc.Gold == 0 {
-		log.Printf("ACCOUNT %s has 0 gold, providing 1000 starting gold", playerID)
-		acc.Gold = 1000 // Give starting gold
-
-		// Try to save updated account (may fail if account ID is invalid)
-		if saveErr := account.SaveAccount(acc); saveErr != nil {
-			log.Printf("FAILED to save account with starting gold: %v", saveErr)
-			// Continue anyway - account may not save but transaction will work locally
-		}
-	}
-
 	// Validate slot
 	if req.Slot < 0 || req.Slot >= SLOT_COUNT {
 		return fmt.Errorf("invalid slot: %d", req.Slot)
@@ -347,13 +331,12 @@ func (s *Service) HandleBuyShopSlot(playerID string, req types.BuyShopSlotReq, b
 
 	var progress *types.UnitProgress
 	var costPerRank int
-	var rankUps int
 
 	// Handle perk purchase
 	if slot.OfferType == "perk" {
-		// Load unit progress
+		// Load unit progress from account
 		var err error
-		progress, err = s.progressionService.LoadUnitProgress(slot.UnitID)
+		progress, err = acc.LoadUnitProgress(slot.UnitID)
 		if err != nil {
 			return fmt.Errorf("failed to load progress for perk unit: %w", err)
 		}
@@ -370,11 +353,8 @@ func (s *Service) HandleBuyShopSlot(playerID string, req types.BuyShopSlotReq, b
 			}
 		}
 
-		// Add perk
+		// Add perk to account
 		progress.PerksUnlocked = append(progress.PerksUnlocked, types.PerkID(slot.PerkID))
-
-		// Grant +1 level (but since rank also gives level, but task says +1 level per perk owned)
-		// Since level = base + shardLevels + perkCount, save as is.
 
 		// Deduct gold
 		acc.Gold -= slot.PriceGold
@@ -384,29 +364,22 @@ func (s *Service) HandleBuyShopSlot(playerID string, req types.BuyShopSlotReq, b
 		acc.Shop.Sold[req.Slot] = true
 		acc.Shop.NonceSeen[req.Nonce] = true
 
-		// Save progress
-		if err := s.progressionService.SaveUnitProgress(progress); err != nil {
+		// Save progress using account service
+		if err := acc.SaveUnitProgress(progress, playerID); err != nil {
 			return fmt.Errorf("failed to save progress: %w", err)
 		}
 
 		costPerRank = 0
-		rankUps = 0
-
-		if broadcaster != nil {
-			// Inform about +1 level.toast "Perk purchased (+1 Level)".
-			s.progressionService.BroadcastUnitProgress(slot.UnitID, progress, broadcaster)
-		}
 	} else {
-		// Unit purchase logic
+		// Unit purchase logic (unchanged)
 		// Get unit progress
 		meta := types.GetUnitMeta(slot.UnitID)
 		if meta == nil {
 			return fmt.Errorf("unit not found: %s", slot.UnitID)
 		}
 
-		// Load/create progress
-		var err error
-		progress, err = s.progressionService.LoadUnitProgress(slot.UnitID)
+		// Load/create progress using account
+		progress, err = acc.LoadUnitProgress(slot.UnitID)
 		if err != nil {
 			return fmt.Errorf("failed to load progress: %w", err)
 		}
@@ -414,11 +387,14 @@ func (s *Service) HandleBuyShopSlot(playerID string, req types.BuyShopSlotReq, b
 		// Set rarity from meta
 		progress.Rarity = meta.Rarity
 
-		// Calculate shard cost for next rank
-		costPerRank = meta.Rarity.ShardsPerRank()
+		// Calculate shard cost for next rank using shared progression logic
+		costPerRank = types.GetUpgradeCost(progress.Rank)
 
-		// Add one shard
-		rankUps = progression.AddShards(progress, 1)
+		// Add one shard using account service
+		_, shardErr := acc.AddShards(slot.UnitID, 1)
+		if shardErr != nil {
+			return fmt.Errorf("failed to add shards to unit: %w", shardErr)
+		}
 
 		// Deduct gold
 		acc.Gold -= slot.PriceGold
@@ -428,27 +404,16 @@ func (s *Service) HandleBuyShopSlot(playerID string, req types.BuyShopSlotReq, b
 		acc.Shop.Sold[req.Slot] = true
 		acc.Shop.NonceSeen[req.Nonce] = true
 
-		// Initialize progress map if needed
+		// Update progress in account
 		if acc.Progress == nil {
 			acc.Progress = make(map[string]*types.UnitProgress)
 		}
 		acc.Progress[slot.UnitID] = progress
 
-		// Save progress
-		if err := s.progressionService.SaveUnitProgress(progress); err != nil {
-			return fmt.Errorf("failed to save progress: %w", err)
+		// Save account (this will automatically save progress)
+		if err := account.SaveAccount(acc); err != nil {
+			return fmt.Errorf("failed to save account: %w", err)
 		}
-
-		if broadcaster != nil {
-			if rankUps > 0 {
-				s.progressionService.BroadcastUnitProgress(slot.UnitID, progress, broadcaster)
-			}
-		}
-	}
-
-	// Save account
-	if err := account.SaveAccount(acc); err != nil {
-		return fmt.Errorf("failed to save account: %w", err)
 	}
 
 	// Broadcast events
@@ -473,11 +438,6 @@ func (s *Service) HandleBuyShopSlot(playerID string, req types.BuyShopSlotReq, b
 			Threshold: costPerRank,
 		}
 		broadcaster("BuyShopResult", result)
-
-		// Unit progress update if rank changed
-		if rankUps > 0 {
-			s.progressionService.BroadcastUnitProgress(slot.UnitID, progress, broadcaster)
-		}
 	}
 
 	return nil

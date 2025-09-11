@@ -248,6 +248,20 @@ func (g *Game) handle(env Msg) {
 			g.shopView.UpdateGold(m.Gold)
 		}
 
+	case "DustSynced":
+		var m protocol.DustSynced
+		json.Unmarshal(env.Data, &m)
+		g.dust = m.Dust
+
+	case "CapsulesSynced":
+		var m protocol.CapsulesSynced
+		json.Unmarshal(env.Data, &m)
+		g.capsules = CapsuleStock{
+			Rare:      m.Capsules.Rare,
+			Epic:      m.Capsules.Epic,
+			Legendary: m.Capsules.Legendary,
+		}
+
 	case "StateDelta":
 		var d protocol.StateDelta
 		json.Unmarshal(env.Data, &d)
