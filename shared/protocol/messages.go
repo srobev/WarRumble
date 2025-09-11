@@ -349,3 +349,11 @@ type BuyShopResult struct {
 	Rank      int    `json:"rank"`      // unit rank after buy
 	Threshold int    `json:"threshold"` // rarity threshold (3/10/25/25)
 }
+
+type UpgradeResult struct {
+	Success   bool   `json:"success"`
+	UnitID    string `json:"unitId"`
+	NewRank   int    `json:"newRank"`
+	NewShards int    `json:"newShards"`
+	Reason    string `json:"reason,omitempty"` // For failures
+}

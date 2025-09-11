@@ -15,7 +15,7 @@ type UnitProgress struct {
 	Rank          int      `json:"rank"`
 	ShardsOwned   int      `json:"shardsOwned"`
 	PerksUnlocked []PerkID `json:"perksUnlocked"`
-	ActivePerk    *PerkID  `json:"activePerk"`
+	ActivePerk    *PerkID  `json:"activePerk,omitempty"`
 }
 
 // GetUpgradeCost returns the shards required to upgrade from given rank (TRADITIONAL SYSTEM)

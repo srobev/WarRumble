@@ -1,0 +1,44 @@
+[
+  {
+    "From": "tester",
+    "Text": "why i see only my messages but not others?",
+    "Ts": 1757614390054,
+    "System": false
+  },
+  {
+    "From": "tester",
+    "Text": "test",
+    "Ts": 1757614398524,
+    "System": false
+  },
+  {
+    "From": "silvester",
+    "Text": "bravo",
+    "Ts": 1757614430609,
+    "System": false
+  },
+  {
+    "From": "silvester",
+    "Text": "hmmmm",
+    "Ts": 1757614989137,
+    "System": false
+  },
+  {
+    "From": "tester",
+    "Text": "test",
+    "Ts": 1757615035852,
+    "System": false
+  },
+  {
+    "From": "silvester",
+    "Text": "tesstt",
+    "Ts": 1757615401754,
+    "System": false
+  },
+  {
+    "From": "",
+    "Text": "silvester left the guild",
+    "Ts": 1757615406488,
+    "System": true
+  }
+]

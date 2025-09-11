@@ -552,6 +552,18 @@ func (g *Game) handle(env Msg) {
 			}
 		}
 
+	case "UnitXPUpdate":
+		var m protocol.UnitXPUpdate
+		json.Unmarshal(env.Data, &m)
+		// Update unit XP immediately without requiring restart
+		if g.unitXP == nil {
+			g.unitXP = make(map[string]int)
+		}
+		for unitID, xp := range m.UnitXP {
+			g.unitXP[unitID] = xp
+		}
+		log.Printf("Unit XP updated: %v", g.unitXP)
+
 	case "LoggedOut":
 
 		g.resetToLoginNoAutoConnect()
@@ -575,8 +587,6 @@ func (g *Game) handle(env Msg) {
 		g.guildID = gi.Profile.GuildID
 		g.guildName = gi.Profile.Name
 		g.guildDescEdit = gi.Profile.Desc
-		// Load any persisted chat first (so new system lines append to existing)
-		g.guildChat = g.loadGuildChatFromDisk(g.guildID)
 		// compute diffs before overwriting
 		old := g.prevGuildRoles
 		curr := make(map[string]string, len(gi.Profile.Members))
@@ -630,10 +640,6 @@ func (g *Game) handle(env Msg) {
 			g.send("ListGuilds", protocol.ListGuilds{Query: ""})
 			return
 		}
-		// Persist chat updates if any (after appending system lines)
-		if g.guildID != "" {
-			g.saveGuildChatToDisk(g.guildID, g.guildChat)
-		}
 	case "GuildList":
 		var gl protocol.GuildList
 		json.Unmarshal(env.Data, &gl)
@@ -642,7 +648,13 @@ func (g *Game) handle(env Msg) {
 		var m protocol.GuildChatMsg
 		json.Unmarshal(env.Data, &m)
 		g.guildChat = append(g.guildChat, m)
-		g.saveGuildChatToDisk(g.guildID, g.guildChat)
+
+	case "GuildChatHistory":
+		var m protocol.GuildChatHistory
+		json.Unmarshal(env.Data, &m)
+		// Replace local guild chat with the stored chat history from server
+		g.guildChat = make([]protocol.GuildChatMsg, len(m.Messages))
+		copy(g.guildChat, m.Messages)
 
 	// Friends / DMs
 	case "FriendsList":
@@ -699,6 +711,12 @@ func (g *Game) handle(env Msg) {
 		// Otherwise, open profile overlay as usual
 		g.memberProfile = up.Profile
 		g.memberProfileOverlay = true
+	case "AvatarSet":
+		var m protocol.AvatarSet
+		json.Unmarshal(env.Data, &m)
+		// Update local avatar state
+		g.avatar = m.AvatarName
+		log.Printf("Client: Avatar updated to %s", m.AvatarName)
 	}
 }
 

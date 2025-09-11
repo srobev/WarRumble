@@ -1,119 +1,14 @@
 {
-  "id": "",
+  "playerId": 109468,
   "name": "silvester",
-  "gold": 3343385533,
-  "accountXp": 0,
-  "resources": {},
-  "pvpRating": 1200,
-  "pvpRank": "Knight",
-  "avatar": "orc.png",
-  "guildId": "",
-  "unitXp": {
-    "Blazebinder": 3,
-    "Blizzard": 1,
-    "Bloodmage Thalor": 2,
-    "Flesh Golem": 1,
-    "Grizzly Marksman": 1,
-    "Jungle Headhunter": 2,
-    "Magma Beasts": 1,
-    "Razorboar": 1,
-    "Reanimator": 2,
-    "Redhand Thieves": 2,
-    "Sir Kaelen Lightbane": 4,
-    "Sorceress Glacia": 1,
-    "Spirit Binder": 3,
-    "Swordsman": 2,
-    "The Warden": 3,
-    "Winged Screechers": 1
-  },
-  "shop": {
-    "roll": [
-      {
-        "slot": 0,
-        "unitId": "Earthhoof",
-        "isChampion": false,
-        "priceGold": 90,
-        "sold": false
-      },
-      {
-        "slot": 1,
-        "unitId": "Twin Wyrnn",
-        "isChampion": false,
-        "priceGold": 90,
-        "sold": false
-      },
-      {
-        "slot": 2,
-        "unitId": "Blazebinder",
-        "isChampion": false,
-        "priceGold": 90,
-        "sold": false
-      },
-      {
-        "slot": 3,
-        "unitId": "Whelp Eggs",
-        "isChampion": false,
-        "priceGold": 90,
-        "sold": false
-      },
-      {
-        "slot": 4,
-        "unitId": "Aerie Guard",
-        "isChampion": false,
-        "priceGold": 90,
-        "sold": false
-      },
-      {
-        "slot": 5,
-        "unitId": "Bloodmage Thalor",
-        "isChampion": true,
-        "priceGold": 120,
-        "sold": false
-      },
-      {
-        "slot": 6,
-        "unitId": "Whelp Eggs",
-        "isChampion": false,
-        "priceGold": 90,
-        "sold": false
-      },
-      {
-        "slot": 7,
-        "unitId": "Sorceress Glacia",
-        "isChampion": true,
-        "priceGold": 120,
-        "sold": false
-      },
-      {
-        "slot": 8,
-        "unitId": "Living Bomb",
-        "isChampion": false,
-        "priceGold": 90,
-        "sold": false
-      }
-    ],
-    "lastReroll": 1757596220,
-    "sold": {},
-    "nonceSeen": {
-      "reroll-1757596174539": true
-    },
-    "version": 1
-  },
-  "progress": {},
-  "dust": 1500,
-  "capsules": {
-    "rare": 1,
-    "epic": 1,
-    "legendary": 1
-  },
   "army": [
-    "The Warden",
-    "Spirit Binder",
-    "Nightfang",
-    "Swordsman",
+    "Bloodmage Thalor",
+    "Flesh Golem",
     "Winged Screechers",
-    "Redhand Thieves",
-    "Blazebinder"
+    "Reanimator",
+    "Swordsman",
+    "Earthhoof",
+    "Razorboar"
   ],
   "armies": {
     "Bloodmage Thalor": [
@@ -141,7 +36,7 @@
       "Grizzly Marksman"
     ],
     "Sorceress Glacia": [
-      "Flesh Golem",
+      "Jungle Headhunter",
       "Magma Beasts",
       "Winged Screechers",
       "Blazebinder",
@@ -165,13 +60,35 @@
       "Winged Screechers"
     ]
   },
-  "lastUpdated": 0,
-  "sectionTimes": {
-    "progress": 0,
-    "resources": 0,
-    "pvp": 0,
-    "army": 0,
-    "shop": 0,
-    "profile": 0
-  }
+  "gold": 3343374403,
+  "accountXp": 0,
+  "unitXp": {
+    "Aethelion Ragestorm": 2,
+    "Blazebinder": 3,
+    "Blizzard": 3,
+    "Bloodmage Thalor": 2,
+    "Flesh Golem": 1,
+    "Grizzly Marksman": 8,
+    "Jungle Headhunter": 2,
+    "Magma Beasts": 1,
+    "Razorboar": 1,
+    "Reanimator": 2,
+    "Redhand Thieves": 2,
+    "Sir Kaelen Lightbane": 4,
+    "Sorceress Glacia": 80,
+    "Spirit Binder": 3,
+    "Swordsman": 2,
+    "The Warden": 3,
+    "Winged Screechers": 1
+  },
+  "dust": 11144,
+  "capsules": {
+    "rare": 4,
+    "epic": 5,
+    "legendary": 1
+  },
+  "pvp_rating": 1200,
+  "pvp_rank": "Knight",
+  "avatar": "orc.png",
+  "guildId": "g-1756713614348685400"
 }

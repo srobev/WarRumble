@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"rumble/shared/game/types"
+	"rumble/shared/protocol"
 )
 
 // ShopState represents shop-specific account data
@@ -28,24 +29,25 @@ type ShopState struct {
 
 // Account represents an account record with persisted data
 type Account struct {
-	ID           string                         `json:"id"`
-	Name         string                         `json:"name"`
-	Gold         int64                          `json:"gold"`
-	AccountXP    int                            `json:"accountXp"`
-	Resources    map[string]int                 `json:"resources"` // dust, gems, etc.
-	PvPRating    int                            `json:"pvpRating"` // PvP rating points
-	PvPRank      string                         `json:"pvpRank"`   // calculated PvP rank name
-	Avatar       string                         `json:"avatar"`    // selected avatar filename
-	GuildID      string                         `json:"guildId"`   // guild membership ID
-	UnitXP       map[string]int                 `json:"unitXp"`    // unit XP for level calculation
-	Shop         ShopState                      `json:"shop"`
-	Progress     map[string]*types.UnitProgress `json:"progress"`     // unitID -> progress (includes shards)
-	Dust         int                            `json:"dust"`         // upgrade dust currency
-	Capsules     CapsuleStock                   `json:"capsules"`     // upgrade capsules by rarity
-	Army         []string                       `json:"army"`         // active army [champ, 6 minis]
-	Armies       map[string][]string            `json:"armies"`       // saved armies
-	LastUpdated  int64                          `json:"lastUpdated"`  // unix timestamp for race condition prevention
-	SectionTimes SectionUpdateTimes             `json:"sectionTimes"` // individual section update times
+	ID           string                             `json:"id"`
+	Name         string                             `json:"name"`
+	Gold         int64                              `json:"gold"`
+	AccountXP    int                                `json:"accountXp"`
+	Resources    map[string]int                     `json:"resources"` // dust, gems, etc.
+	PvPRating    int                                `json:"pvpRating"` // PvP rating points
+	PvPRank      string                             `json:"pvpRank"`   // calculated PvP rank name
+	Avatar       string                             `json:"avatar"`    // selected avatar filename
+	GuildID      string                             `json:"guildId"`   // guild membership ID
+	UnitXP       map[string]int                     `json:"unitXp"`    // unit XP for level calculation
+	Shop         ShopState                          `json:"shop"`
+	Progress     map[string]*types.UnitProgress     `json:"progress"`            // unitID -> progress (includes shards)
+	Dust         int                                `json:"dust"`                // upgrade dust currency
+	Capsules     CapsuleStock                       `json:"capsules"`            // upgrade capsules by rarity
+	GuildChat    map[string][]protocol.GuildChatMsg `json:"guildChat,omitempty"` // guildID -> chat messages
+	Army         []string                           `json:"army"`                // active army [champ, 6 minis]
+	Armies       map[string][]string                `json:"armies"`              // saved armies
+	LastUpdated  int64                              `json:"lastUpdated"`         // unix timestamp for race condition prevention
+	SectionTimes SectionUpdateTimes                 `json:"sectionTimes"`        // individual section update times
 }
 
 // CapsuleStock tracks capsule counts by rarity
@@ -476,7 +478,15 @@ func (a *Account) SaveUnitProgress(progress *types.UnitProgress, username string
 	log.Printf("ACCOUNT: Saving progress for unit %s, shards: %d, rank: %d",
 		progress.UnitID, progress.ShardsOwned, progress.Rank)
 
-	return SaveAccount(a)
+	err := SaveAccount(a)
+	if err != nil {
+		log.Printf("ACCOUNT: SaveAccount failed: %v", err)
+		return err
+	}
+
+	log.Printf("ACCOUNT: Successfully saved progress for %s", progress.UnitID)
+
+	return nil
 }
 
 // AddShards adds shards to unit progress (manual rank-up system)
@@ -524,6 +534,55 @@ func (a *Account) GetUpgradeCost(currentRank int) int {
 	return types.GetUpgradeCost(currentRank)
 }
 
+// Duplicate XP calculation functions to avoid circular import
+func computeLevel(totalXP int) (int, int, int) {
+	tbl := xpTable()
+	lvl := 1
+	for i := 0; i < len(tbl); i++ {
+		need := tbl[i]
+		if totalXP < need {
+			return lvl, totalXP, need
+		}
+		totalXP -= need
+		lvl++
+	}
+	return len(tbl) + 1, 0, 0
+}
+
+func xpTable() []int {
+	// Try to read from server/data/xp_levels.json
+	dataDir := filepath.Join("server", "data")
+	p := filepath.Join(dataDir, "xp_levels.json")
+	if b, err := os.ReadFile(p); err == nil {
+		var arr []int
+		if json.Unmarshal(b, &arr) == nil && len(arr) >= 19 {
+			return arr
+		}
+	}
+	// Fallback to hardcoded values
+	return []int{
+		2,      // 1->2
+		5,      // 2->3
+		10,     // 3->4
+		20,     // 4->5
+		35,     // 5->6
+		65,     // 6->7
+		120,    // 7->8
+		210,    // 8->9
+		375,    // 9->10
+		675,    // 10->11
+		1200,   // 11->12
+		2100,   // 12->13
+		3750,   // 13->14
+		6500,   // 14->15
+		12000,  // 15->16
+		25000,  // 16->17
+		50000,  // 17->18
+		100000, // 18->19
+		200000, // 19->20
+	}
+}
+
 // HandleUpgradeUnit processes unit upgrade (consuming shards, dust, and capsules)
 func (a *Account) HandleUpgradeUnit(username, unitID string) error {
 	progress, err := a.LoadUnitProgress(unitID)
@@ -564,6 +623,22 @@ func (a *Account) HandleUpgradeUnit(username, unitID string) error {
 		a.AddCapsule(capsuleType, -capsuleNeeded) // Negative value to reduce capsules
 	}
 	progress.Rank++
+
+	// Calculate and add XP to increase unit level by 1
+	currentXP, exists := a.UnitXP[unitID]
+	if !exists {
+		a.UnitXP[unitID] = 0
+		currentXP = 0
+	}
+
+	// Get current level and XP needed for next level
+	currentLevel, _, nextXP := computeLevel(currentXP)
+	if nextXP > 0 {
+		// Add exactly the XP needed to reach the next level
+		a.UnitXP[unitID] = currentXP + nextXP
+		log.Printf("[%s] Unit %s leveled up from %d to %d when upgrading to rank %d",
+			username, unitID, currentLevel, currentLevel+1, progress.Rank)
+	}
 
 	if err := a.SaveUnitProgress(progress, username); err != nil {
 		return fmt.Errorf("failed to save progress: %w", err)
@@ -617,6 +692,43 @@ func (a *Account) HandleSetActivePerk(username, unitID string, perkID types.Perk
 
 	if err := a.SaveUnitProgress(progress, username); err != nil {
 		return fmt.Errorf("failed to save progress: %w", err)
+	}
+
+	return nil
+}
+
+// HandleSetAvatar processes setting the user's avatar
+func (a *Account) HandleSetAvatar(username, avatar string) error {
+	if avatar == "" {
+		return fmt.Errorf("avatar name cannot be empty")
+	}
+
+	// Validate avatar file exists (basic check)
+	validAvatars := []string{
+		"orc.png", "human.png", "elf.png", "dwarf.png", "undead.png",
+		"knight.png", "default.png",
+	}
+
+	valid := false
+	for _, validAvatar := range validAvatars {
+		if avatar == validAvatar {
+			valid = true
+			break
+		}
+	}
+
+	if !valid {
+		log.Printf("ACCOUNT: Invalid avatar %s for user %s, defaulting to orc.png", avatar, username)
+		avatar = "orc.png" // Default fallback
+	}
+
+	a.Avatar = avatar
+	a.UpdateTimestamps("profile")
+
+	log.Printf("ACCOUNT: Setting avatar for %s to %s", username, avatar)
+
+	if err := SaveAccount(a); err != nil {
+		return fmt.Errorf("failed to save account with new avatar: %w", err)
 	}
 
 	return nil
@@ -698,6 +810,125 @@ func (a *Account) PerkSlotsUnlocked(unitID string) int {
 		return 0
 	}
 	return int(progress.Rarity)
+}
+
+var guildChatsDir = filepath.Join("server", "data", "guilds")
+var guildChatLocks = make(map[string]*sync.Mutex)
+
+// getGuildChatLock returns a mutex for a specific guild's chat
+func getGuildChatLock(guildID string) *sync.Mutex {
+	lock, exists := guildChatLocks[guildID]
+	if !exists {
+		lock = &sync.Mutex{}
+		guildChatLocks[guildID] = lock
+	}
+	return lock
+}
+
+// LoadGuildChatHistory loads guild chat from shared guild file
+func LoadGuildChatHistory(guildID string) ([]protocol.GuildChatMsg, error) {
+	lock := getGuildChatLock(guildID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	if err := os.MkdirAll(guildChatsDir, 0755); err != nil {
+		return nil, fmt.Errorf("failed to create guild chats directory: %w", err)
+	}
+
+	path := filepath.Join(guildChatsDir, safeFileName(guildID)+"_chat.json")
+
+	data, err := os.ReadFile(path)
+	if err != nil && errors.Is(err, os.ErrNotExist) {
+		return []protocol.GuildChatMsg{}, nil // Return empty slice if no chat exists
+	} else if err != nil {
+		log.Printf("Failed to read guild chat file for %s: %v", guildID, err)
+		return []protocol.GuildChatMsg{}, nil // Return empty on error
+	}
+
+	var messages []protocol.GuildChatMsg
+	if err := json.Unmarshal(data, &messages); err != nil {
+		log.Printf("Failed to unmarshal guild chat for %s: %v", guildID, err)
+		return []protocol.GuildChatMsg{}, nil // Return empty on error
+	}
+
+	// Keep at most 200 messages
+	if len(messages) > 200 {
+		messages = messages[len(messages)-200:]
+	}
+
+	return messages, nil
+}
+
+// SaveGuildChatHistory saves guild chat to shared guild file
+func SaveGuildChatHistory(guildID string, messages []protocol.GuildChatMsg) error {
+	lock := getGuildChatLock(guildID)
+	lock.Lock()
+	defer lock.Unlock()
+
+	if err := os.MkdirAll(guildChatsDir, 0755); err != nil {
+		return fmt.Errorf("failed to create guild chats directory: %w", err)
+	}
+
+	path := filepath.Join(guildChatsDir, safeFileName(guildID)+"_chat.json")
+
+	// Keep at most 200 messages
+	if len(messages) > 200 {
+		messages = messages[len(messages)-200:]
+	}
+
+	data, err := json.MarshalIndent(messages, "", "  ")
+	if err != nil {
+		return fmt.Errorf("failed to marshal guild chat: %w", err)
+	}
+
+	// Write to temp file
+	tempPath := path + ".tmp"
+	if err := os.WriteFile(tempPath, data, 0644); err != nil {
+		return fmt.Errorf("failed to write temp guild chat file: %w", err)
+	}
+
+	// Atomic rename
+	if err := os.Rename(tempPath, path); err != nil {
+		os.Remove(tempPath)
+		return fmt.Errorf("failed to rename guild chat file: %w", err)
+	}
+
+	return nil
+}
+
+// HandleGuildChatMessage handles saving a guild chat message to shared guild chat
+func (a *Account) HandleGuildChatMessage(guildID string, msg protocol.GuildChatMsg) error {
+	// Load current guild chat history
+	messages, err := LoadGuildChatHistory(guildID)
+	if err != nil {
+		log.Printf("Error loading guild chat history for %s: %v", guildID, err)
+		return fmt.Errorf("failed to load chat history: %w", err)
+	}
+
+	// Add new message
+	messages = append(messages, msg)
+
+	// Save updated chat history
+	if err := SaveGuildChatHistory(guildID, messages); err != nil {
+		return fmt.Errorf("failed to save guild chat: %w", err)
+	}
+
+	// Update account timestamp
+	a.UpdateTimestamps("profile")
+
+	log.Printf("ACCOUNT: Saved guild chat message to shared file for guild %s", guildID)
+
+	return nil
+}
+
+// GetGuildChatHistory returns the chat history for a specific guild from shared file
+func (a *Account) GetGuildChatHistory(guildID string) []protocol.GuildChatMsg {
+	messages, err := LoadGuildChatHistory(guildID)
+	if err != nil {
+		log.Printf("Error loading guild chat history for %s: %v", guildID, err)
+		return nil
+	}
+	return messages
 }
 
 // rankName calculates PvP rank name from rating points

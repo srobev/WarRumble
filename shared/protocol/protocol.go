@@ -73,3 +73,12 @@ type ActivePerkChanged struct {
 type UpgradeUnit struct {
 	UnitID string `json:"unitId"`
 }
+
+type UnitXPUpdate struct {
+	UnitXP map[string]int `json:"unitXp"`
+}
+
+// Avatar messages are defined in avatar.go
+type AvatarSet struct {
+	AvatarName string `json:"avatarName"`
+}

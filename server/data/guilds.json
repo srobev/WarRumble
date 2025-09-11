@@ -7,20 +7,9 @@
     "region": "NA",
     "leader": "tester2",
     "members": {
+      "silvester": "member",
       "tester2": "member"
     },
     "created": 1756713614
-  },
-  "g-1757237974642085700": {
-    "guildId": "g-1757237974642085700",
-    "name": "guilder",
-    "desc": "",
-    "privacy": "public",
-    "region": "NA",
-    "leader": "tester",
-    "members": {
-      "tester": "member"
-    },
-    "created": 1757237974
   }
 }

@@ -396,6 +396,12 @@ func (s *Service) HandleBuyShopSlot(playerID string, req types.BuyShopSlotReq, b
 			return fmt.Errorf("failed to add shards to unit: %w", shardErr)
 		}
 
+		// Reload progress after AddShards to get the updated data
+		progress, err = acc.LoadUnitProgress(slot.UnitID)
+		if err != nil {
+			return fmt.Errorf("failed to reload progress: %w", err)
+		}
+
 		// Deduct gold
 		acc.Gold -= slot.PriceGold
 
@@ -404,13 +410,7 @@ func (s *Service) HandleBuyShopSlot(playerID string, req types.BuyShopSlotReq, b
 		acc.Shop.Sold[req.Slot] = true
 		acc.Shop.NonceSeen[req.Nonce] = true
 
-		// Update progress in account
-		if acc.Progress == nil {
-			acc.Progress = make(map[string]*types.UnitProgress)
-		}
-		acc.Progress[slot.UnitID] = progress
-
-		// Save account (this will automatically save progress)
+		// Save account (reinforce the save)
 		if err := account.SaveAccount(acc); err != nil {
 			return fmt.Errorf("failed to save account: %w", err)
 		}

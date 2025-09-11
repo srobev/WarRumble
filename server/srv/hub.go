@@ -458,11 +458,11 @@ func (c *client) reader(h *Hub) {
 			}
 			s.Name = msg.Name
 
-			// Load Account data as the single source of truth
+			// Load Account data as the SINGLE source of truth for ALL progress
 			acc, err := account.LoadAccount(s.Name)
 			if err != nil {
-				log.Printf("LoadAccount: %v", err)
-				// Create new account if it doesn't exist
+				log.Printf("LoadAccount error for '%s': %v", s.Name, err)
+				// Create new account with full progression data structure
 				acc = &account.Account{
 					ID:        s.Name, // Use name as ID
 					Name:      s.Name,
@@ -473,7 +473,11 @@ func (c *client) reader(h *Hub) {
 					UnitXP:    make(map[string]int),
 					Resources: make(map[string]int),
 					Armies:    make(map[string][]string),
-					Progress:  make(map[string]*types.UnitProgress),
+					Progress:  make(map[string]*types.UnitProgress), // Full progression tracking
+				}
+				// Immediately save new account to establish single source of truth
+				if saveErr := account.SaveAccount(acc); saveErr != nil {
+					log.Printf("Initial save failed for '%s': %v", s.Name, saveErr)
 				}
 			}
 
@@ -510,6 +514,7 @@ func (c *client) reader(h *Hub) {
 			}
 			gid := strings.TrimSpace(prof.GuildID)
 			h.mu.Unlock()
+
 			if gid == "" || h.guilds == nil {
 				sendJSON(c, "GuildNone", protocol.GuildNone{})
 			} else if gp, ok := h.guilds.BuildProfile(gid); ok {
@@ -525,8 +530,21 @@ func (c *client) reader(h *Hub) {
 					}
 				}
 				h.mu.Unlock()
+
 				sendJSON(c, "GuildInfo", protocol.GuildInfo{Profile: gp})
+
+				// Send guild chat history to the client
 				h.mu.Lock()
+				if s := h.sessions[c]; s != nil && s.Name != "" {
+					if acc, err := account.LoadAccount(s.Name); err == nil {
+						chatHistory := acc.GetGuildChatHistory(gid)
+						if len(chatHistory) > 0 {
+							sendJSON(c, "GuildChatHistory", protocol.GuildChatHistory{Messages: chatHistory})
+						}
+					}
+				}
+
+				// Continue with subscription setup
 				subs := h.guildSubs[gid]
 				if subs == nil {
 					subs = map[*client]struct{}{}
@@ -556,6 +574,26 @@ func (c *client) reader(h *Hub) {
 				sendJSON(c, "Error", protocol.ErrorMsg{Message: err.Error()})
 				break
 			}
+			// Create system message for guild creation
+			systemMsg := protocol.GuildChatMsg{
+				From:   "",
+				Text:   fmt.Sprintf("%s founded the guild", user),
+				Ts:     time.Now().UnixMilli(),
+				System: true,
+			}
+			// Send system message through account system
+			if acc, loadErr := account.LoadAccount(user); loadErr == nil {
+				if saveErr := acc.HandleGuildChatMessage(g.GuildID, systemMsg); saveErr != nil {
+					log.Printf("Failed to save guild creation system message: %v", saveErr)
+				} else {
+					// Broadcast system message to all guild members currently online
+					h.mu.Lock()
+					for cl := range h.guildSubs[g.GuildID] {
+						sendJSON(cl, "GuildChatMsg", systemMsg)
+					}
+					h.mu.Unlock()
+				}
+			}
 			// store membership on profile
 			h.mu.Lock()
 			if s := h.sessions[c]; s != nil {
@@ -583,6 +621,26 @@ func (c *client) reader(h *Hub) {
 			if err := h.guilds.Join(m.GuildID, user); err != nil {
 				sendJSON(c, "Error", protocol.ErrorMsg{Message: err.Error()})
 				break
+			}
+			// Create system message for guild join
+			systemMsg := protocol.GuildChatMsg{
+				From:   "",
+				Text:   fmt.Sprintf("%s joined the guild", user),
+				Ts:     time.Now().UnixMilli(),
+				System: true,
+			}
+			// Send system message through account system
+			if acc, loadErr := account.LoadAccount(user); loadErr == nil {
+				if saveErr := acc.HandleGuildChatMessage(m.GuildID, systemMsg); saveErr != nil {
+					log.Printf("Failed to save guild join system message: %v", saveErr)
+				} else {
+					// Broadcast system message to all guild members currently online
+					h.mu.Lock()
+					for cl := range h.guildSubs[m.GuildID] {
+						sendJSON(cl, "GuildChatMsg", systemMsg)
+					}
+					h.mu.Unlock()
+				}
 			}
 			h.mu.Lock()
 			if s := h.sessions[c]; s != nil {
@@ -616,6 +674,27 @@ func (c *client) reader(h *Hub) {
 			}
 			h.mu.Unlock()
 			if gid != "" {
+				// Create system message for guild leave before leaving
+				systemMsg := protocol.GuildChatMsg{
+					From:   "",
+					Text:   fmt.Sprintf("%s left the guild", user),
+					Ts:     time.Now().UnixMilli(),
+					System: true,
+				}
+				// Send system message through account system
+				if acc, loadErr := account.LoadAccount(user); loadErr == nil {
+					if saveErr := acc.HandleGuildChatMessage(gid, systemMsg); saveErr != nil {
+						log.Printf("Failed to save guild leave system message: %v", saveErr)
+					} else {
+						// Broadcast system message to all guild members currently online
+						h.mu.Lock()
+						for cl := range h.guildSubs[gid] {
+							sendJSON(cl, "GuildChatMsg", systemMsg)
+						}
+						h.mu.Unlock()
+					}
+				}
+
 				_ = h.guilds.Leave(gid, user)
 				h.mu.Lock()
 				if s := h.sessions[c]; s != nil {
@@ -651,6 +730,20 @@ func (c *client) reader(h *Hub) {
 			}
 			if err := h.guilds.SetRole(gid, actor, m.User, "officer"); err != nil {
 				sendJSON(c, "Error", protocol.ErrorMsg{Message: err.Error()})
+			} else {
+				// Create system message for promotion on success only
+				systemMsg := protocol.GuildChatMsg{
+					From:   "",
+					Text:   fmt.Sprintf("%s was promoted to officer by %s", m.User, actor),
+					Ts:     time.Now().UnixMilli(),
+					System: true,
+				}
+				// Send system message through account system
+				if acc, loadErr := account.LoadAccount(actor); loadErr == nil {
+					if saveErr := acc.HandleGuildChatMessage(gid, systemMsg); saveErr != nil {
+						log.Printf("Failed to save guild promotion system message: %v", saveErr)
+					}
+				}
 			}
 			if gp, ok := h.guilds.BuildProfile(gid); ok {
 				sendJSON(c, "GuildInfo", protocol.GuildInfo{Profile: gp})
@@ -672,6 +765,20 @@ func (c *client) reader(h *Hub) {
 			}
 			if err := h.guilds.SetRole(gid, actor, m.User, "member"); err != nil {
 				sendJSON(c, "Error", protocol.ErrorMsg{Message: err.Error()})
+			} else {
+				// Create system message for demotion on success only
+				systemMsg := protocol.GuildChatMsg{
+					From:   "",
+					Text:   fmt.Sprintf("%s was demoted to member by %s", m.User, actor),
+					Ts:     time.Now().UnixMilli(),
+					System: true,
+				}
+				// Send system message through account system
+				if acc, loadErr := account.LoadAccount(actor); loadErr == nil {
+					if saveErr := acc.HandleGuildChatMessage(gid, systemMsg); saveErr != nil {
+						log.Printf("Failed to save guild demotion system message: %v", saveErr)
+					}
+				}
 			}
 			if gp, ok := h.guilds.BuildProfile(gid); ok {
 				sendJSON(c, "GuildInfo", protocol.GuildInfo{Profile: gp})
@@ -693,6 +800,20 @@ func (c *client) reader(h *Hub) {
 			}
 			if err := h.guilds.Kick(gid, actor, m.User); err != nil {
 				sendJSON(c, "Error", protocol.ErrorMsg{Message: err.Error()})
+			} else {
+				// Create system message for kick on success only
+				systemMsg := protocol.GuildChatMsg{
+					From:   "",
+					Text:   fmt.Sprintf("%s was kicked by %s", m.User, actor),
+					Ts:     time.Now().UnixMilli(),
+					System: true,
+				}
+				// Send system message through account system
+				if acc, loadErr := account.LoadAccount(actor); loadErr == nil {
+					if saveErr := acc.HandleGuildChatMessage(gid, systemMsg); saveErr != nil {
+						log.Printf("Failed to save guild kick system message: %v", saveErr)
+					}
+				}
 			}
 			if gp, ok := h.guilds.BuildProfile(gid); ok {
 				sendJSON(c, "GuildInfo", protocol.GuildInfo{Profile: gp})
@@ -714,6 +835,20 @@ func (c *client) reader(h *Hub) {
 			}
 			if err := h.guilds.SetRole(gid, actor, m.To, "leader"); err != nil {
 				sendJSON(c, "Error", protocol.ErrorMsg{Message: err.Error()})
+			} else {
+				// Create system message for leadership transfer on success only
+				systemMsg := protocol.GuildChatMsg{
+					From:   "",
+					Text:   fmt.Sprintf("%s transferred leadership to %s", actor, m.To),
+					Ts:     time.Now().UnixMilli(),
+					System: true,
+				}
+				// Send system message through account system
+				if acc, loadErr := account.LoadAccount(actor); loadErr == nil {
+					if saveErr := acc.HandleGuildChatMessage(gid, systemMsg); saveErr != nil {
+						log.Printf("Failed to save guild leadership transfer system message: %v", saveErr)
+					}
+				}
 			}
 			if gp, ok := h.guilds.BuildProfile(gid); ok {
 				sendJSON(c, "GuildInfo", protocol.GuildInfo{Profile: gp})
@@ -735,6 +870,20 @@ func (c *client) reader(h *Hub) {
 			}
 			if err := h.guilds.SetDesc(gid, actor, strings.TrimSpace(m.Desc)); err != nil {
 				sendJSON(c, "Error", protocol.ErrorMsg{Message: err.Error()})
+			} else {
+				// Create system message for guild description update on success only
+				systemMsg := protocol.GuildChatMsg{
+					From:   "",
+					Text:   fmt.Sprintf("%s updated the guild description", actor),
+					Ts:     time.Now().UnixMilli(),
+					System: true,
+				}
+				// Send system message through account system
+				if acc, loadErr := account.LoadAccount(actor); loadErr == nil {
+					if saveErr := acc.HandleGuildChatMessage(gid, systemMsg); saveErr != nil {
+						log.Printf("Failed to save guild description update system message: %v", saveErr)
+					}
+				}
 			}
 			if gp, ok := h.guilds.BuildProfile(gid); ok {
 				sendJSON(c, "GuildInfo", protocol.GuildInfo{Profile: gp})
@@ -765,6 +914,21 @@ func (c *client) reader(h *Hub) {
 				break
 			}
 			msg := protocol.GuildChatMsg{From: from, Text: txt, Ts: time.Now().UnixMilli(), System: false}
+
+			// Server-side guild chat persistence through account system
+			if from != "" {
+				// Load account and save guild chat message
+				acc, err := account.LoadAccount(from)
+				if err != nil {
+					log.Printf("Failed to load account for guild chat persistence: %v", err)
+				} else {
+					if saveErr := acc.HandleGuildChatMessage(gid, msg); saveErr != nil {
+						log.Printf("Failed to save guild chat message: %v", saveErr)
+					}
+				}
+			}
+
+			// Send to all subscribed guild members
 			h.mu.Lock()
 			for cl := range h.guildSubs[gid] {
 				sendJSON(cl, "GuildChatMsg", msg)
@@ -921,6 +1085,19 @@ func (c *client) reader(h *Hub) {
 			var m protocol.SetAvatar
 			_ = json.Unmarshal(env.Data, &m)
 
+			h.mu.Lock()
+			s := h.sessions[c]
+			username := ""
+			if s != nil {
+				username = s.Name
+			}
+			h.mu.Unlock()
+
+			if username == "" {
+				sendJSON(c, "Error", protocol.ErrorMsg{Message: "Not authenticated"})
+				break
+			}
+
 			// simple validation: filename-ish and png/jpg
 			a := strings.TrimSpace(m.Avatar)
 			a = strings.ReplaceAll(a, "\\", "/")
@@ -934,17 +1111,34 @@ func (c *client) reader(h *Hub) {
 				break
 			}
 
+			// Update avatar through account system
+			acc, err := account.LoadAccount(username)
+			if err != nil {
+				sendJSON(c, "Error", protocol.ErrorMsg{Message: "Failed to load account: " + err.Error()})
+				break
+			}
+
+			if avatarErr := acc.HandleSetAvatar(username, a); avatarErr != nil {
+				sendJSON(c, "Error", protocol.ErrorMsg{Message: "Failed to set avatar: " + avatarErr.Error()})
+				break
+			}
+
+			// Update session profile with fresh account data
 			h.mu.Lock()
 			if s := h.sessions[c]; s != nil {
-				s.Profile.Avatar = a
-				_ = saveProfile(s.Profile)
-				// send updated profile back so client refreshes UI
-				prof := s.Profile
-				h.mu.Unlock()
-				sendJSON(c, "Profile", prof)
-			} else {
-				h.mu.Unlock()
+				// Convert account back to profile
+				s.Profile = accountToProfile(acc)
+				log.Printf("AVATAR: %s set avatar to %s", username, a)
 			}
+			prof := s.Profile
+			h.mu.Unlock()
+
+			// Send updated profile back to client
+			sendJSON(c, "Profile", prof)
+
+			// Send AvatarSet response to client for confirmation
+			avatarSetMsg := protocol.AvatarSet{AvatarName: a}
+			sendJSON(c, "AvatarSet", avatarSetMsg)
 
 		case "GetProfile":
 			h.mu.Lock()
@@ -1378,7 +1572,11 @@ func (c *client) reader(h *Hub) {
 			}
 
 			if err := acc.HandleUpgradeUnit(username, req.UnitID); err != nil {
-				sendJSON(c, "Error", protocol.ErrorMsg{Message: err.Error()})
+				sendJSON(c, "UpgradeResult", protocol.UpgradeResult{
+					Success: false,
+					UnitID:  req.UnitID,
+					Reason:  err.Error(),
+				})
 			} else {
 				// Reload account after upgrade to get fresh data
 				acc, accountErr = account.LoadAccount(username)
@@ -1396,17 +1594,39 @@ func (c *client) reader(h *Hub) {
 				}
 				h.mu.Unlock()
 
-				// Send success response with updated account data
-				sendJSON(c, "UpgradeUnit", req)
+				// Send success response with upgraded unit details
+				sendJSON(c, "UpgradeResult", protocol.UpgradeResult{
+					Success:   true,
+					UnitID:    req.UnitID,
+					NewRank:   acc.Progress[req.UnitID].Rank,
+					NewShards: acc.Progress[req.UnitID].ShardsOwned,
+				})
 
 				// IMPORTANT: Sync the unit progression data back to client
 				// This prevents the client from showing stale shard counts
 				h.sendUnitProgressionData(acc, c)
 
+				// Send updated UnitXP to client so level increases are visible immediately
+				sendJSON(c, "UnitXPUpdate", protocol.UnitXPUpdate{
+					UnitXP: acc.UnitXP,
+				})
+
 				// Send updated gold to client (dust costs consume gold equivalent)
 				sendJSON(c, "GoldUpdate", protocol.GoldUpdate{
 					PlayerID: s.PlayerID,
 					Gold:     int(acc.Gold),
+				})
+
+				// Send updated dust count to client
+				sendJSON(c, "DustSynced", protocol.DustSynced{Dust: acc.Dust})
+
+				// Send updated capsule counts to client
+				sendJSON(c, "CapsulesSynced", protocol.CapsulesSynced{
+					Capsules: protocol.CapsulesCount{
+						Rare:      acc.Capsules.Rare,
+						Epic:      acc.Capsules.Epic,
+						Legendary: acc.Capsules.Legendary,
+					},
 				})
 			}
 

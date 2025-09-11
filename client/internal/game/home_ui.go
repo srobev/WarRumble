@@ -1393,36 +1393,56 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 							}
 						}
 						if prog.ShardsOwned >= shardsPerRank {
-							// Position button below STAR progress bar (with increased spacing)
-							upgradeBtnY := starBarY + starBarH + 16 // Gap of 16px below progress bar to avoid overlapping
-							upgradeBtnX := starBarX                 // Left align with progress bar
+							// Position button at BOTTOM LEFT of mini overlay
+							upgradeBtnY := y + h - 50 // From bottom of overlay with small margin
+							upgradeBtnX := x + 20     // Left side of overlay with small margin
 							upgradeBtnW := 120
-							upgradeBtnH := 26
-
-							// Draw upgrade button background
-							ebitenutil.DrawRect(screen, float64(upgradeBtnX), float64(upgradeBtnY), float64(upgradeBtnW), float64(upgradeBtnH), color.NRGBA{70, 130, 70, 255})
+							upgradeBtnH := 32 // Slightly taller button
 
 							// Check if button is hovered
 							mx, my := ebiten.CursorPosition()
 							isHovered := mx >= upgradeBtnX && mx <= upgradeBtnX+upgradeBtnW && my >= upgradeBtnY && my <= upgradeBtnY+upgradeBtnH
 
-							// Draw hover effect
+							// Draw button background FIRST (correct Z-order)
+							buttonColor := color.NRGBA{70, 130, 70, 255} // Green background
 							if isHovered {
-								ebitenutil.DrawRect(screen, float64(upgradeBtnX), float64(upgradeBtnY), float64(upgradeBtnW), float64(upgradeBtnH), color.NRGBA{100, 160, 100, 180})
+								buttonColor = color.NRGBA{100, 160, 100, 255} // Lighter green on hover
 							}
+							ebitenutil.DrawRect(screen, float64(upgradeBtnX), float64(upgradeBtnY), float64(upgradeBtnW), float64(upgradeBtnH), buttonColor)
 
 							// Draw button border
-							ebitenutil.DrawRect(screen, float64(upgradeBtnX), float64(upgradeBtnY), float64(upgradeBtnW), 2, color.NRGBA{100, 160, 100, 255})
-							ebitenutil.DrawRect(screen, float64(upgradeBtnX), float64(upgradeBtnY+upgradeBtnH-2), float64(upgradeBtnW), 2, color.NRGBA{100, 160, 100, 255})
-							ebitenutil.DrawRect(screen, float64(upgradeBtnX), float64(upgradeBtnY), 2, float64(upgradeBtnH), color.NRGBA{100, 160, 100, 255})
-							ebitenutil.DrawRect(screen, float64(upgradeBtnX+upgradeBtnW-2), float64(upgradeBtnY), 2, float64(upgradeBtnH), color.NRGBA{100, 160, 100, 255})
+							vector.StrokeRect(screen, float32(upgradeBtnX), float32(upgradeBtnY), float32(upgradeBtnW), float32(upgradeBtnH), 2, color.NRGBA{120, 170, 120, 255}, true)
 
-							// Draw button text "UPGRADE ⭐" with gold star
-							text.Draw(screen, "UPGRADE ⭐", fonts.UI(12), upgradeBtnX+15, upgradeBtnY+18, color.White)
+							// Draw button text "UPGRADE ⭐" with gold star ON TOP (after background)
+							text.Draw(screen, "UPGRADE", fonts.UI(14), upgradeBtnX+15, upgradeBtnY+22, color.NRGBA{255, 255, 255, 255})
 
-							// Handle click - send upgrade message
+							// Handle click - show upgrade confirmation overlay
 							if isHovered && inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-								g.send("UpgradeUnit", protocol.UpgradeUnit{UnitID: g.miniOverlayName})
+								// Populate upgrade resources and show overlay
+								g.upgradeOverlayUnit = g.miniOverlayName
+								if g.unitProgression != nil {
+									if progress, exists := g.unitProgression[g.miniOverlayName]; exists {
+										// Calculate required resources based on current rank
+										shardsNeeded := types.GetUpgradeCost(progress.Rank)
+										dustNeeded := g.calculateDustCost(progress.Rank)
+										capsuleNeeded, capsuleType := g.calculateCapsuleCost(progress.Rank)
+
+										g.upgradeOverlayResources = UpgradeResources{
+											ShardsNeeded:    shardsNeeded,
+											ShardsCurrent:   progress.ShardsOwned,
+											DustNeeded:      dustNeeded,
+											DustCurrent:     g.dust,
+											CapsulesNeeded:  capsuleNeeded,
+											CapsulesCurrent: g.getCapsuleCountByType(capsuleType),
+											CapsuleType:     capsuleType,
+											Rarity:          g.getUnitRarityString(g.miniOverlayName),
+											CanAfford: progress.ShardsOwned >= shardsNeeded &&
+												g.dust >= dustNeeded &&
+												g.getCapsuleCountByType(capsuleType) >= capsuleNeeded,
+										}
+									}
+								}
+								g.showUpgradeOverlay = true
 							}
 						}
 					}
@@ -2220,6 +2240,11 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 		text.Draw(screen, protocol.GameName+" v"+protocol.GameVersion, fonts.UI(12), pad+8, y, color.NRGBA{150, 150, 160, 255})
 		text.Draw(screen, "by S. Robev", basicfont.Face7x13, pad+8, y+16, color.NRGBA{120, 120, 130, 255})
 	}
+
+	// Draw upgrade confirmation overlay (only on Army tab for UI consistency)
+	if g.activeTab == tabArmy && g.showUpgradeOverlay {
+		g.drawUpgradeOverlay(screen)
+	}
 }
 
 func maxInt(a, b int) int {
@@ -2306,4 +2331,213 @@ func (g *Game) enemyTargetAvatarImage() *ebiten.Image {
 		return img
 	}
 	return nil
+}
+
+// Helper methods for upgrade confirmation system
+
+// calculateDustCost returns the dust required for upgrading from current rank
+func (g *Game) calculateDustCost(rank int) int {
+	switch rank {
+	case 1:
+		return 500 // Rank 1 → Rank 2: 500 dust
+	case 2:
+		return 2000 // Rank 2 → Rank 3: 2000 dust
+	case 3:
+		return 8000 // Rank 3 → Rank 4: 8000 dust
+	case 4:
+		return 20000 // Rank 4 → Rank 5: 20000 dust
+	default:
+		return 0 // Max rank reached
+	}
+}
+
+// calculateCapsuleCost returns the capsule count and type required for upgrading from current rank
+func (g *Game) calculateCapsuleCost(rank int) (count int, capsuleType string) {
+	switch rank {
+	case 1:
+		return 0, "Rare" // Rank 1 → Rank 2: no capsule required
+	case 2:
+		return 1, "Rare" // Rank 2 → Rank 3: 1 rare capsule
+	case 3:
+		return 1, "Epic" // Rank 3 → Rank 4: 1 epic capsule
+	case 4:
+		return 1, "Legendary" // Rank 4 → Rank 5: 1 legendary capsule
+	default:
+		return 0, "" // Max rank reached
+	}
+}
+
+// getCapsuleCountByType returns the count of a specific capsule type
+func (g *Game) getCapsuleCountByType(capsuleType string) int {
+	switch capsuleType {
+	case "Rare":
+		return g.capsules.Rare
+	case "Epic":
+		return g.capsules.Epic
+	case "Legendary":
+		return g.capsules.Legendary
+	default:
+		return 0
+	}
+}
+
+// getUnitRarityString returns the rarity string for a unit
+func (g *Game) getUnitRarityString(unitName string) string {
+	unitName = strings.ToLower(unitName)
+	if strings.Contains(unitName, "legendary") ||
+		strings.Contains(unitName, "mythic") ||
+		strings.Contains(unitName, "lord") ||
+		strings.Contains(unitName, "king") {
+		return "Legendary"
+	} else if strings.Contains(unitName, "rare") ||
+		strings.Contains(unitName, "elite") ||
+		strings.Contains(unitName, "knight") ||
+		strings.Contains(unitName, "archer") {
+		return "Rare"
+	} else {
+		return "Epic"
+	}
+}
+
+// drawUpgradeOverlay draws the upgrade confirmation dialog
+func (g *Game) drawUpgradeOverlay(screen *ebiten.Image) {
+	resources := g.upgradeOverlayResources
+	if resources.CapsuleType == "" {
+		return // Invalid state
+	}
+
+	// Semi-transparent background
+	ebitenutil.DrawRect(screen, 0, 0, float64(protocol.ScreenW), float64(protocol.ScreenH), color.NRGBA{0, 0, 0, 200})
+
+	// Center the overlay
+	overlayW := 500
+	overlayH := 300
+	overlayX := (protocol.ScreenW - overlayW) / 2
+	overlayY := (protocol.ScreenH - overlayH) / 2
+
+	// Draw main background
+	if g.fantasyUI != nil {
+		g.fantasyUI.DrawThemedPanel(screen, overlayX, overlayY, overlayW, overlayH, 0.95)
+		// Draw border
+		vector.StrokeRect(screen, float32(overlayX), float32(overlayY), float32(overlayW), float32(overlayH), 2, g.fantasyUI.Theme.Border, true)
+	} else {
+		ebitenutil.DrawRect(screen, float64(overlayX), float64(overlayY), float64(overlayW), float64(overlayH), color.NRGBA{40, 45, 60, 240})
+		ebitenutil.DrawRect(screen, float64(overlayX), float64(overlayY), float64(overlayW), 2, color.NRGBA{80, 100, 140, 255})
+		ebitenutil.DrawRect(screen, float64(overlayX), float64(overlayY+overlayH-2), float64(overlayW), 2, color.NRGBA{80, 100, 140, 255})
+		ebitenutil.DrawRect(screen, float64(overlayX), float64(overlayY), 2, float64(overlayH), color.NRGBA{80, 100, 140, 255})
+		ebitenutil.DrawRect(screen, float64(overlayX+overlayW-2), float64(overlayY), 2, float64(overlayH), color.NRGBA{80, 100, 140, 255})
+	}
+
+	// Title
+	titleY := overlayY + 20
+	fonts.DrawUIWithFallback(screen, "⚡ Confirm Unit Upgrade", overlayX+overlayW/2-text.BoundString(fonts.UI(18), "⚡ Confirm Unit Upgrade").Dx()/2, titleY, 18, color.NRGBA{255, 215, 0, 255})
+
+	// Show the unit being upgraded
+	if img := g.ensureMiniImageByName(g.upgradeOverlayUnit); img != nil {
+		iw, ih := img.Bounds().Dx(), img.Bounds().Dy()
+		portraitSize := 60
+		portraitX := overlayX + 20
+		portraitY := titleY + 25
+		scale := mathMin(float64(portraitSize)/float64(iw), float64(portraitSize)/float64(ih))
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Scale(scale, scale)
+		op.GeoM.Translate(float64(portraitX), float64(portraitY))
+		op.Filter = ebiten.FilterLinear
+		screen.DrawImage(img, op)
+
+		fonts.DrawUIWithFallback(screen, g.upgradeOverlayUnit, portraitX+portraitSize+20, portraitY+20, 14, color.White)
+		fonts.DrawUIWithFallback(screen, resources.Rarity+" Unit", portraitX+portraitSize+20, portraitY+40, 12, color.NRGBA{200, 200, 220, 255})
+	}
+
+	// Resource requirements section
+	reqY := titleY + 110
+	fonts.DrawUIWithFallback(screen, "Required Resources:", overlayX+20, reqY, 14, color.NRGBA{255, 215, 0, 255})
+
+	lineHeight := 20
+	y := reqY + 30
+
+	// Shards
+	fonts.DrawUIWithFallback(screen, "⭐ Shards:", overlayX+40, y, 12, color.White)
+	shardText := fmt.Sprintf("%d / %d", resources.ShardsCurrent, resources.ShardsNeeded)
+	fonts.DrawUIWithFallback(screen, shardText, overlayX+overlayW-120, y, 12, g.getResourceColor(resources.ShardsCurrent >= resources.ShardsNeeded))
+
+	// Dust
+	y += lineHeight
+	fonts.DrawUIWithFallback(screen, "💰 Dust:", overlayX+40, y, 12, color.White)
+	dustText := fmt.Sprintf("%d / %d", resources.DustCurrent, resources.DustNeeded)
+	fonts.DrawUIWithFallback(screen, dustText, overlayX+overlayW-120, y, 12, g.getResourceColor(resources.DustCurrent >= resources.DustNeeded))
+
+	// Capsules
+	y += lineHeight
+	capsuleEmoji := map[string]string{"Rare": "🔸", "Epic": "🔹", "Legendary": "🔶"}[resources.CapsuleType]
+	fonts.DrawUIWithFallback(screen, capsuleEmoji+" "+resources.CapsuleType+" Capsule:", overlayX+40, y, 12, color.White)
+	capsuleText := fmt.Sprintf("%d / %d", resources.CapsulesCurrent, resources.CapsulesNeeded)
+	fonts.DrawUIWithFallback(screen, capsuleText, overlayX+overlayW-120, y, 12, g.getResourceColor(resources.CapsulesCurrent >= resources.CapsulesNeeded))
+
+	// Can afford message
+	y += lineHeight + 15
+	if !resources.CanAfford {
+		fonts.DrawUIWithFallback(screen, "❌ Cannot afford upgrade - collect more resources!", overlayX+overlayW/2-text.BoundString(fonts.UI(12), "❌ Cannot afford upgrade - collect more resources!").Dx()/2, y, 12, color.NRGBA{255, 120, 120, 255})
+	} else {
+		fonts.DrawUIWithFallback(screen, "✅ Ready to upgrade!", overlayX+overlayW/2-text.BoundString(fonts.UI(12), "✅ Ready to upgrade!").Dx()/2, y, 12, color.NRGBA{120, 255, 120, 255})
+	}
+
+	// Buttons
+	buttonY := overlayY + overlayH - 60
+	cancelBtnX := overlayX + 50
+	confirmBtnX := overlayX + overlayW - 150
+
+	mx, my := ebiten.CursorPosition()
+
+	// Store button hover states
+	cancelHovered := mx >= cancelBtnX && mx <= cancelBtnX+80 && my >= buttonY && my <= buttonY+28
+	confirmHovered := resources.CanAfford && mx >= confirmBtnX && mx <= confirmBtnX+120 && my >= buttonY && my <= buttonY+28
+
+	// Draw button backgrounds first (bottom Z-layer)
+	cancelBtnColor := color.NRGBA{100, 80, 80, 255}
+	confirmBtnColor := color.NRGBA{100, 150, 100, 255}
+	if !resources.CanAfford {
+		confirmBtnColor = color.NRGBA{60, 60, 60, 255}
+	}
+
+	ebitenutil.DrawRect(screen, float64(cancelBtnX), float64(buttonY), 80, 28, cancelBtnColor)
+	ebitenutil.DrawRect(screen, float64(confirmBtnX), float64(buttonY), 120, 28, confirmBtnColor)
+
+	// Draw hover effects second (middle Z-layer)
+	if cancelHovered {
+		ebitenutil.DrawRect(screen, float64(cancelBtnX), float64(buttonY), 80, 2, color.NRGBA{200, 200, 200, 255})
+		ebitenutil.DrawRect(screen, float64(cancelBtnX), float64(buttonY+26), 80, 2, color.NRGBA{200, 200, 200, 255})
+		ebitenutil.DrawRect(screen, float64(cancelBtnX), float64(buttonY), 2, 28, color.NRGBA{200, 200, 200, 255})
+		ebitenutil.DrawRect(screen, float64(cancelBtnX+78), float64(buttonY), 2, 28, color.NRGBA{200, 200, 200, 255})
+	}
+
+	if confirmHovered {
+		ebitenutil.DrawRect(screen, float64(confirmBtnX), float64(buttonY), 120, 2, color.NRGBA{200, 200, 200, 255})
+		ebitenutil.DrawRect(screen, float64(confirmBtnX), float64(buttonY+26), 120, 2, color.NRGBA{200, 200, 200, 255})
+		ebitenutil.DrawRect(screen, float64(confirmBtnX), float64(buttonY), 2, 28, color.NRGBA{200, 200, 200, 255})
+		ebitenutil.DrawRect(screen, float64(confirmBtnX+118), float64(buttonY), 2, 28, color.NRGBA{200, 200, 200, 255})
+	}
+
+	// Draw button text last (top Z-layer)
+	fonts.DrawUIWithFallback(screen, "Cancel", cancelBtnX+10, buttonY+18, 12, color.White)
+	fonts.DrawUIWithFallback(screen, "Confirm", confirmBtnX+10, buttonY+18, 12, color.White)
+
+	// Handle button clicks (logic only)
+	if cancelHovered && inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		g.showUpgradeOverlay = false // Close overlay
+	}
+
+	if confirmHovered && inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
+		// Perform the upgrade
+		g.send("UpgradeUnit", protocol.UpgradeUnit{UnitID: g.upgradeOverlayUnit})
+		g.showUpgradeOverlay = false // Close overlay
+	}
+}
+
+// getResourceColor returns the appropriate color based on whether sufficient resources are available
+func (g *Game) getResourceColor(hasEnough bool) color.NRGBA {
+	if hasEnough {
+		return color.NRGBA{120, 255, 120, 255} // Green for sufficient
+	}
+	return color.NRGBA{255, 120, 120, 255} // Red for insufficient
 }

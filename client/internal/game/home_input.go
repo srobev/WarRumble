@@ -122,7 +122,6 @@ func (g *Game) updateHome() {
 			for i, r := range g.avatarRects {
 				if r.hit(mx, my) && i >= 0 && i < len(g.avatars) {
 					choice := g.avatars[i]
-					_ = SaveAvatar(choice)
 					g.avatar = choice
 					g.send("SetAvatar", protocol.SetAvatar{Avatar: choice})
 					break

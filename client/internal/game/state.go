@@ -17,6 +17,19 @@ type CapsuleStock struct {
 	Legendary int `json:"legendary"`
 }
 
+// UpgradeResources describes required vs current resources for unit upgrade
+type UpgradeResources struct {
+	ShardsNeeded    int    // required shards
+	ShardsCurrent   int    // current shards
+	DustNeeded      int    // required dust
+	DustCurrent     int    // current dust
+	CapsulesNeeded  int    // required capsules
+	CapsulesCurrent int    // current capsules
+	CapsuleType     string // "Rare", "Epic", or "Legendary"
+	Rarity          string // unit rarity for display
+	CanAfford       bool   // whether player can afford the upgrade
+}
+
 // Panel types
 type Offer struct {
 	OfferID   string  `json:"offer_id"`
@@ -130,14 +143,17 @@ type Game struct {
 	roomID      string
 	startBtn    rect
 	// --- Top bar (Home only) ---
-	accountGold int64        // separate "meta" currency (not battle gold)
-	dust        int          // upgrade dust currency
-	capsules    CapsuleStock // upgrade capsules by rarity
-	userBtn     rect         // clickable later for profile/statistics
-	titleArea   rect
-	goldArea    rect
-	resourceBtn rect // resource panel button (next to gold)
-	topBarBg    *ebiten.Image
+	accountGold             int64            // separate "meta" currency (not battle gold)
+	dust                    int              // upgrade dust currency
+	capsules                CapsuleStock     // upgrade capsules by rarity
+	showUpgradeOverlay      bool             // upgrade confirmation dialog
+	upgradeOverlayUnit      string           // unit being upgraded
+	upgradeOverlayResources UpgradeResources // required vs current resources
+	userBtn                 rect             // clickable later for profile/statistics
+	titleArea               rect
+	goldArea                rect
+	resourceBtn             rect // resource panel button (next to gold)
+	topBarBg                *ebiten.Image
 	// bottom bar buttons
 	shopBtn, armyBtn, mapBtn, pvpBtn, socialBtn, settingsBtn rect
 	bottomBarBg                                              *ebiten.Image

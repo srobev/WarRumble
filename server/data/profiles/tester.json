@@ -1,9 +1,15 @@
 {
-  "playerId": 114041,
+  "playerId": 337478,
   "name": "tester",
-  "army": null,
+  "army": [],
   "gold": 910,
   "accountXp": 0,
+  "dust": 0,
+  "capsules": {
+    "rare": 0,
+    "epic": 0,
+    "legendary": 0
+  },
   "pvp_rating": 1200,
   "pvp_rank": "Knight",
   "avatar": "default.png"

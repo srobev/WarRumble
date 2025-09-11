@@ -1,0 +1,47 @@
+{
+  "id": "test_user",
+  "name": "test_user",
+  "gold": 1000,
+  "accountXp": 0,
+  "resources": null,
+  "pvpRating": 0,
+  "pvpRank": "",
+  "avatar": "",
+  "guildId": "",
+  "unitXp": null,
+  "shop": {
+    "roll": null,
+    "lastReroll": 0,
+    "sold": null,
+    "nonceSeen": null,
+    "version": 0
+  },
+  "progress": {
+    "test_unit": {
+      "UnitID": "test_unit",
+      "rarity": 2,
+      "rank": 2,
+      "shardsOwned": 5,
+      "perksUnlocked": [
+        "test_perk"
+      ]
+    }
+  },
+  "dust": 0,
+  "capsules": {
+    "rare": 0,
+    "epic": 0,
+    "legendary": 0
+  },
+  "army": null,
+  "armies": null,
+  "lastUpdated": 1757608646,
+  "sectionTimes": {
+    "progress": 1757608646,
+    "resources": 0,
+    "pvp": 0,
+    "army": 0,
+    "shop": 0,
+    "profile": 0
+  }
+}

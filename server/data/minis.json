@@ -10,23 +10,7 @@
     "speed": 1,
     "features": ["melee","tank"]
   },
-  {
-    "name": "Arcane Blast",
-    "dmg": 500,
-    "hp": 0,
-    "portrait": "arcane-blast.png",
-    "class": "spell",
-    "role": "mini",
-    "cost": 1,
-    "speed": 1,
-    "spell_type": "damage",
-    "target_type": "single",
-    "instant_cast": true,
-    "spell_effect": "arcane_blast",
-    "features": ["spell"],
-    "features": ["spell", "aoe"]
-  },
-  {
+    {
     "name": "Wraith",
     "dmg": 280,
     "hp": 500,
@@ -94,23 +78,6 @@
     "instant_cast": true,
     "spell_effect": "blizzard",
     "features": ["spell", "aoe"]
-  },
-  {
-    "name": "Chain Lightning",
-    "dmg": 320,
-    "hp": 0,
-    "portrait": "chain-lightning.png",
-    "class": "spell",
-    "role": "mini",
-    "cost": 3,
-    "speed": 1,
-    "spell_type": "damage",
-    "target_type": "chain",
-    "chain_targets": 3,
-    "chain_damage_reduction": 0.6,
-    "instant_cast": true,
-    "spell_effect": "chain_lightning",
-    "features": ["spell"]
   },
   {
     "name": "Twin Wyrnn",
@@ -293,22 +260,6 @@
     "features": ["melee", "tank", "fast"]
   },
   {
-    "name": "Holy Nova",
-    "dmg": 350,
-    "hp": 0,
-    "portrait": "holy-nova.png",
-    "class": "spell",
-    "role": "mini",
-    "cost": 3,
-    "speed": 1,
-    "spell_type": "damage",
-    "target_type": "area",
-    "effect_range": 100,
-    "instant_cast": true,
-    "spell_effect": "holy_nova",
-    "features": ["spell", "aoe"]
-  },
-  {
     "name": "Night Sentinel",
     "dmg": 160,
     "hp": 600,
@@ -345,22 +296,6 @@
     "speed": 1,
     "features": ["melee","armored","tank"],
     "spawn_count": 4
-  },
-  {
-    "name": "Living Bomb",
-    "dmg": 370,
-    "hp": 0,
-    "portrait": "living-bomb.png",
-    "class": "spell",
-    "role": "mini",
-    "cost": 6,
-    "speed": 1,
-    "spell_type": "damage",
-    "target_type": "single",
-    "duration": 3,
-    "instant_cast": true,
-    "spell_effect": "living_bomb",
-    "features": ["spell", "aoe"]
   },
   {
     "name": "The Warden",
@@ -513,23 +448,6 @@
     "features": ["squad", "melee"]
   },
   {
-    "name": "Smoke Bomb",
-    "dmg": 0,
-    "hp": 0,
-    "portrait": "smoke-bomb.png",
-    "class": "spell",
-    "role": "mini",
-    "cost": 1,
-    "speed": 1,
-    "spell_type": "utility",
-    "target_type": "area",
-    "effect_range": 60,
-    "duration": 4,
-    "instant_cast": true,
-    "spell_effect": "smoke_bomb",
-    "features": ["spell", "aoe"]
-  },
-  {
     "name": "Earthhoof",
     "dmg": 250,
     "hp": 1200,
@@ -580,7 +498,7 @@
     "features": ["melee", "armored", "healer"]
   },
   {
-    "name": "Whelp Eggs",
+    "name": "Drake Eggs",
     "dmg": 0,
     "hp": 0,
     "portrait": "whelp-eggs.png",
