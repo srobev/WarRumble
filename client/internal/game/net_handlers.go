@@ -377,6 +377,47 @@ func (g *Game) handle(env Msg) {
 
 		log.Printf("Unit progression updated: %s (rank %d, shards %d)", progress.UnitID, progress.Rank, progress.ShardsOwned)
 
+	case "UpgradeResult":
+		var result protocol.UpgradeResult
+		json.Unmarshal(env.Data, &result)
+
+		if result.Success {
+			log.Printf("Unit upgrade successful: %s to rank %d", result.UnitID, result.NewRank)
+
+			// Update local unit progression state
+			if g.unitProgression == nil {
+				g.unitProgression = make(map[string]protocol.UnitProgressSynced)
+			}
+			if progress, exists := g.unitProgression[result.UnitID]; exists {
+				progress.Rank = result.NewRank
+				progress.ShardsOwned = result.NewShards
+				g.unitProgression[result.UnitID] = progress
+			} else {
+				// Initialize if not exists
+				g.unitProgression[result.UnitID] = protocol.UnitProgressSynced{
+					UnitID:      result.UnitID,
+					Rank:        result.NewRank,
+					ShardsOwned: result.NewShards,
+				}
+			}
+
+			// Force army tab refresh by setting active tab to army and back again
+			if g.activeTab == 2 { // tabArmy
+				g.activeTab = 1 // Force refresh
+				g.activeTab = 2
+			}
+
+			// Close the upgrade overlay
+			g.showUpgradeOverlay = false
+
+			// Also close any open mini overlay so it refreshes with updated progression data
+			g.miniOverlayOpen = false
+		} else {
+			log.Printf("Unit upgrade failed: %s - %s", result.UnitID, result.Reason)
+			// Could show an error message here, but for now just close the overlay
+			g.showUpgradeOverlay = false
+		}
+
 	case "HandUpdate":
 		var hu protocol.HandUpdate
 		json.Unmarshal(env.Data, &hu)

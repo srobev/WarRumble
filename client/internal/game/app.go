@@ -720,6 +720,13 @@ func (g *Game) Draw(screen *ebiten.Image) {
 
 			if u.MaxHP > 0 {
 				lvl := g.levelForUnitName(u.Name)
+				// Apply rank progression bonus for battle display
+				if g.unitProgression != nil {
+					if progress, exists := g.unitProgression[u.Name]; exists {
+						rankBonus := progress.Rank - 1
+						lvl += rankBonus
+					}
+				}
 				isFullHealth := u.HP >= u.MaxHP
 
 				if isFullHealth {

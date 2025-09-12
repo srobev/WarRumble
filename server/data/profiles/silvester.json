@@ -1,14 +1,122 @@
 {
-  "playerId": 109468,
+  "id": "",
   "name": "silvester",
+  "gold": 3343362943,
+  "accountXp": 0,
+  "resources": {},
+  "pvpRating": 1200,
+  "pvpRank": "Knight",
+  "avatar": "orc.png",
+  "guildId": "g-1756713614348685400",
+  "unitXp": {
+    "Aethelion Ragestorm": 7,
+    "Blazebinder": 4,
+    "Blizzard": 4,
+    "Bloodmage Thalor": 2,
+    "Dino Steed": 2,
+    "Flesh Golem": 1,
+    "Grizzly Marksman": 8,
+    "Jungle Headhunter": 3,
+    "Magma Beasts": 2,
+    "Obsidian Bat": 1,
+    "Rampager": 2,
+    "Razorboar": 1,
+    "Reanimator": 2,
+    "Redhand Thieves": 2,
+    "Rusttooth": 2,
+    "Sir Kaelen Lightbane": 9,
+    "Sorceress Glacia": 88,
+    "Spirit Binder": 4,
+    "Swordsman": 3,
+    "The Warden": 3,
+    "Warg Lord": 2,
+    "Winged Screechers": 4
+  },
+  "shop": {
+    "roll": [
+      {
+        "slot": 0,
+        "unitId": "Razorboar",
+        "isChampion": false,
+        "priceGold": 90,
+        "sold": false
+      },
+      {
+        "slot": 1,
+        "unitId": "Reanimator",
+        "isChampion": false,
+        "priceGold": 90,
+        "sold": false
+      },
+      {
+        "slot": 2,
+        "unitId": "Spirit Binder",
+        "isChampion": false,
+        "priceGold": 90,
+        "sold": false
+      },
+      {
+        "slot": 3,
+        "unitId": "Nightfang",
+        "isChampion": false,
+        "priceGold": 90,
+        "sold": false
+      },
+      {
+        "slot": 4,
+        "unitId": "Earthhoof",
+        "isChampion": false,
+        "priceGold": 90,
+        "sold": false
+      },
+      {
+        "slot": 5,
+        "unitId": "Razorboar",
+        "isChampion": false,
+        "priceGold": 90,
+        "sold": false
+      },
+      {
+        "slot": 6,
+        "unitId": "Bloodmage Thalor",
+        "isChampion": true,
+        "priceGold": 120,
+        "sold": false
+      },
+      {
+        "slot": 7,
+        "unitId": "Night Sentinel",
+        "isChampion": false,
+        "priceGold": 90,
+        "sold": false
+      },
+      {
+        "slot": 8,
+        "unitId": "Dino Steed",
+        "isChampion": false,
+        "priceGold": 90,
+        "sold": false
+      }
+    ],
+    "lastReroll": 1757686245,
+    "sold": {},
+    "nonceSeen": {},
+    "version": 1
+  },
+  "dust": 644,
+  "capsules": {
+    "rare": 3,
+    "epic": 5,
+    "legendary": 1
+  },
   "army": [
-    "Bloodmage Thalor",
-    "Flesh Golem",
+    "Sorceress Glacia",
+    "Hex",
+    "Blizzard",
     "Winged Screechers",
-    "Reanimator",
-    "Swordsman",
-    "Earthhoof",
-    "Razorboar"
+    "Blazebinder",
+    "Corpse Catapult",
+    "Swordsman"
   ],
   "armies": {
     "Bloodmage Thalor": [
@@ -31,16 +139,16 @@
       "Redhand Thieves",
       "Blazebinder",
       "Jungle Headhunter",
-      "Spirit Binder",
+      "Foulwing Rider",
       "Swordsman",
       "Grizzly Marksman"
     ],
     "Sorceress Glacia": [
-      "Jungle Headhunter",
-      "Magma Beasts",
+      "Hex",
+      "Blizzard",
       "Winged Screechers",
       "Blazebinder",
-      "Blizzard",
+      "Corpse Catapult",
       "Swordsman"
     ],
     "The Warden": [
@@ -52,7 +160,7 @@
       "Blazebinder"
     ],
     "Warg Lord": [
-      "Chain Lightning",
+      "Spirit Binder",
       "Magma Beasts",
       "Firedrake",
       "Jungle Headhunter",
@@ -60,35 +168,13 @@
       "Winged Screechers"
     ]
   },
-  "gold": 3343374403,
-  "accountXp": 0,
-  "unitXp": {
-    "Aethelion Ragestorm": 2,
-    "Blazebinder": 3,
-    "Blizzard": 3,
-    "Bloodmage Thalor": 2,
-    "Flesh Golem": 1,
-    "Grizzly Marksman": 8,
-    "Jungle Headhunter": 2,
-    "Magma Beasts": 1,
-    "Razorboar": 1,
-    "Reanimator": 2,
-    "Redhand Thieves": 2,
-    "Sir Kaelen Lightbane": 4,
-    "Sorceress Glacia": 80,
-    "Spirit Binder": 3,
-    "Swordsman": 2,
-    "The Warden": 3,
-    "Winged Screechers": 1
-  },
-  "dust": 11144,
-  "capsules": {
-    "rare": 4,
-    "epic": 5,
-    "legendary": 1
-  },
-  "pvp_rating": 1200,
-  "pvp_rank": "Knight",
-  "avatar": "orc.png",
-  "guildId": "g-1756713614348685400"
+  "lastUpdated": 0,
+  "sectionTimes": {
+    "progress": 0,
+    "resources": 0,
+    "pvp": 0,
+    "army": 0,
+    "shop": 0,
+    "profile": 0
+  }
 }

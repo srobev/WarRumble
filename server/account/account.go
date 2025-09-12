@@ -40,7 +40,7 @@ type Account struct {
 	GuildID      string                             `json:"guildId"`   // guild membership ID
 	UnitXP       map[string]int                     `json:"unitXp"`    // unit XP for level calculation
 	Shop         ShopState                          `json:"shop"`
-	Progress     map[string]*types.UnitProgress     `json:"progress"`            // unitID -> progress (includes shards)
+	Progress     map[string]*types.UnitProgress     `json:"progress,omitempty"`  // unitID -> progress (includes shards)
 	Dust         int                                `json:"dust"`                // upgrade dust currency
 	Capsules     CapsuleStock                       `json:"capsules"`            // upgrade capsules by rarity
 	GuildChat    map[string][]protocol.GuildChatMsg `json:"guildChat,omitempty"` // guildID -> chat messages
@@ -623,22 +623,6 @@ func (a *Account) HandleUpgradeUnit(username, unitID string) error {
 		a.AddCapsule(capsuleType, -capsuleNeeded) // Negative value to reduce capsules
 	}
 	progress.Rank++
-
-	// Calculate and add XP to increase unit level by 1
-	currentXP, exists := a.UnitXP[unitID]
-	if !exists {
-		a.UnitXP[unitID] = 0
-		currentXP = 0
-	}
-
-	// Get current level and XP needed for next level
-	currentLevel, _, nextXP := computeLevel(currentXP)
-	if nextXP > 0 {
-		// Add exactly the XP needed to reach the next level
-		a.UnitXP[unitID] = currentXP + nextXP
-		log.Printf("[%s] Unit %s leveled up from %d to %d when upgrading to rank %d",
-			username, unitID, currentLevel, currentLevel+1, progress.Rank)
-	}
 
 	if err := a.SaveUnitProgress(progress, username); err != nil {
 		return fmt.Errorf("failed to save progress: %w", err)

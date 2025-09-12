@@ -71,17 +71,36 @@ func accountToProfile(acc *account.Account) protocol.Profile {
 
 // sendUnitProgressionData sends unit progression data to client for UI display
 func (h *Hub) sendUnitProgressionData(acc *account.Account, client *client) {
-	if acc.Progress != nil {
-		for unitID, progress := range acc.Progress {
-			unitProgressSync := protocol.UnitProgressSynced{
-				UnitID:                unitID,
-				Rank:                  progress.Rank,
-				ShardsOwned:           progress.ShardsOwned,
-				PerkSlotsUnlocked:     progress.Rank, // Approximation - can be calculated based on rank
-				LegendaryPerkUnlocked: false,         // Calculate based on rank requirements
-			}
-			sendJSON(client, "UnitProgressSynced", unitProgressSync)
+	// Collect all unique unit IDs from the account's armies
+	unitIDs := make(map[string]bool)
+
+	// Add units from active army
+	for _, unitID := range acc.Army {
+		unitIDs[unitID] = true
+	}
+
+	// Add units from saved armies
+	for _, units := range acc.Armies {
+		for _, unitID := range units {
+			unitIDs[unitID] = true
 		}
+	}
+
+	// For each unique unit, load progression (creates defaults if missing) and send
+	for unitID := range unitIDs {
+		progress, err := acc.LoadUnitProgress(unitID)
+		if err != nil {
+			log.Printf("Failed to load progress for unit %s: %v", unitID, err)
+			continue
+		}
+		unitProgressSync := protocol.UnitProgressSynced{
+			UnitID:                unitID,
+			Rank:                  progress.Rank,
+			ShardsOwned:           progress.ShardsOwned,
+			PerkSlotsUnlocked:     progress.Rank, // Approximation - can be calculated based on rank
+			LegendaryPerkUnlocked: false,         // Calculate based on rank requirements
+		}
+		sendJSON(client, "UnitProgressSynced", unitProgressSync)
 	}
 }
 
@@ -502,8 +521,8 @@ func (c *client) reader(h *Hub) {
 				},
 			})
 
-			// Send unit progression data for UI display
-			// Do this after unlock to avoid blocking other operations
+			// Send unit progression data for UI display IMMEDIATELY after profile loading
+			// This ensures progression data is always up to date with server state
 			h.sendUnitProgressionData(acc, c)
 		case "GetGuild":
 			h.mu.Lock()
@@ -1196,10 +1215,23 @@ func (c *client) reader(h *Hub) {
 			s.Profile.Armies[ch] = append([]string{}, minis...)
 			// legacy sync
 			s.Army = append([]string{}, msg.Cards...)
-			// persist
-			if err := saveProfile(s.Profile); err != nil {
-				log.Printf("saveProfile: %v", err)
+
+			// Update account with army composition - DO NOT save profile here to avoid losing progression data
+			// Progression data is stored in separate account files and should not be affected by army saves
+			if acc, accountLoadErr := account.LoadAccount(s.Profile.Name); accountLoadErr == nil {
+				// Update army in account (preserves progression data)
+				acc.Army = append([]string{}, msg.Cards...)
+				if acc.Armies == nil {
+					acc.Armies = make(map[string][]string)
+				}
+				acc.Armies[ch] = append([]string{}, minis...)
+
+				// Save account data through account system (preserves progression)
+				if saveErr := account.SaveAccount(acc); saveErr != nil {
+					log.Printf("Failed to save account army data for %s: %v", s.Profile.Name, saveErr)
+				}
 			}
+
 			prof := s.Profile
 			h.mu.Unlock()
 
