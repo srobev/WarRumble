@@ -222,86 +222,32 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				screen.DrawImage(img, op)
 			}
 
+			// Get level using centralized function
+			lvl := g.GetUnitDisplayLevel(it.Name)
+
 			// Level bottom-left with rank progression & perk slot indicators
-			lvl := 1
-			baseLvl := 1
-			rankBonus := 0
+			rank := 1 // default rank if no progression
 			perkSlots := 0
 			currentShards := 0
 			shardsNeeded := 3 // Default
 			canUpgrade := false
 
-			if g.unitXP != nil {
-				if xp, ok := g.unitXP[it.Name]; ok {
-					if l, _, _ := computeLevel(xp); l > 0 {
-						baseLvl = l
-						lvl = l
-					}
+			// Check for rank progression and perk slots for upgrade indicators
+			if g.unitProgression != nil {
+				if progress, exists := g.unitProgression[it.Name]; exists {
+					rank = int(progress.Rank)
+					perkSlots = int(progress.Rank) // Approximation - can be calculated based on rank
+					currentShards = progress.ShardsOwned
+
+					// Use centralized upgrade cost function
+					shardsNeeded = types.GetUpgradeCost(int(progress.Rank))
+					canUpgrade = int(progress.Rank) < 5 && currentShards >= shardsNeeded
 				}
 			}
 
-			// Check for rank progression and perk slots
-			if g.unitProgression != nil {
-				if progress, exists := g.unitProgression[it.Name]; exists {
-					rankBonus = progress.Rank - 1
-					perkSlots = progress.PerkSlotsUnlocked
-					currentShards = progress.ShardsOwned
-					lvl = baseLvl + rankBonus
-
-					// Get unit metadata to access rarity information
-					var meta types.UnitMeta
-					if info, ok := g.nameToMini[it.Name]; ok {
-						// This is a champion, determine rarity from class name patterns
-						if info.Class == "champion" {
-							unitName := strings.ToLower(it.Name)
-							if strings.Contains(unitName, "legendary") ||
-								strings.Contains(unitName, "mythic") ||
-								strings.Contains(unitName, "lord") ||
-								strings.Contains(unitName, "king") {
-								meta.Rarity = types.RarityLegendary
-							} else if strings.Contains(unitName, "rare") ||
-								strings.Contains(unitName, "elite") ||
-								strings.Contains(unitName, "knight") ||
-								strings.Contains(unitName, "archer") {
-								meta.Rarity = types.RarityRare
-							} else {
-								meta.Rarity = types.RarityEpic
-							}
-						} else {
-							// For minis, get rarity from class
-							unitName := strings.ToLower(it.Name)
-							if strings.Contains(unitName, "legendary") ||
-								strings.Contains(unitName, "mythic") ||
-								strings.Contains(unitName, "lord") ||
-								strings.Contains(unitName, "king") {
-								meta.Rarity = types.RarityLegendary
-							} else if strings.Contains(unitName, "rare") ||
-								strings.Contains(unitName, "elite") ||
-								strings.Contains(unitName, "knight") ||
-								strings.Contains(unitName, "archer") {
-								meta.Rarity = types.RarityRare
-							} else {
-								meta.Rarity = types.RarityEpic
-							}
-						}
-					}
-
-					// Check if can upgrade - use rarity-based cost
-					// Updated with proper resource costs matching server-side logic
-					switch progress.Rank {
-					case 1:
-						shardsNeeded = 3 // Rank 1 → Rank 2: 3 shards + 500 dust (no capsule)
-					case 2:
-						shardsNeeded = 10 // Rank 2 → Rank 3: 10 shards + 2000 dust + 1 rare capsule
-					case 3:
-						shardsNeeded = 25 // Rank 3 → Rank 4: 25 shards + 8000 dust + 1 epic capsule
-					case 4:
-						shardsNeeded = 25 // Rank 4 → Rank 5: 25 shards + 20000 dust + 1 legendary capsule
-					default:
-						shardsNeeded = 0 // Max rank reached - show MAX
-					}
-					canUpgrade = progress.Rank < 5 && currentShards >= shardsNeeded
-				}
+			rankBonus := rank - 1
+			if rankBonus < 0 {
+				rankBonus = 0
 			}
 
 			levelBadgeX := r.x + 8
@@ -412,14 +358,13 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 			}
 
 			// Level and XP bar at bottom-left
-			lvl := 1
+			lvl := g.GetUnitDisplayLevel(g.selectedChampion)
+
+			// Get XP for progress bar
 			xp := 0
 			if g.unitXP != nil {
 				if xpVal, ok := g.unitXP[g.selectedChampion]; ok {
 					xp = xpVal
-					if l, _, _ := computeLevel(xp); l > 0 {
-						lvl = l
-					}
 				}
 			}
 
@@ -508,7 +453,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 						op := &ebiten.DrawImageOptions{}
 						op.GeoM.Scale(s, s)
 						op.GeoM.Translate(float64(r.x)+4, float64(r.y)+4)
-						op.Filter = ebiten.FilterLinear // High-quality filtering
+						op.Filter = ebiten.FilterLinear // High quality filtering
 						screen.DrawImage(img, op)
 					}
 
@@ -525,15 +470,14 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 						text.Draw(screen, costStr, fonts.UI(12), costX, costY+10, color.NRGBA{64, 64, 64, 255})
 					}
 
-					// Level and XP bar at bottom-left
-					lvl := 1
+					// Level and XP bar at bottom-left (EQUIPPED MINIS)
+					lvl := g.GetUnitDisplayLevel(name)
+
+					// Get XP for progress bar
 					xp := 0
 					if g.unitXP != nil {
 						if xpVal, ok := g.unitXP[name]; ok {
 							xp = xpVal
-							if l, _, _ := computeLevel(xp); l > 0 {
-								lvl = l
-							}
 						}
 					}
 
@@ -664,15 +608,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 			}
 
 			// Level badge at bottom-left for collection items
-			lvl := 1
-			if g.unitXP != nil {
-				if xp, ok := g.unitXP[it.Name]; ok {
-					l, _, _ := computeLevel(xp)
-					if l > 0 {
-						lvl = l
-					}
-				}
-			}
+			lvl := g.GetUnitDisplayLevel(it.Name)
 			levelBadgeX := r.x + 8
 			levelBadgeY := r.y + r.h - 20
 
@@ -740,15 +676,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 					// Level tooltip
 					levelBadgeRect := rect{x: r.x + 8, y: r.y + r.h - 20, w: 20, h: 20}
 					if levelBadgeRect.hit(mx, my) {
-						lvl := 1
-						if g.unitXP != nil {
-							if xp, ok := g.unitXP[it.Name]; ok {
-								l, _, _ := computeLevel(xp)
-								if l > 0 {
-									lvl = l
-								}
-							}
-						}
+						lvl := g.GetUnitDisplayLevel(it.Name)
 
 						tooltipText := fmt.Sprintf("Level %d", lvl)
 						tw := text.BoundString(fonts.UI(12), tooltipText).Dx()
@@ -813,15 +741,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 
 		// Draw tooltips for selected champion
 		if g.hoveredSelectedChampionLevel && g.selectedChampion != "" {
-			lvl := 1
-			if g.unitXP != nil {
-				if xp, ok := g.unitXP[g.selectedChampion]; ok {
-					l, _, _ := computeLevel(xp)
-					if l > 0 {
-						lvl = l
-					}
-				}
-			}
+			lvl := g.GetUnitDisplayLevel(g.selectedChampion)
 
 			tooltipText := fmt.Sprintf("Level %d", lvl)
 			tw := text.BoundString(fonts.UI(12), tooltipText).Dx()
@@ -917,15 +837,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 		// Draw tooltips for equipped mini slots
 		if g.hoveredMiniSlotLevel >= 0 && g.hoveredMiniSlotLevel < len(g.selectedOrder) && g.selectedOrder[g.hoveredMiniSlotLevel] != "" {
 			name := g.selectedOrder[g.hoveredMiniSlotLevel]
-			lvl := 1
-			if g.unitXP != nil {
-				if xp, ok := g.unitXP[name]; ok {
-					l, _, _ := computeLevel(xp)
-					if l > 0 {
-						lvl = l
-					}
-				}
-			}
+			lvl := g.GetUnitDisplayLevel(name)
 
 			tooltipText := fmt.Sprintf("Level %d", lvl)
 			tw := text.BoundString(fonts.UI(12), tooltipText).Dx()
@@ -1022,15 +934,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 
 		// Draw tooltips for mini overlay
 		if g.hoveredOverlayLevel && g.miniOverlayName != "" {
-			lvl := 1
-			if g.unitXP != nil {
-				if xp, ok := g.unitXP[g.miniOverlayName]; ok {
-					l, _, _ := computeLevel(xp)
-					if l > 0 {
-						lvl = l
-					}
-				}
-			}
+			lvl := g.GetUnitDisplayLevel(g.miniOverlayName)
 
 			tooltipText := fmt.Sprintf("Level %d", lvl)
 			tw := text.BoundString(fonts.UI(12), tooltipText).Dx()
@@ -1245,14 +1149,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				op.GeoM.Translate(ox, oy)
 				screen.DrawImage(img, op)
 				// Level badge over portrait top-left (bigger)
-				lvl := 1
-				if g.unitXP != nil {
-					if v, ok := g.unitXP[g.miniOverlayName]; ok {
-						if l, _, _ := computeLevel(v); l > 0 {
-							lvl = l
-						}
-					}
-				}
+				lvl := g.GetUnitDisplayLevel(g.miniOverlayName)
 
 				// Level badge with purple theme (same size as gold cost badges)
 				if lvl > 0 {
@@ -1304,7 +1201,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 					fonts.DrawUIWithFallback(screen, starTitleText, starBarX, starBarY-8, 12, color.NRGBA{255, 215, 0, 255})
 				}
 				// Use shared progression system for accurate thresholds (DRY)
-				threshold := 25 // Default to 25 shards for next tier
+				threshold := types.GetUpgradeCost(1) // Default to rank 1 cost
 				if g.unitProgression != nil {
 					if progress, exists := g.unitProgression[g.miniOverlayName]; exists {
 						// Use centralized upgrade cost function
@@ -1373,26 +1270,7 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				// Add UPGRADE button below STAR progress bar if unit can be upgraded
 				if currentShards >= threshold && g.unitProgression != nil {
 					if prog, exists := g.unitProgression[g.miniOverlayName]; exists {
-						// Get the required shards for this unit's level - fixed values based on unit type
-						shardsPerRank := 3 // Common default
-						if info.Class == "champion" {
-							shardsPerRank = 25 // Legendary
-						} else {
-							// Simple mapping based on name/class patterns for minis
-							unitName := strings.ToLower(g.miniOverlayName)
-							if strings.Contains(unitName, "rare") ||
-								strings.Contains(unitName, "elite") ||
-								strings.Contains(unitName, "knight") ||
-								strings.Contains(unitName, "archer") {
-								shardsPerRank = 10 // Rare
-							} else if strings.Contains(unitName, "legendary") ||
-								strings.Contains(unitName, "mythic") ||
-								strings.Contains(unitName, "lord") ||
-								strings.Contains(unitName, "king") {
-								shardsPerRank = 25 // Epic/Legendary
-							}
-						}
-						if prog.ShardsOwned >= shardsPerRank {
+						if prog.ShardsOwned >= types.GetUpgradeCost(prog.Rank) {
 							// Position button at BOTTOM LEFT of mini overlay
 							upgradeBtnY := y + h - 50 // From bottom of overlay with small margin
 							upgradeBtnX := x + 20     // Left side of overlay with small margin
@@ -1430,31 +1308,38 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 
 							// Handle click - show upgrade confirmation overlay
 							if isHovered && inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
-								// Populate upgrade resources and show overlay
+								// Show upgrade confirmation overlay
+								g.showUpgradeOverlay = true
 								g.upgradeOverlayUnit = g.miniOverlayName
-								if g.unitProgression != nil {
-									if progress, exists := g.unitProgression[g.miniOverlayName]; exists {
-										// Calculate required resources based on current rank
-										shardsNeeded := types.GetUpgradeCost(progress.Rank)
-										dustNeeded := g.calculateDustCost(progress.Rank)
-										capsuleNeeded, capsuleType := g.calculateCapsuleCost(progress.Rank)
 
-										g.upgradeOverlayResources = UpgradeResources{
-											ShardsNeeded:    shardsNeeded,
-											ShardsCurrent:   progress.ShardsOwned,
-											DustNeeded:      dustNeeded,
-											DustCurrent:     g.dust,
-											CapsulesNeeded:  capsuleNeeded,
-											CapsulesCurrent: g.getCapsuleCountByType(capsuleType),
-											CapsuleType:     capsuleType,
-											Rarity:          g.getUnitRarityString(g.miniOverlayName),
-											CanAfford: progress.ShardsOwned >= shardsNeeded &&
-												g.dust >= dustNeeded &&
-												g.getCapsuleCountByType(capsuleType) >= capsuleNeeded,
-										}
+								// Calculate and set overlay resources
+								currentRank := 1
+								if g.unitProgression != nil {
+									if prog, exists := g.unitProgression[g.upgradeOverlayUnit]; exists {
+										currentRank = int(prog.Rank)
 									}
 								}
-								g.showUpgradeOverlay = true
+
+								g.upgradeOverlayResources.ShardsCurrent = types.GetUpgradeCost(currentRank)
+								g.upgradeOverlayResources.ShardsNeeded = types.GetUpgradeCost(currentRank)
+
+								if g.unitProgression != nil {
+									if prog, exists := g.unitProgression[g.upgradeOverlayUnit]; exists {
+										g.upgradeOverlayResources.ShardsCurrent = prog.ShardsOwned
+									}
+								}
+
+								g.upgradeOverlayResources.DustCurrent = g.dust
+								g.upgradeOverlayResources.DustNeeded = g.calculateDustCost(currentRank)
+
+								capsuleCount, capsuleType := g.calculateCapsuleCost(currentRank)
+								g.upgradeOverlayResources.CapsulesNeeded = capsuleCount
+								g.upgradeOverlayResources.CapsuleType = capsuleType
+								g.upgradeOverlayResources.CapsulesCurrent = g.getCapsuleCountByType(capsuleType)
+								g.upgradeOverlayResources.Rarity = g.getUnitRarityString(g.upgradeOverlayUnit)
+								g.upgradeOverlayResources.CanAfford = g.upgradeOverlayResources.ShardsCurrent >= g.upgradeOverlayResources.ShardsNeeded &&
+									g.upgradeOverlayResources.DustCurrent >= g.upgradeOverlayResources.DustNeeded &&
+									g.upgradeOverlayResources.CapsulesCurrent >= g.upgradeOverlayResources.CapsulesNeeded
 							}
 						}
 					}
@@ -1698,18 +1583,14 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 				// XP bar hover tooltip
 				if g.xpBarHovered {
 					mx, my := ebiten.CursorPosition()
-					// Calculate next level and XP required
-					nextLevel := lvl + 1
-					if nextLevel > 20 {
-						nextLevel = 20
-					}
+					// Calculate XP required for next level
 					xpRequired := 0
 					if next > 0 {
 						xpRequired = next - cur
 					}
 
 					// Tooltip text
-					tooltipText := fmt.Sprintf("XP to level %d: %d", nextLevel, xpRequired)
+					tooltipText := fmt.Sprintf("Required XP to next level: %d", xpRequired)
 
 					// Measure text for tooltip box
 					tw := text.BoundString(fonts.UI(12), tooltipText).Dx()

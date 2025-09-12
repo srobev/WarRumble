@@ -75,3 +75,31 @@ type Hotspot struct {
 
 // World map image fallback id used across files
 const defaultMapID = "rumble_world"
+
+// GetUnitDisplayLevel returns the consistent display level for a unit,
+// combining XP-based level with rank progression bonus
+func (g *Game) GetUnitDisplayLevel(unitName string) int {
+	lvl := 1
+	xp := 0
+	if g.unitXP != nil {
+		if xpVal, ok := g.unitXP[unitName]; ok {
+			xp = xpVal
+			l, _, _ := computeLevel(xp)
+			if l > 0 {
+				lvl = l
+			}
+		}
+	}
+
+	// Add rank progression bonus
+	rankBonus := 0
+	if g.unitProgression != nil {
+		if progress, exists := g.unitProgression[unitName]; exists {
+			rank := int(progress.Rank)
+			rankBonus = rank - 1
+			lvl += rankBonus
+		}
+	}
+
+	return lvl
+}
