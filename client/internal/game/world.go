@@ -109,6 +109,7 @@ func (w *World) ApplyDelta(d protocol.StateDelta) {
 		ru.OwnerID, ru.Class = u.OwnerID, u.Class
 		ru.Range = u.Range
 		ru.Particle = u.Particle
+		ru.Name = u.Name // Update name for state changes like hex
 	}
 	for _, id := range d.UnitsRemoved {
 		delete(w.Units, id)

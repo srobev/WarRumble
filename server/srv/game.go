@@ -2039,6 +2039,9 @@ func (g *Game) processSpellEffect(casterID int64, s protocol.CastSpell) {
 	case "Whelp Eggs":
 		// Summon spell
 		g.castWhelpEggs(casterID, s.X, s.Y)
+	case "Hex":
+		// Polymorph enemy units into frogs
+		g.castHex(casterID, s.X, s.Y)
 	}
 }
 
@@ -2288,6 +2291,39 @@ func (g *Game) castPolymorph(casterID int64, targetX, targetY float64) {
 				}
 			}(unit, unit.Speed, unit.DMG)
 			break
+		}
+	}
+}
+
+func (g *Game) castHex(casterID int64, targetX, targetY float64) {
+	radius := 80.0  // Smaller than blizzard (120)
+	duration := 4.0 // 4 seconds duration
+
+	// Apply hex effect to all enemy units in AOE
+	for _, unit := range g.units {
+		if unit.OwnerID == casterID || unit.HP <= 0 {
+			continue
+		}
+		dist := hypot(targetX, targetY, unit.X, unit.Y)
+		if dist <= radius {
+			// Transform unit into frog
+			originalName := unit.Name
+			originalSpeed := unit.Speed
+			originalDMG := unit.DMG
+
+			unit.Name = "hexed" // Client will render hexed.png
+			unit.Speed = 0      // Stand still
+			unit.DMG = 0        // Can't attack
+
+			// Restore after duration
+			go func(target *Unit, originalName string, originalSpeed float64, originalDMG int) {
+				time.Sleep(time.Duration(duration) * time.Second)
+				if target.HP > 0 {
+					target.Name = originalName
+					target.Speed = originalSpeed
+					target.DMG = originalDMG
+				}
+			}(unit, originalName, originalSpeed, originalDMG)
 		}
 	}
 }

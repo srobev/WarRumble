@@ -647,7 +647,7 @@ func (g *Game) drawBattleBar(screen *ebiten.Image) {
 		// Special handling for Blizzard spell - show AoE oval border only
 		if g.isSpellCard(draggedCard.Name) && strings.ToLower(draggedCard.Name) == "blizzard" {
 			// Draw blizzard AoE oval border only (no fill)
-			radius := 120.0
+			radius := 120.0 * g.cameraZoom // Scale radius to match world coordinates
 			centerX := previewX
 			centerY := previewY
 
@@ -662,7 +662,7 @@ func (g *Game) drawBattleBar(screen *ebiten.Image) {
 		// Special handling for Holy Nova spell - show yellow AoE circle
 		if g.isSpellCard(draggedCard.Name) && strings.ToLower(draggedCard.Name) == "holy nova" {
 			// Draw Holy Nova AoE yellow circle border only (no fill)
-			radius := 120.0
+			radius := 120.0 * g.cameraZoom // Scale radius to match world coordinates
 			centerX := previewX
 			centerY := previewY
 
@@ -671,6 +671,21 @@ func (g *Game) drawBattleBar(screen *ebiten.Image) {
 				borderX := centerX + math.Cos(angle)*radius
 				borderY := centerY + math.Sin(angle)*radius
 				vector.DrawFilledCircle(screen, float32(borderX), float32(borderY), 2, color.NRGBA{255, 255, 0, 255}, true)
+			}
+		}
+
+		// Special handling for Hex spell - show green AoE ring
+		if g.isSpellCard(draggedCard.Name) && strings.ToLower(draggedCard.Name) == "hex" {
+			// Draw Hex AoE green ring border only (no fill)
+			radius := 80.0 * g.cameraZoom // Scale radius to match world coordinates
+			centerX := previewX
+			centerY := previewY
+
+			// Draw border outline only in green
+			for angle := 0.0; angle < 2*math.Pi; angle += 0.03 {
+				borderX := centerX + math.Cos(angle)*radius
+				borderY := centerY + math.Sin(angle)*radius
+				vector.DrawFilledCircle(screen, float32(borderX), float32(borderY), 2, color.NRGBA{0, 255, 0, 255}, true)
 			}
 		}
 
@@ -1255,21 +1270,23 @@ func (g *Game) castSpell(spellName string, targetX, targetY float64) {
 		return
 	}
 
-	// Send spell cast message to server
+	// Convert screen coordinates to world coordinates for server
+	// Screen coords: (targetX, targetY) are raw mouse position on screen
+	// World coords: inverse camera transformation gives map position
+	worldX := (targetX - g.cameraX) / g.cameraZoom
+	worldY := (targetY - g.cameraY) / g.cameraZoom
+
+	// Send spell cast message to server with world coordinates
 	g.send("CastSpell", protocol.CastSpell{
 		SpellName: spellName,
-		X:         targetX,
-		Y:         targetY,
+		X:         worldX,
+		Y:         worldY,
 		ClientTs:  time.Now().UnixMilli(),
 	})
 
 	// Trigger local visual effects immediately for responsiveness
 	if g.particleSystem != nil {
-		// Convert screen coordinates to world coordinates for effects
-		worldX := (targetX - g.cameraX) / g.cameraZoom
-		worldY := (targetY - g.cameraY) / g.cameraZoom
-
-		// Create spell cast effect based on spell type
+		// Create spell cast effect based on spell type (already in world coords)
 		switch strings.ToLower(miniInfo.Name) {
 		case "arcane blast":
 			g.particleSystem.CreateSpellCastEffect(worldX, worldY, "arcane_blast")
@@ -1291,6 +1308,8 @@ func (g *Game) castSpell(spellName string, targetX, targetY float64) {
 			g.particleSystem.CreateSpellCastEffect(worldX, worldY, "smoke_bomb")
 		case "whelp eggs":
 			g.particleSystem.CreateSpellCastEffect(worldX, worldY, "whelp_eggs")
+		case "hex":
+			g.particleSystem.CreateSpellCastEffect(worldX, worldY, "hex")
 		}
 	}
 }
