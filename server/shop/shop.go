@@ -1,15 +1,86 @@
 package shop
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
+	"math"
 	"math/rand"
+	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"rumble/server/account"
 	"rumble/shared/game/types"
 	"rumble/shared/protocol"
 )
+
+type MiniInfo struct {
+	Name     string   `json:"name"`
+	Dmg      int      `json:"dmg"`
+	Hp       int      `json:"hp"`
+	Heal     int      `json:"heal"`
+	Hps      int      `json:"hps"`
+	Portrait string   `json:"portrait"`
+	Class    string   `json:"class"`
+	SubClass string   `json:"subclass"`
+	Role     string   `json:"role"`
+	Cost     int      `json:"cost"`
+	Speed    float64  `json:"speed"`
+	Range    int      `json:"range"`
+	Particle string   `json:"particle"`
+	Cooldown float64  `json:"cooldown,omitempty"`
+	Features []string `json:"features,omitempty"`
+}
+
+// LoadLobbyMinis loads minis from minis.json file
+func LoadLobbyMinis() []protocol.MiniInfo {
+	var minis []MiniInfo
+
+	// Try sensible paths relative to the running binary and CWD.
+	exe, _ := os.Executable()
+	exeDir := filepath.Dir(exe)
+	candidates := []string{
+		filepath.Join(exeDir, "data", "minis.json"), // server/data/minis.json next to server binary
+		filepath.Join("data", "minis.json"),         // when running `go run .` inside server/
+		filepath.Join("..", "internal", "game", "assets", "minis.json"),
+	}
+
+	for _, p := range candidates {
+		if b, err := os.ReadFile(p); err == nil {
+			if err := json.Unmarshal(b, &minis); err == nil {
+				log.Printf("loaded %d minis from %s", len(minis), p)
+
+				// Convert to protocol.MiniInfo format
+				out := make([]protocol.MiniInfo, 0, len(minis))
+				for _, m := range minis {
+					out = append(out, protocol.MiniInfo{
+						Name:        m.Name,
+						Class:       m.Class,
+						SubClass:    m.SubClass,
+						Role:        m.Role,
+						Cost:        m.Cost,
+						Portrait:    m.Portrait,
+						Dmg:         m.Dmg,
+						Hp:          m.Hp,
+						Heal:        m.Heal,
+						Hps:         m.Hps,
+						Speed:       int(math.Round(m.Speed)),
+						AttackSpeed: 1.0 / m.Cooldown,
+						Features:    m.Features,
+					})
+				}
+				return out
+			}
+			log.Printf("failed to parse minis from %s: %v", p, err)
+		}
+	}
+	log.Printf("WARNING: no minis.json found — using empty set (fallback cards will be used)")
+
+	// Return empty slice if no file found
+	return []protocol.MiniInfo{}
+}
 
 const SLOT_COUNT = 9
 
@@ -22,11 +93,31 @@ type Service struct {
 func NewService() *Service {
 	return &Service{
 		unitCatalog: func() ([]types.UnitMeta, []types.UnitMeta) {
-			return types.ListMinis(), types.ListChampions()
+			// Load units from minis.json instead of hardcoded registry
+			var minis, champions []types.UnitMeta
+			for _, mini := range LoadLobbyMinis() {
+				isChamp := strings.Contains(strings.ToLower(mini.Role), "champion") ||
+					strings.Contains(strings.ToLower(mini.Class), "champion")
+
+				// Convert MiniInfo to UnitMeta
+				unitMeta := types.UnitMeta{
+					ID:         mini.Name,
+					Rarity:     determineRarity(mini.Name),
+					IsChampion: isChamp,
+					Icon:       mini.Portrait,
+				}
+
+				if isChamp {
+					champions = append(champions, unitMeta)
+				} else {
+					minis = append(minis, unitMeta)
+				}
+			}
+			return minis, champions
 		},
 		perkCatalog: func() []string {
-			// Units with perks
-			return []string{"Sorceress Glacia", "Swordsman"}
+			// Units with perks - now from actual units
+			return []string{"Sorceress Glacia", "Warg Lord", "Bloodmage Thalor"}
 		},
 		PerkCatalogFunc: func(unitID string) []types.Perk {
 			// Since different package, stub for now
@@ -34,6 +125,36 @@ func NewService() *Service {
 			return []types.Perk{}
 		},
 	}
+}
+
+// determineRarity assigns rarities based on unit names
+func determineRarity(unitName string) types.Rarity {
+	name := strings.ToLower(unitName)
+
+	// Legendary units
+	if strings.Contains(name, "great") || strings.Contains(name, "supreme") ||
+		strings.Contains(name, "lord") || strings.Contains(name, "master") ||
+		strings.Contains(name, "king") || strings.Contains(name, "queen") ||
+		strings.Contains(name, "legendary") {
+		return types.RarityLegendary
+	}
+
+	// Epic units
+	if strings.Contains(name, "elite") || strings.Contains(name, "epic") ||
+		strings.Contains(name, "sorceress") || strings.Contains(name, "bloodmage") ||
+		strings.Contains(name, "arch") || strings.Contains(name, "grand") {
+		return types.RarityEpic
+	}
+
+	// Rare units
+	if strings.Contains(name, "rare") || strings.Contains(name, "knights") ||
+		strings.Contains(name, "guards") || strings.Contains(name, "navy") ||
+		strings.Contains(name, "elite") || strings.Contains(name, "sentinel") {
+		return types.RarityRare
+	}
+
+	// Common units (default)
+	return types.RarityCommon
 }
 
 // GenerateRoll81 builds 81 slots mixing minis & champions

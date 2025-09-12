@@ -134,8 +134,28 @@ func (g *Game) drawTopBarHome(screen *ebiten.Image) {
 	resourceFontSize := 12.0
 	resFont := fonts.UI(resourceFontSize)
 	gb := text.BoundString(resFont, resourceStr)
-	gy := g.goldArea.y + (topBarH+gb.Dy())/2 - 2
-	fonts.DrawUIWithFallback(screen, resourceStr, g.goldArea.x, gy, resourceFontSize, color.NRGBA{240, 196, 25, 255})
+
+	// Gold icon positioned left, followed by gold amount
+	const iconSize = 16
+	const iconSpacing = 4
+	iconX := float64(g.goldArea.x)
+	goldAmountX := iconX + iconSize + iconSpacing
+	gy := float64(g.goldArea.y + topBarH/2 + gb.Dy()/2 - 2) // Better vertical centering
+
+	// Draw gold icon
+	if goldIcon := g.ensureIconImage("gold"); goldIcon != nil {
+		iw, ih := goldIcon.Bounds().Dx(), goldIcon.Bounds().Dy()
+		scale := float64(iconSize) / mathMax(float64(iw), float64(ih))
+
+		iconCenterY := float64(g.goldArea.y + topBarH/2 - 1) // Center of the bar area (slightly offset for visual balance)
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Scale(scale, scale)
+		op.GeoM.Translate(iconX, iconCenterY-float64(iconSize)/2) // Perfect vertical centering
+		screen.DrawImage(goldIcon, op)
+	}
+
+	// Draw gold amount text
+	fonts.DrawUIWithFallback(screen, resourceStr, int(goldAmountX), int(gy), resourceFontSize, color.NRGBA{240, 196, 25, 255})
 
 	hoveredResource := g.goldArea.hit(mx, my)
 	if hoveredResource && g.fantasyUI != nil {
@@ -246,48 +266,49 @@ func (g *Game) computeResourcePanelLayout() {
 	const panelPadding = 8
 	const itemHeight = 20
 	const itemSpacing = 4
+	const itemWidth = 100 // Uniform width for all items
 
 	// Start positioning below the top bar, aligned with gold area
 	baseY := topBarH + panelPadding
-	baseX := g.goldArea.x + (g.goldArea.w / 2) - 100 // Center the panel around gold area
+	baseX := g.goldArea.x + (g.goldArea.w / 2) - 50 // Slightly left to center better
 
-	// Resource panel background
+	// Resource panel background with increased height for better coverage
 	g.resourcePanelArea = rect{
-		x: baseX - 5,
+		x: baseX - 10,
 		y: topBarH + 4,
-		w: 210,
-		h: 100,
+		w: 120,
+		h: 110, // Increased height from 95 to 110 for better coverage of all rows
 	}
 
-	// Dust area
+	// Dust area - top center
 	g.dustArea = rect{
 		x: baseX,
 		y: baseY,
-		w: 120,
+		w: itemWidth,
 		h: itemHeight,
 	}
 
-	// Rare capsules
+	// Rare capsules - middle center (full width)
 	g.rareCapsArea = rect{
 		x: baseX,
 		y: baseY + itemHeight + itemSpacing,
-		w: 70,
+		w: itemWidth,
 		h: itemHeight,
 	}
 
-	// Epic capsules
+	// Epic capsules - bottom center (full width)
 	g.epicCapsArea = rect{
-		x: baseX + 80,
-		y: baseY + itemHeight + itemSpacing,
-		w: 70,
-		h: itemHeight,
-	}
-
-	// Legendary capsules
-	g.legendaryCapsArea = rect{
 		x: baseX,
 		y: baseY + 2*itemHeight + 2*itemSpacing,
-		w: 140,
+		w: itemWidth,
+		h: itemHeight,
+	}
+
+	// Legendary capsules - bottom center
+	g.legendaryCapsArea = rect{
+		x: baseX,
+		y: baseY + 3*itemHeight + 3*itemSpacing,
+		w: itemWidth,
 		h: itemHeight,
 	}
 }
@@ -301,24 +322,41 @@ func (g *Game) drawResourcePanel(screen *ebiten.Image, mx, my int) {
 	} else {
 		// Draw themed panel background
 		g.fantasyUI.DrawThemedPanel(screen, g.resourcePanelArea.x, g.resourcePanelArea.y,
-			g.resourcePanelArea.w, g.resourcePanelArea.h, 0.9)
+			g.resourcePanelArea.w, g.resourcePanelArea.h, 1.0)
 	}
 
 	textColorPrimary := color.NRGBA{240, 240, 240, 255}
-	textColorSecondary := color.NRGBA{200, 200, 200, 255}
 
-	// Draw resource items using UI fonts with fallback
-	dustStr := fmt.Sprintf("⭐ Dust: %d", g.dust)
-	fonts.DrawUIWithFallback(screen, dustStr, g.dustArea.x+2, g.dustArea.y+14, 14, textColorPrimary)
+	// Draw dust with proper dust icon
+	const dustIconSize = 16
+	const dustTextSpacing = 4
+	dustIconX := float64(g.dustArea.x + 2)
+	dustTextX := dustIconX + dustIconSize + dustTextSpacing
 
-	rareStr := fmt.Sprintf("Rare: %d", g.capsules.Rare)
-	fonts.DrawUIWithFallback(screen, rareStr, g.rareCapsArea.x+2, g.rareCapsArea.y+14, 14, textColorSecondary)
+	// Draw dust icon with adjusted positioning
+	if dustIcon := loadImage("assets/ui/icons/dust.png"); dustIcon != nil {
+		iw, ih := dustIcon.Bounds().Dx(), dustIcon.Bounds().Dy()
+		scale := float64(dustIconSize) / mathMax(float64(iw), float64(ih))
 
-	epicStr := fmt.Sprintf("Epic: %d", g.capsules.Epic)
-	fonts.DrawUIWithFallback(screen, epicStr, g.epicCapsArea.x+2, g.epicCapsArea.y+14, 14, textColorSecondary)
+		iconY := float64(g.dustArea.y + (g.dustArea.h-dustIconSize)/2) // Center vertically
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Scale(scale, scale)
+		op.GeoM.Translate(dustIconX, iconY)
+		op.Filter = ebiten.FilterLinear
+		screen.DrawImage(dustIcon, op)
+	} else {
+		// Fallback to emoji if icon doesn't load
+		fonts.DrawUIWithFallback(screen, "⭐", int(dustIconX), g.dustArea.y+14, 14, textColorPrimary)
+	}
 
-	legendaryStr := fmt.Sprintf("Legendary: %d", g.capsules.Legendary)
-	fonts.DrawUIWithFallback(screen, legendaryStr, g.legendaryCapsArea.x+2, g.legendaryCapsArea.y+14, 14, textColorSecondary)
+	// Draw dust count text with much reduced spacing (closer to icon)
+	dustStr := fmt.Sprintf("%d", g.dust)
+	fonts.DrawUIWithFallback(screen, dustStr, int(dustTextX-4), g.dustArea.y+14, 14, textColorPrimary)
+
+	// Load and draw capsule icons instead of text
+	g.drawCapsuleIcons(screen, g.rareCapsArea, g.capsules.Rare, "rare_core.png")
+	g.drawCapsuleIcons(screen, g.epicCapsArea, g.capsules.Epic, "epic_core.png")
+	g.drawCapsuleIcons(screen, g.legendaryCapsArea, g.capsules.Legendary, "legendary_core.png")
 
 	// Draw tooltips for hovered resource types
 	hoveredDust := g.dustArea.hit(mx, my)
@@ -328,7 +366,7 @@ func (g *Game) drawResourcePanel(screen *ebiten.Image, mx, my int) {
 
 	if (hoveredDust || hoveredRare || hoveredEpic || hoveredLegendary) && g.fantasyUI != nil {
 		var tipTitle, tipDesc string
-		tipW, tipH := 300, 70
+		tipW, tipH := 310, 70
 
 		if hoveredDust {
 			tipTitle = "Dust"
@@ -344,9 +382,49 @@ func (g *Game) drawResourcePanel(screen *ebiten.Image, mx, my int) {
 			tipDesc = "Required for legendary unit upgrades."
 		}
 
+		// Position tooltip above cursor and right-aligned to avoid shop UI interference
 		tx := clampInt(mx-tipW-10, 0, protocol.ScreenW-tipW)
-		ty := clampInt(my+12, 0, protocol.ScreenH-tipH)
+		ty := clampInt(my-tipH-10, 0, protocol.ScreenH-tipH) // Position above the cursor
 
 		g.fantasyUI.DrawThemedTooltip(screen, tx, ty, tipW, tipH, tipTitle, []string{tipDesc})
+	}
+}
+
+// drawCapsuleIcons draws a capsule icon and count for the resource panel
+func (g *Game) drawCapsuleIcons(screen *ebiten.Image, area rect, count int, iconPath string) {
+	const iconSize = 16
+	const textSpacing = 4
+
+	// Combined string for centering
+	countStr := fmt.Sprintf("%d", count)
+	totalWidth := iconSize + textSpacing + len(countStr)*6 // Approximate text width
+
+	// Center the combined icon + text horizontally
+	centerX := area.x + area.w/2
+	startX := centerX - totalWidth/2
+
+	// Draw icon
+	if img := loadImage(fmt.Sprintf("assets/ui/icons/%s", iconPath)); img != nil {
+		iw, ih := img.Bounds().Dx(), img.Bounds().Dy()
+		scale := float64(iconSize) / mathMax(float64(iw), float64(ih))
+
+		// Center the icon vertically in the area
+		iconX := float64(startX)
+		iconY := float64(area.y + (area.h-iconSize)/2)
+
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Scale(scale, scale)
+		op.GeoM.Translate(iconX, iconY)
+		op.Filter = ebiten.FilterLinear
+		screen.DrawImage(img, op)
+
+		// Draw count text next to icon with even closer spacing for better alignment
+		textX := startX + iconSize + textSpacing - 4 // Even closer spacing to align with dust
+		textY := area.y + (area.h+10)/2              // Center vertically with icon
+		fonts.DrawUIWithFallback(screen, countStr, textX, textY, 12, color.NRGBA{200, 200, 220, 255})
+	} else {
+		// Fallback to text if icon doesn't load
+		countStrFallback := fmt.Sprintf("?: %d", count)
+		fonts.DrawUIWithFallback(screen, countStrFallback, area.x+(area.w-len(countStrFallback)*6)/2, area.y+14, 12, color.NRGBA{200, 200, 220, 255})
 	}
 }

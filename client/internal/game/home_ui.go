@@ -1413,8 +1413,20 @@ func (g *Game) drawHomeContent(screen *ebiten.Image) {
 							// Draw button border
 							vector.StrokeRect(screen, float32(upgradeBtnX), float32(upgradeBtnY), float32(upgradeBtnW), float32(upgradeBtnH), 2, color.NRGBA{120, 170, 120, 255}, true)
 
-							// Draw button text "UPGRADE ⭐" with gold star ON TOP (after background)
-							text.Draw(screen, "UPGRADE", fonts.UI(14), upgradeBtnX+15, upgradeBtnY+22, color.NRGBA{255, 255, 255, 255})
+							// Draw upgrade icon and button text
+							if upgradeIcon := loadImage("assets/ui/icons/upgrade.png"); upgradeIcon != nil {
+								iconSize := 16
+								iw, ih := upgradeIcon.Bounds().Dx(), upgradeIcon.Bounds().Dy()
+								scale := float64(iconSize) / mathMax(float64(iw), float64(ih))
+
+								op := &ebiten.DrawImageOptions{}
+								op.GeoM.Scale(scale, scale)
+								op.GeoM.Translate(float64(upgradeBtnX+5), float64(upgradeBtnY+8))
+								op.Filter = ebiten.FilterLinear
+								screen.DrawImage(upgradeIcon, op)
+							}
+							// Draw button text "Upgrade"
+							text.Draw(screen, "Upgrade", fonts.UI(14), upgradeBtnX+25, upgradeBtnY+22, color.NRGBA{255, 255, 255, 255})
 
 							// Handle click - show upgrade confirmation overlay
 							if isHovered && inpututil.IsMouseButtonJustPressed(ebiten.MouseButtonLeft) {
@@ -2449,37 +2461,114 @@ func (g *Game) drawUpgradeOverlay(screen *ebiten.Image) {
 		fonts.DrawUIWithFallback(screen, resources.Rarity+" Unit", portraitX+portraitSize+20, portraitY+40, 12, color.NRGBA{200, 200, 220, 255})
 	}
 
-	// Resource requirements section
-	reqY := titleY + 110
-	fonts.DrawUIWithFallback(screen, "Required Resources:", overlayX+20, reqY, 14, color.NRGBA{255, 215, 0, 255})
+	// Resource requirements section - left column icons, centered text values
+	reqY := overlayY + 110
+	fonts.DrawUIWithFallback(screen, "Required Resources:", overlayX+overlayW/2-80, reqY, 14, color.NRGBA{255, 215, 0, 255})
 
-	lineHeight := 20
-	y := reqY + 30
+	lineHeight := 22 // Slightly increased for better spacing
+	y := reqY + 35
 
-	// Shards
-	fonts.DrawUIWithFallback(screen, "⭐ Shards:", overlayX+40, y, 12, color.White)
+	// Resource layout: left-aligned icons column, centered values
+	const resourceIconSize = 16
+	const resourceTextSpacing = 8
+	iconColumnX := overlayX + 80              // Left column for icons
+	textColumnX := overlayX + overlayW/2 - 40 // Center column for values
+
 	shardText := fmt.Sprintf("%d / %d", resources.ShardsCurrent, resources.ShardsNeeded)
-	fonts.DrawUIWithFallback(screen, shardText, overlayX+overlayW-120, y, 12, g.getResourceColor(resources.ShardsCurrent >= resources.ShardsNeeded))
-
-	// Dust
-	y += lineHeight
-	fonts.DrawUIWithFallback(screen, "💰 Dust:", overlayX+40, y, 12, color.White)
 	dustText := fmt.Sprintf("%d / %d", resources.DustCurrent, resources.DustNeeded)
-	fonts.DrawUIWithFallback(screen, dustText, overlayX+overlayW-120, y, 12, g.getResourceColor(resources.DustCurrent >= resources.DustNeeded))
-
-	// Capsules
-	y += lineHeight
-	capsuleEmoji := map[string]string{"Rare": "🔸", "Epic": "🔹", "Legendary": "🔶"}[resources.CapsuleType]
-	fonts.DrawUIWithFallback(screen, capsuleEmoji+" "+resources.CapsuleType+" Capsule:", overlayX+40, y, 12, color.White)
 	capsuleText := fmt.Sprintf("%d / %d", resources.CapsulesCurrent, resources.CapsulesNeeded)
-	fonts.DrawUIWithFallback(screen, capsuleText, overlayX+overlayW-120, y, 12, g.getResourceColor(resources.CapsulesCurrent >= resources.CapsulesNeeded))
+	_ = capsuleText // Explicitly ignore unused variable
+
+	// Shards row
+	shardIconY := float64(y + 4) // Center with text baseline
+
+	// Draw shard icon in left column
+	if shardIcon := loadImage("assets/ui/icons/shards.png"); shardIcon != nil {
+		iw, ih := shardIcon.Bounds().Dx(), shardIcon.Bounds().Dy()
+		scale := float64(resourceIconSize) / mathMax(float64(iw), float64(ih))
+
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Scale(scale, scale)
+		op.GeoM.Translate(float64(iconColumnX), shardIconY-resourceIconSize/2+6)
+		op.Filter = ebiten.FilterLinear
+		screen.DrawImage(shardIcon, op)
+	} else {
+		fonts.DrawUIWithFallback(screen, "📏", int(iconColumnX), y+10, 12, color.White)
+	}
+
+	// Draw shard cost in center column
+	fonts.DrawUIWithFallback(screen, shardText, int(textColumnX), y+10, 12, g.getResourceColor(resources.ShardsCurrent >= resources.ShardsNeeded))
+
+	// Dust row
+	y += lineHeight
+	dustIconY := float64(y - resourceIconSize/2 + 6) // Center vertically with text baseline
+
+	// Draw dust icon in left column
+	if dustIcon := loadImage("assets/ui/icons/dust.png"); dustIcon != nil {
+		iw, ih := dustIcon.Bounds().Dx(), dustIcon.Bounds().Dy()
+		scale := float64(resourceIconSize) / mathMax(float64(iw), float64(ih))
+
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Scale(scale, scale)
+		op.GeoM.Translate(float64(iconColumnX), dustIconY)
+		op.Filter = ebiten.FilterLinear
+		screen.DrawImage(dustIcon, op)
+	} else {
+		fonts.DrawUIWithFallback(screen, "💰", int(iconColumnX), y, 12, color.White)
+	}
+
+	// Draw dust cost in center column
+	fonts.DrawUIWithFallback(screen, dustText, int(textColumnX), y+10, 12, g.getResourceColor(resources.DustCurrent >= resources.DustNeeded))
+
+	// Capsules row - draw directly instead of using helper function
+	y += lineHeight
+
+	capsuleIconY := float64(y - resourceIconSize/2 + 6) // Center vertically with text baseline
+
+	// Draw capsule icon in left column
+	var capsuleFile string
+	switch resources.CapsuleType {
+	case "Rare":
+		capsuleFile = "assets/ui/icons/rare_core.png"
+	case "Epic":
+		capsuleFile = "assets/ui/icons/epic_core.png"
+	case "Legendary":
+		capsuleFile = "assets/ui/icons/legendary_core.png"
+	default:
+		capsuleFile = "assets/ui/icons/rare_core.png"
+	}
+
+	if capsuleIcon := loadImage(capsuleFile); capsuleIcon != nil {
+		iw, ih := capsuleIcon.Bounds().Dx(), capsuleIcon.Bounds().Dy()
+		scale := float64(resourceIconSize) / mathMax(float64(iw), float64(ih))
+
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Scale(scale, scale)
+		op.GeoM.Translate(float64(iconColumnX), capsuleIconY)
+		op.Filter = ebiten.FilterLinear
+		screen.DrawImage(capsuleIcon, op)
+	} else {
+		fonts.DrawUIWithFallback(screen, "🎁", int(iconColumnX), y, 12, color.White)
+	}
+
+	// Draw capsule cost in center column
+	capsuleReqText := fmt.Sprintf("%d / %d", resources.CapsulesCurrent, resources.CapsulesNeeded)
+	fonts.DrawUIWithFallback(screen, capsuleReqText, int(textColumnX), y+10, 12, g.getResourceColor(resources.CapsulesCurrent >= resources.CapsulesNeeded))
 
 	// Can afford message
 	y += lineHeight + 15
 	if !resources.CanAfford {
-		fonts.DrawUIWithFallback(screen, "❌ Cannot afford upgrade - collect more resources!", overlayX+overlayW/2-text.BoundString(fonts.UI(12), "❌ Cannot afford upgrade - collect more resources!").Dx()/2, y, 12, color.NRGBA{255, 120, 120, 255})
+		fonts.DrawUIWithFallback(screen, "Cannot afford upgrade - collect more resources!", overlayX+overlayW/2-text.BoundString(fonts.UI(12), "❌ Cannot afford upgrade - collect more resources!").Dx()/2, y, 12, color.NRGBA{255, 120, 120, 255})
 	} else {
-		fonts.DrawUIWithFallback(screen, "✅ Ready to upgrade!", overlayX+overlayW/2-text.BoundString(fonts.UI(12), "✅ Ready to upgrade!").Dx()/2, y, 12, color.NRGBA{120, 255, 120, 255})
+		const resourceIconSize = 16
+		upgrade_ready := loadImage("assets/ui/icons/upgrade.png")
+		iw, ih := upgrade_ready.Bounds().Dx(), upgrade_ready.Bounds().Dy()
+		scale := float64(resourceIconSize) / mathMax(float64(iw), float64(ih))
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Scale(scale, scale)
+		op.GeoM.Translate(float64(iconColumnX), float64(y-16))
+		screen.DrawImage(upgrade_ready, op)
+		fonts.DrawUIWithFallback(screen, "Ready to upgrade!", overlayX+overlayW/2-text.BoundString(fonts.UI(12), "✅ Ready to upgrade!").Dx()/2, y, 12, color.NRGBA{120, 255, 120, 255})
 	}
 
 	// Buttons
@@ -2492,6 +2581,57 @@ func (g *Game) drawUpgradeOverlay(screen *ebiten.Image) {
 	// Store button hover states
 	cancelHovered := mx >= cancelBtnX && mx <= cancelBtnX+80 && my >= buttonY && my <= buttonY+28
 	confirmHovered := resources.CanAfford && mx >= confirmBtnX && mx <= confirmBtnX+120 && my >= buttonY && my <= buttonY+28
+
+	// Tooltip handling for upgrade resources
+	if g.showUpgradeOverlay {
+		// Check for hover over shard resource requirement
+		shardAreaY := reqY + 30
+		if shardIcon := loadImage("assets/ui/icons/shards.png"); shardIcon != nil {
+			shardTextWide := text.BoundString(fonts.UI(12), shardText).Dx() + resourceIconSize + resourceTextSpacing
+			if mx >= int(iconColumnX) && mx <= int(iconColumnX)+shardTextWide && my >= shardAreaY-4 && my <= shardAreaY+16 {
+				// Draw shard tooltip
+				tipW, tipH := 320, 80
+				tx := clampInt(mx-tipW-20, 0, protocol.ScreenW-tipW)
+				ty := clampInt(my+16, 0, protocol.ScreenH-tipH)
+				ebitenutil.DrawRect(screen, float64(tx), float64(ty), float64(tipW), float64(tipH), color.NRGBA{20, 25, 35, 220})
+				fonts.DrawUIWithFallback(screen, "Unit Shards", tx+10, ty+20, 12, color.NRGBA{255, 215, 0, 255})
+				fonts.DrawUIWithFallback(screen, "Collect shards by winning battles", tx+10, ty+40, 10, color.NRGBA{180, 200, 220, 255})
+				fonts.DrawUIWithFallback(screen, "Used for permanent unit upgrades", tx+10, ty+55, 10, color.NRGBA{160, 180, 200, 255})
+			}
+		}
+
+		// Check for hover over dust resource requirement
+		if dustIcon := loadImage("assets/ui/icons/dust.png"); dustIcon != nil {
+			dustAreaY := shardAreaY + lineHeight
+			dustTextWide := text.BoundString(fonts.UI(12), dustText).Dx() + resourceIconSize + resourceTextSpacing
+			if mx >= int(iconColumnX) && mx <= int(iconColumnX)+dustTextWide && my >= dustAreaY-4 && my <= dustAreaY+16 {
+				// Draw dust tooltip
+				tipW, tipH := 320, 80
+				tx := clampInt(mx-tipW-20, 0, protocol.ScreenW-tipW)
+				ty := clampInt(my+16, 0, protocol.ScreenH-tipH)
+				ebitenutil.DrawRect(screen, float64(tx), float64(ty), float64(tipW), float64(tipH), color.NRGBA{20, 25, 35, 220})
+				fonts.DrawUIWithFallback(screen, "Upgrade Dust", tx+10, ty+20, 12, color.NRGBA{255, 215, 0, 255})
+				fonts.DrawUIWithFallback(screen, "Earn dust from matches and quests", tx+10, ty+40, 10, color.NRGBA{180, 200, 220, 255})
+				fonts.DrawUIWithFallback(screen, "Consumes 500-20000 based on rank", tx+10, ty+55, 10, color.NRGBA{160, 180, 200, 255})
+			}
+		}
+
+		// Check for hover over capsule resource requirement
+		capsuleAreaY := shardAreaY + lineHeight*2
+		capsuleText := fmt.Sprintf("%d / %d", resources.CapsulesCurrent, resources.CapsulesNeeded)
+		capsuleTextWide := text.BoundString(fonts.UI(12), capsuleText).Dx() + resourceIconSize + resourceTextSpacing
+		if float64(mx) >= float64(iconColumnX) && float64(mx) <= float64(iconColumnX)+float64(capsuleTextWide) && float64(my) >= float64(capsuleAreaY-4) && float64(my) <= float64(capsuleAreaY+16) {
+			// Draw capsule tooltip
+			tipW, tipH := 320, 80
+			tx := clampInt(mx-tipW-20, 0, protocol.ScreenW-tipW)
+			ty := clampInt(my+16, 0, protocol.ScreenH-tipH)
+			ebitenutil.DrawRect(screen, float64(tx), float64(ty), float64(tipW), float64(tipH), color.NRGBA{20, 25, 35, 220})
+			rarityStr := fmt.Sprintf("%s %s Capsules", resources.CapsuleType, resources.CapsuleType)
+			fonts.DrawUIWithFallback(screen, rarityStr, tx+10, ty+20, 12, color.NRGBA{255, 215, 0, 255})
+			fonts.DrawUIWithFallback(screen, "Opened from boss battles and events", tx+10, ty+40, 10, color.NRGBA{180, 200, 220, 255})
+			fonts.DrawUIWithFallback(screen, "Rarity increases with unit rank", tx+10, ty+55, 10, color.NRGBA{160, 180, 200, 255})
+		}
+	}
 
 	// Draw button backgrounds first (bottom Z-layer)
 	cancelBtnColor := color.NRGBA{100, 80, 80, 255}
@@ -2531,6 +2671,48 @@ func (g *Game) drawUpgradeOverlay(screen *ebiten.Image) {
 		// Perform the upgrade
 		g.send("UpgradeUnit", protocol.UpgradeUnit{UnitID: g.upgradeOverlayUnit})
 		g.showUpgradeOverlay = false // Close overlay
+	}
+}
+
+// drawCapsuleRequirement draws the capsule requirement in the upgrade overlay with icon and count
+func (g *Game) drawCapsuleRequirement(screen *ebiten.Image, x, y int, capsuleType string, needed, current int) {
+	const iconSize = 16
+	const textSpacing = 4
+
+	// Get the appropriate icon filename
+	var iconFile string
+	switch capsuleType {
+	case "Rare":
+		iconFile = "rare_core.png"
+	case "Epic":
+		iconFile = "epic_core.png"
+	case "Legendary":
+		iconFile = "legendary_core.png"
+	default:
+		iconFile = "rare_core.png" // fallback
+	}
+
+	// Draw icon
+	if img := loadImage("assets/ui/icons/" + iconFile); img != nil {
+		iw, ih := img.Bounds().Dx(), img.Bounds().Dy()
+		scale := float64(iconSize) / mathMax(float64(iw), float64(ih))
+
+		iconX := float64(x)
+		iconY := float64(y - iconSize/2 + 6) // Center vertically with text baseline
+		op := &ebiten.DrawImageOptions{}
+		op.GeoM.Scale(scale, scale)
+		op.GeoM.Translate(iconX, iconY)
+		op.Filter = ebiten.FilterLinear
+		screen.DrawImage(img, op)
+
+		// Draw capsule name and requirement text (removed the "- Rare Capsule:" text)
+		reqText := fmt.Sprintf("%d / %d", current, needed)
+		reqColor := g.getResourceColor(current >= needed)
+		fonts.DrawUIWithFallback(screen, reqText, int(iconX)+iconSize+textSpacing, y, 12, reqColor)
+	} else {
+		// Fallback to text if icon doesn't load (keep old format for fallback)
+		countStr := fmt.Sprintf("❓ %s Capsule: %d / %d", capsuleType, current, needed)
+		fonts.DrawUIWithFallback(screen, countStr, x, y, 12, color.NRGBA{200, 200, 220, 255})
 	}
 }
 
